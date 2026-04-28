@@ -1,5 +1,38 @@
 # Gerendo — Changelog
 
+## 2026-04-28 (evening — docs + deploy unblock)
+
+**Session: Drafted core Phase 0 docs (BRIEF, ARCHITECTURE), unblocked Vercel deploys, validated RAG direction.**
+
+### Created
+- [docs/BRIEF.md](BRIEF.md) v0 — 1-page product brief with `[GINO: ...]` markers (drift story, why-now, why-us, contact line)
+- [docs/ARCHITECTURE.md](ARCHITECTURE.md) v0 — RAG data model, RLS pattern, ingest pipeline, retrieval flow, drift detection (LLM-as-judge), cost discipline, 6 milestones (M1–M6), 6 open questions
+
+### Decided
+- **GitHub repo flipped public** for Phase 0 — bypasses Vercel Hobby restriction on org-owned private repos, doubles as build-in-public marketing. Flip private before Week 4 when real schema/keys land.
+- **Drift detection v1 = Claude-as-judge.** Feed variants from different sources, ask Claude to flag contradictions. Cheap, not deterministic, acceptable for v1. Custom comparison engine deferred.
+- **Scope-creep detection added as first-class feature direction.** Gino's idea — capture SOW at kickoff, compare new client requests against baseline, flag out-of-scope asks. Specialization of drift, directly tied to agency margin. To be folded into ARCHITECTURE.md next session.
+- **Vercel "Improve models with this project's data" toggle = OFF** as default privacy posture.
+- **Embedding model default: Voyage-3 (1024 dim).** Pending final confirmation in ARCHITECTURE.md open questions.
+
+### Discussed but deferred
+- Filling in `[GINO: ...]` markers in BRIEF.md (4 spots)
+- Resolving 6 open questions in ARCHITECTURE.md (embedding model, workspace identity, raw doc storage, reranker, WhatsApp ingestion model, background worker platform)
+- INTERVIEW_SCRIPT.md and OUTREACH_TEMPLATES.md drafts
+- Agency contact list (15–20 names)
+
+### Did not do
+- Repo transfer from `Gerendo` → `Tocki28` GitHub user. Started, got stuck waiting on Tocki28 acceptance (notification didn't surface). Aborted, made repo public instead — same outcome with less friction.
+- Replace default Next.js homepage. Holding until BRIEF.md is finalized — don't ship vague copy.
+
+### Next session should
+1. Fold scope-creep detection into ARCHITECTURE.md
+2. Fill in the four `[GINO: ...]` markers in BRIEF.md (with Gino's actual answers)
+3. Draft INTERVIEW_SCRIPT.md and OUTREACH_TEMPLATES.md
+4. Start building the 15–20 agency contact list
+
+---
+
 ## 2026-04-28 (afternoon — infra setup)
 
 **Session: Phase 0 infra spin-up. Moved from agency workspace into dedicated SaaS repo.**
