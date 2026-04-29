@@ -19,7 +19,7 @@ const WELCOME_SUBJECT = "thanks for joining the Gerendo waitlist";
 
 const WELCOME_TEXT = `Hey,
 
-Andrei here — solo founder behind Gerendo.
+Andrei here — co-founder behind Gerendo.
 
 Thanks for dropping your email. You're on the waitlist for the alpha.
 
