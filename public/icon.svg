@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="14" fill="#E8A33D"/>
+  <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central"
+        font-family="Fraunces, 'Times New Roman', Georgia, serif"
+        font-style="italic" font-weight="500" font-size="44" fill="#0E0F12">G</text>
+</svg>
