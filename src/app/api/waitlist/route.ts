@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-const FROM = process.env.RESEND_FROM!;
-const AUDIENCE_ID = process.env.RESEND_AUDIENCE_ID!;
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -39,6 +34,15 @@ gerendo.com
 `;
 
 export async function POST(request: Request) {
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM;
+  const audienceId = process.env.RESEND_AUDIENCE_ID;
+  if (!apiKey || !from || !audienceId) {
+    console.error("Missing RESEND_* env vars");
+    return json({ error: "Server not configured." }, 500);
+  }
+  const resend = new Resend(apiKey);
+
   let email: string;
   try {
     const body = (await request.json()) as { email?: unknown };
@@ -54,7 +58,7 @@ export async function POST(request: Request) {
 
   const contact = await resend.contacts.create({
     email,
-    audienceId: AUDIENCE_ID,
+    audienceId,
     unsubscribed: false,
   });
 
@@ -64,7 +68,7 @@ export async function POST(request: Request) {
   }
 
   const send = await resend.emails.send({
-    from: FROM,
+    from,
     to: email,
     subject: WELCOME_SUBJECT,
     text: WELCOME_TEXT,
