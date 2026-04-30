@@ -124,8 +124,7 @@ function Privacy() {
               <a href="mailto:privacy@gerendo.com" className="text-foreground underline underline-offset-4">privacy@gerendo.com</a> and we will respond within 30 days.
             </p>
             <p className="mt-3">
-              You also have the right to lodge a complaint with your local data protection authority. In Romania, this is the{" "}
-              <a href="https://www.dataprotection.ro" target="_blank" rel="noopener noreferrer" className="text-foreground underline underline-offset-4">ANSPDCP</a>.
+              You also have the right to lodge a complaint with your local data protection authority.
             </p>
           </section>
 
