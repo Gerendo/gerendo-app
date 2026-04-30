@@ -166,11 +166,10 @@ function Cookies() {
               the site against bots and to enforce rate limits. These are strictly necessary for
               the service to function securely. You can read more in{" "}
 
-              href="https://www.cloudflare.com/cookie-policy/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground underline underline-offset-2 hover:text-ember transition-colors"
-              <a>
+              <a href="https://www.cloudflare.com/cookie-policy/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground underline underline-offset-2 hover:text-ember transition-colors">
                 Cloudflare's Cookie Policy
               </a>
               .
@@ -183,11 +182,10 @@ function Cookies() {
             <p className="mt-3">
               We use{" "}
 
-              href="https://www.cloudflare.com/web-analytics/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-foreground underline underline-offset-2 hover:text-ember transition-colors"
-              <a>
+              <a href="https://www.cloudflare.com/web-analytics/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-foreground underline underline-offset-2 hover:text-ember transition-colors">
                 Cloudflare Web Analytics
               </a>
               , which is cookieless and privacy-preserving by design. It does not use cookies,
@@ -220,9 +218,9 @@ function Cookies() {
             <p className="mt-3">
               Questions about this policy? Email us at{" "}
 
-              href="mailto:privacy@gerendo.com"
-              className="text-foreground underline underline-offset-2 hover:text-ember transition-colors"
-              <a>
+              <a href="mailto:privacy@gerendo.com"
+                className="text-foreground underline underline-offset-2 hover:text-ember transition-colors"
+              >
                 privacy@gerendo.com
               </a>
               .
