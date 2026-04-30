@@ -26,7 +26,7 @@ function Privacy() {
         <div className="mt-12 space-y-8 text-[15px] leading-relaxed text-muted-foreground">
           <section>
             <h2 className="font-display text-2xl text-foreground">1. What we collect</h2>
-            <p className="mt-3">We only access the data you explicitly connect to Gerendo through OAuth (Gmail, Drive, Asana, Meet, WhatsApp, etc.). We collect the minimum metadata needed to index and answer your queries.</p>
+            <p className="mt-3">W only access the data you explicitly connect to Gerendo through OAuth (Gmail, Drive, Asana, Meet, WhatsApp, etc.). We collect the minimum metadata needed to index and answer your queries.</p>
           </section>
           <section>
             <h2 className="font-display text-2xl text-foreground">2. How we use it</h2>
