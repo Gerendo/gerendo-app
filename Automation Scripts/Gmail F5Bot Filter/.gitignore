@@ -1,0 +1,14 @@
+# Sensitive Google files
+credentials.json
+token.pickle
+
+# Output files
+gerendo_opportunities.xlsx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# OS
+.DS_Store
