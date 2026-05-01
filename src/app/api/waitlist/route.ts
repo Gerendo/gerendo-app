@@ -19,7 +19,7 @@ const WELCOME_SUBJECT = "thanks for joining the Gerendo waitlist";
 
 const WELCOME_TEXT = `Hey,
 
-Andrei here — co-founder behind Gerendo.
+Ermina here — co-founder behind Gerendo.
 
 Thanks for dropping your email. You're on the waitlist for the alpha.
 
@@ -29,7 +29,7 @@ If any of this sounds familiar, hit reply and tell me about it.
 
 I'll keep you posted as we open up access.
 
-— Andrei
+— Ermina
 gerendo.com
 `;
 
