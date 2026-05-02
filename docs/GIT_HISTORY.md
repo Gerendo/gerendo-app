@@ -1,3 +1,25 @@
+## c5a9881 - fix: clean Voyage index - prune stale/unlisted chunks, cap per-file results
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 16:51
+
+- Remove CLAUDE.md from indexed files (already in system context every session)
+- Add pruneUnlistedFiles: removes chunks for files dropped from the collection list
+- Add pruneDeletedFiles: removes chunks for files no longer on disk
+- Add pruneStaleChunks: removes old byte-offset chunks when a file is edited
+- Cap search results at 2 chunks per source file to prevent any file flooding TOP_K
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## db06c5b - chore: use absolute paths in MCP server config and enable project MCP servers
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 16:41
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 19c0240 - chore: fix Voyage MCP sourcing and harden search_gerendo rule
 
 **Author:** Tocki28  

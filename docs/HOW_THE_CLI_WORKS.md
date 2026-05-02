@@ -41,6 +41,11 @@ Every time the indexer runs, it refreshes and indexes the following sources:
 - `reference_resend.md` - Resend domain, audience, key permissions, From conventions
 - `user_personas.md` - Andrei / Ermina personas, when to use each in copy
 
+**Code sources**
+- `src/**/*.{ts,tsx}` - Next.js app (routes, API, utilities, CLI)
+- `agency-brain-ai-main/src/**/*.{ts,tsx}` - Marketing site
+- Excluded: `*.test.ts`, `*.spec.ts`, `*.d.ts`, `node_modules`, `.next`, `dist`
+
 ---
 
 ## Phase 1 - Indexing (runs when context changes)

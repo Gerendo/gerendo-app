@@ -43,7 +43,7 @@ const server = new McpServer({
 
 server.tool(
   "search_gerendo",
-  "Search the Gerendo project knowledge base (docs, notes, memory files) using semantic search. Call this before answering any question about the project, its architecture, decisions, or context.",
+  "Search the entire Gerendo codebase and knowledge base (code, docs, notes, memory) using semantic search. Returns file path + byte range pointers for efficient retrieval. Call this before answering any question about the project.",
   { query: z.string().describe("The question or topic to search for") },
   async ({ query }) => {
     if (!fs.existsSync(DB_PATH)) {
