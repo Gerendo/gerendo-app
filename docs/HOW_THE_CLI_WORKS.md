@@ -66,22 +66,22 @@ When you ask a question, Voyage converts that question into the same kind of 512
 
 The system finds the chunks whose points on the map are closest to your question's point. Closest = most relevant to what you asked.
 
-Those chunks are pointers - they hold the file path and exact byte positions, not the raw text. The system reads the raw text fresh from disk using those pointers, then hands only that text to Claude.
+The search results come back as pointers only - file path, byte range (start-end), similarity score, and a short 120-character preview. No full content.
 
-Claude sees maybe 2,000 tokens of the most relevant context instead of 50,000 tokens of everything. It answers the question based only on what was retrieved.
+If Claude needs the full text of a result, it uses the Read tool with the exact path and byte range from the pointer. This means Claude only pays for content it actually decides to read - typically 1-2 chunks per question instead of all 5.
 
 ---
 
 ## Why this is smart
 
 ```
-Without RAG:   all 23 files → Claude every time   (slow, expensive, hits limits)
-With RAG:      all 23 files → Voyage once          (cheap, builds the map)
-               question     → Voyage               (finds the relevant 5 chunks)
-               5 chunks     → Claude               (answers fast and cheap)
+Without RAG:   all files → Claude every time              (slow, expensive, hits limits)
+With RAG:      all files → Voyage once                    (cheap, builds the map)
+               question  → Voyage                         (finds top 5 pointers + previews)
+               Claude    → reads 1-2 chunks if needed     (pays only for what it uses)
 ```
 
-Voyage retrieval costs almost nothing. Claude only touches the relevant slice. The map is yours and stays on your machine.
+Voyage retrieval costs almost nothing. Claude only reads what it decides is relevant. The map is yours and stays on your machine.
 
 ---
 

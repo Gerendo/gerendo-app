@@ -1,5 +1,13 @@
 # Gerendo - Changelog
 
+## 2026-05-02 (Engram extraction + search token optimization)
+
+- Extracted the Voyage RAG pipeline into a standalone open source repo at github.com/Gerendo/engram. Engram is config-driven (engram.config.json), repo-agnostic, and includes an init wizard that wires the MCP server into any project's .claude/settings.json automatically.
+- Changed `search_gerendo` (and Engram's `search_<name>`) to return pointers + 120-char previews only, instead of full chunk text. Reduces per-search token cost from ~4,000-5,000 tokens to ~200-300. Claude reads full content via the Read tool only when needed.
+- Added Voyage token count and cost estimate to `engram:index` output.
+- Added per-query cost breakdown to `engram:ask` output (input/output/cache write/cache read).
+- Updated `docs/HOW_THE_CLI_WORKS.md` to reflect pointer-only search results and two-step retrieval flow.
+
 ## 2026-05-02 (Voyage pipeline hardening + context rules)
 
 - Updated CLAUDE.md context rule: always query `search_gerendo` first, fall back to file reads only if pipeline returns nothing.
