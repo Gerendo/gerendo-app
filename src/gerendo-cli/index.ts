@@ -1,11 +1,21 @@
 import * as path from "path";
 import * as fs from "fs";
+import { execSync } from "child_process";
 import { collectFiles, chunkFile } from "./chunker.js";
 import { embedTexts } from "./embed.js";
 import { openDb, insertChunk } from "./db.js";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../");
 const DB_PATH = path.join(REPO_ROOT, "data/gerendo.db");
+
+// Regenerate git history snapshot before indexing
+const GIT_HISTORY_PATH = path.join(REPO_ROOT, "docs/GIT_HISTORY.md");
+const gitLog = execSync(
+  'git log --pretty=format:"## %h - %s%n%n**Author:** %an  %n**Date:** %ad%n%n%b%n---" --date=format:\'%Y-%m-%d %H:%M\'',
+  { cwd: REPO_ROOT, encoding: "utf-8" }
+);
+fs.writeFileSync(GIT_HISTORY_PATH, gitLog, "utf-8");
+console.log("Refreshed docs/GIT_HISTORY.md");
 
 const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY ?? "";
 if (!VOYAGE_API_KEY) {

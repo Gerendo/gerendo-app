@@ -8,6 +8,41 @@ The CLI solves this with two phases: index once, query cheap.
 
 ---
 
+## What is indexed
+
+Every time the indexer runs, it refreshes and indexes the following sources:
+
+**Repo root**
+- `CLAUDE.md` - operational rules, stack, architectural constraints
+- `AGENTS.md` - Next.js 16 breaking-changes warning
+- `_notes.md` - current session state and open questions
+- `README.md` - repo entry point
+
+**`docs/`**
+- `ARCHITECTURE.md` - RAG data model, RLS pattern, ingest pipeline, retrieval flow, 6-milestone roadmap
+- `BRIEF.md` - 1-page product brief with founder fill-in markers
+- `CHANGELOG.md` - full session history, decisions, what was built each session
+- `FORUM_POSTS.md` - outreach / community posts
+- `GIT_HISTORY.md` - full git log, regenerated fresh before every index run
+- `HOW_THE_CLI_WORKS.md` - this file
+- `INTERVIEW_SCRIPT.md` - Phase 0 validation interview script
+- `MEMORY_LAYER.md` - memory-layer reframe (local-first, Gino as customer zero)
+- `PLAN.md` - week-by-week build plan Phase 0 through Phase 5
+- `README-original.md` - original scaffold readme (kept for reference)
+- `_notes-original.md` - original session notes (kept for reference)
+
+**`~/.claude/projects/.../memory/`**
+- `MEMORY.md` - index of all memory files
+- `feedback_marketing_decisions.md` - positioning and copy decisions
+- `feedback_no_em_dashes.md` - no em dashes in any Gerendo prose
+- `feedback_no_raw_text_in_db.md` - store only embeddings + pointers, never raw text
+- `project_brand_tokens.md` - locked palette, fonts, wordmark, favicon spec
+- `project_deployment_topology.md` - which domain serves what, from which platform
+- `reference_resend.md` - Resend domain, audience, key permissions, From conventions
+- `user_personas.md` - Andrei / Ermina personas, when to use each in copy
+
+---
+
 ## Phase 1 - Indexing (runs when context changes)
 
 The entire workspace gets fed into Voyage, a small cheap model whose only job is to convert text into numbers.
@@ -35,8 +70,8 @@ Claude sees maybe 2,000 tokens of the most relevant context instead of 50,000 to
 ## Why this is smart
 
 ```
-Without RAG:   all 21 files → Claude every time   (slow, expensive, hits limits)
-With RAG:      all 21 files → Voyage once          (cheap, builds the map)
+Without RAG:   all 23 files → Claude every time   (slow, expensive, hits limits)
+With RAG:      all 23 files → Voyage once          (cheap, builds the map)
                question     → Voyage               (finds the relevant 5 chunks)
                5 chunks     → Claude               (answers fast and cheap)
 ```

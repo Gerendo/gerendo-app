@@ -1,5 +1,12 @@
 # Gerendo - Changelog
 
+## 2026-05-02 (Voyage pipeline hardening + context rules)
+
+- Updated CLAUDE.md context rule: always query `search_gerendo` first, fall back to file reads only if pipeline returns nothing.
+- Added `docs/GIT_HISTORY.md` - full git log exported as markdown, queryable via Voyage.
+- Modified `src/gerendo-cli/index.ts` to regenerate `GIT_HISTORY.md` automatically before every index run so it never goes stale.
+- Updated `docs/HOW_THE_CLI_WORKS.md` with a full inventory of every source indexed in the Voyage map (23 files across repo root, docs/, and memory/).
+
 ## 2026-05-02 (favicon, copy polish, two-way email)
 
 - Favicon (italic G PNG) shipped on both sites. Wired in `__root.tsx` and `src/app/layout.tsx`. Commit `925146a`.

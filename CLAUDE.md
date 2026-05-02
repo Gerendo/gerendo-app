@@ -2,7 +2,7 @@
 
 # Gerendo SaaS - Workspace Brain
 
-**Context rule:** Do not read markdown files to gather project context. Always call the `search_gerendo` MCP tool first. Voyage returns only the relevant passages. Read files only when editing them.
+**Context rule:** Always query `search_gerendo` first for any project context. Only fall back to reading files directly if the pipeline returns no relevant results. Read files only when editing them.
 
 **One-liner:** Unified intelligence layer for 15-50 person marketing agencies. Closed loop, not dashboard.
 
