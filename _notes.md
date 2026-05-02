@@ -4,56 +4,60 @@ Read this at the start of every session. Update it at the end of every session.
 
 ---
 
-## Last session: 2026-04-28 (afternoon — docs + deploy unblock)
+## Last session: 2026-04-29 → 2026-05-02 (waitlist sites live)
 
 ### What got done
-- **Drafted [docs/BRIEF.md](docs/BRIEF.md)** — v0 of the 1-page product brief, with `[GINO: ...]` markers for the four spots that need Gino's input (drift story, "why now" lead angle, "why us", contact line)
-- **Drafted [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** — v0 covering RAG data model, RLS pattern, ingest pipeline, retrieval flow, drift detection (Claude-as-judge v1), cost discipline, 6 milestones (M1–M6) with concrete demo targets, 6 open questions
-- **Resolved Vercel deploy block** — `app.gerendo.com` was stuck on first scaffold deploy because Hobby plan blocked deploys of org-owned private repos. Pivoted from repo-transfer (got stuck waiting on Tocki28 acceptance) to **making the repo public**. Deploy now works, push-to-deploy chain restored.
-- **Disabled Vercel "Improve models with this project's data"** toggle — privacy hygiene before any real data lands.
-- **Validated RAG architecture direction** with Gino — Gino described the right approach (embed on ingest, retrieve on query, send only relevant chunks to Claude). Added the four nuances he hadn't thought through (chunking, hybrid search, citations, RLS at vector layer).
-- **New feature added: scope-creep detection.** Gino's idea — at project kickoff, capture the SOW/scope; flag any new client request (WhatsApp, Meet, email) that goes outside it. This is a specialization of drift detection, tied directly to agency margin. Will fold into ARCHITECTURE.md as a first-class feature next session.
+
+- **Locked the brand.** Warm-ink palette (`#0E0F12` / `#F6F4EE` / `#E8A33D` ember), Fraunces (display) + Inter (body) + JetBrains Mono (Lovable site). Wordmark = "Gerendo" in Fraunces 600 with amber dot. Standalone mark = italic Fraunces "G" in amber rounded square.
+- **Built `app.gerendo.com`** (Next.js 16 / Turbopack at the root of `gerendo-app` repo). Single waitlist landing — wordmark, hero, 3-bullet feature list, email form. Deployed on Vercel.
+- **Built `/api/waitlist` route** with Resend integration: contacts.create into the General audience + emails.send transactional welcome. CORS headers `*` so cross-origin works. Lazy-init pattern for Resend client (env vars read inside handler — important to not break Vercel's "collect page data" build pass).
+- **Brought in the Lovable-built marketing site** at `agency-brain-ai-main/` (TanStack Start + Vite + Tailwind 4 + framer-motion, scaffolded for Cloudflare Pages). Connected via Cloudflare Pages, root dir = `agency-brain-ai-main`, build cmd `npm run build`, output `dist`. Deployed at `gerendo.com`.
+- **Wired the Lovable WaitlistDialog** to POST cross-origin to `https://app.gerendo.com/api/waitlist` via constant `WAITLIST_ENDPOINT`. One backend, two frontends.
+- **Renamed fictional client** "Pescobar" → "Marengo" in `AskDemo.tsx`.
+- **Softened homepage Security + AI sections** to honest "we're building" framing. **Then user added back the specific tech claims** (TLS 1.3, AES-256, SOC 2 in progress) on the dedicated `routes/security.tsx` and `routes/privacy.tsx` pages — deliberately, as aspirational target architecture. Homepage and dedicated pages now say slightly different things about security posture.
+- **Resend domain verified** for `gerendo.com` (DKIM, SPF on `send.gerendo.com` subdomain — no conflict with Cloudflare Email Routing on apex). Cloudflare Email Routing is set up for **inbound** mail; `contact@` and `thankyou@` forward to `tomagino28@gmail.com`.
+- **Welcome email signature** is "Ermina here — co-founder behind Gerendo." From: `Andrei from Gerendo <contact@gerendo.com>` (Andrei = display name in env var; Ermina = signature in body — co-founder personas, see user memory).
+- **SEO/branding cleanup of `__root.tsx`** done locally (not yet committed/pushed): replaced "Lovable App" / "@Lovable" / Lovable og:image defaults with proper Gerendo metadata. Homepage description updated to: *"Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks."* (Option C — chosen because it echoes the homepage hero "One brain for your whole business").
 
 ### Current phase
-**Phase 0 — Validation.** Infra fully unblocked. Docs spine is taking shape. Still no app code.
+
+**Phase 0 — validation, with public-facing infra now live.** Both domains serve real pages. Real waitlist signups are captured into Resend.
 
 ---
 
-## Open questions (pick up next session)
+## Open questions / pick up next session
 
-1. **Fold scope-creep detection into ARCHITECTURE.md** as a first-class feature (separate from generic drift). Needs `project_scopes` table + scope-check step in ingest loop.
-2. **Fill in the four `[GINO: ...]` markers in BRIEF.md** — drift story, why-now angle, why-us, contact line. Without these, BRIEF can't ship to outreach.
-3. **Decide the 6 open questions in ARCHITECTURE.md** — embedding model (Voyage-3 default), workspace identity (JWT custom claim default), raw doc storage, reranker, WhatsApp ingestion model, background worker platform.
-4. **Draft `docs/INTERVIEW_SCRIPT.md`** — 7 past-behavior questions for Phase 0 conversations (not hypothetical — Mom Test discipline).
-5. **Draft `docs/OUTREACH_TEMPLATES.md`** — warm + cold templates, asking for 20 minutes of experience, no pitch.
-6. **Build the 15–20 agency contact list** — name, size, current tools, intro path, priority. The bottleneck for Phase 0.
-7. **Set Phase 0 Week 1 start date** — pick an actual Monday on the calendar.
-8. **Replace default Next.js homepage with "Coming Soon + waitlist"** — only after BRIEF nails positioning.
-9. **Make the repo private again** before Week 4 (when real schema/keys land). Currently public for build-in-public Phase 0 strategy.
+1. **User is supplying a favicon** (italic G). When it arrives → drop into `agency-brain-ai-main/public/` and add `link rel="icon"` in `__root.tsx`. Then commit + push the bundled SEO/branding/favicon update — Cloudflare rebuilds.
+2. **Cloudflare Email Routing — add three more inbound routes** on `gerendo.com`: `privacy` (referenced in privacy.tsx + cookies.tsx), `ermina` (founder persona, user wants it set up), `legal` (referenced in terms.tsx). All forward to `tomagino28@gmail.com`. Without these, mail to those addresses bounces.
+3. **DNS conflict on apex `gerendo.com`** — when adding the custom domain in Cloudflare Pages, an existing record blocked it. User needs to identify and delete the conflicting A/AAAA/CNAME on `@` (do NOT delete MX, TXT, or `app`/`_dmarc`/`_domainkey`/`send` subdomains).
+4. **Rotate Resend API key** — earlier in the session a full-access key was pasted in chat (so it's in conversation logs) AND there's a commit `4a9fd3a "Remove sensitive credentials from Git"` which suggests an env file may have been committed at some point. Even after deletion, it stays in `git log -p`. Action: revoke current key in Resend → create a new one → update Vercel env vars + local `.env.local`. Optionally also: check git history for any committed secrets and decide whether to rewrite history.
+5. **Slack/Notion/Linear references in `terms.tsx`** — listed as integrations but not on the v1/v2 roadmap. Either prune them or frame as "planned." Legal pages should match real product scope.
+6. **Cookies/analytics decision** — confirmed: skip third-party analytics for now. Cloudflare Web Analytics (cookieless) + Google Search Console is the stack. No consent banner needed under GDPR for that combination — and `cookies.tsx` correctly states this.
+7. **Romanian-lawyer pass on legal pages** before signing first enterprise customer. Both `terms.tsx` and `privacy.tsx` look LLM-drafted; substance is plausible but not vetted.
+8. **Phase 0 outreach work** — the original gates haven't moved: still need 4-of-7 agency conversations confirming the same pain. The two waitlists are infra; the validation conversations are still ahead. Build the 15–20 contact list, draft `INTERVIEW_SCRIPT.md`, draft `OUTREACH_TEMPLATES.md`, fill in the four `[GINO: ...]` markers in `BRIEF.md` (now likely `[ANDREI/ERMINA: ...]`).
 
 ---
 
 ## Decisions locked in (do not relitigate)
 
-- Subdomain split: `gerendo.com` = marketing (later), `app.gerendo.com` = product
-- Repo lives at `~/gerendo-app/`, not under `~/Gerendo/` — different lifecycle from agency work
-- Tech stack: Next.js 16, TS, Tailwind 4, Supabase, Nango, Anthropic, Vercel, Stripe, PostHog, Resend
-- Multi-tenant + RLS from line 1 — never retrofit security
-- Workspace pricing (€299–€1,499/mo), not per-seat
-- QuickLeap = sandbox only. Real design partners come from outside QuickLeap
-- **GitHub repo public during Phase 0** for build-in-public + to bypass Vercel Hobby restriction. Flip private before Week 4.
-- **Drift detection v1 = Claude-as-judge** (feed variants, ask if contradictory). Don't build custom comparison engine yet.
-- **Scope-creep detection is the headline drift use case** — most valuable specialization, tied to agency margin.
+- **Subdomain split:** `gerendo.com` = marketing (Lovable, Cloudflare Pages). `app.gerendo.com` = product/waitlist (Next.js, Vercel). Today both serve waitlists; later, app.* becomes the actual product.
+- **One repo, two projects:** `gerendo-app` GitHub repo. Vercel deploys root (Next.js). Cloudflare Pages deploys `agency-brain-ai-main/` subfolder (TanStack Start). Cleaner than two repos for now.
+- **Tech stack additions:** TanStack Start + Vite + framer-motion for marketing site. Cloudflare Pages instead of Vercel for that side (cheaper, native to the Lovable export, DNS already on Cloudflare).
+- **Positioning leaned generic.** The Lovable copy says "your business" (not "your agency"). User explicitly chose to keep this — broader market, less wedge focus than CLAUDE.md prescribes. Watch for this drift in copy/decisions.
+- **Security/privacy public claims include specific tech (TLS 1.3, AES-256, SOC 2 in progress).** User's call — treated as target architecture/aspirational. Homepage section is softer, dedicated pages are specific. Keep this in mind before any prospect calls about security.
+- **Welcome email signed "Ermina"** with from-display "Andrei from Gerendo." Co-founder personas; treat both names as legit when copy needs editing.
+- **Skip third-party analytics** — Cloudflare Web Analytics (cookieless) + Google Search Console is enough for Phase 0. No consent banner needed.
+- **Email From address:** `contact@gerendo.com` (display name "Andrei from Gerendo"). Was `thankyou@` originally; switched mid-session because user preferred a more standard contact address.
 
 ---
 
 ## Things to NOT do yet
 
-- Don't write Supabase schema yet — wait until M1 (Week 4–5)
-- Don't install shadcn/ui until first real UI need
-- Don't activate Stripe billing — wait until Phase 3
-- Don't do cold customer-discovery interviews Gino dreads — lean on warm intros + build-in-public
-- Don't replace the homepage until BRIEF.md is finalized — vague copy is worse than default scaffold
+- Don't write Supabase schema yet — wait until M1 (Week 4–5 of PLAN.md)
+- Don't activate Stripe billing — Phase 3
+- Don't build local LLM / self-hosted model support (cut from BringYourAI section deliberately)
+- Don't add Slack/Notion/Linear integrations until they're on the actual roadmap (terms.tsx claims them; reality doesn't yet)
+- Don't add cookie consent banner (Cloudflare Web Analytics is cookieless, GDPR-compliant without consent)
 
 ---
 

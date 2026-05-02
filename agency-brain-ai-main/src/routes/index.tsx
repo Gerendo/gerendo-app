@@ -19,13 +19,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Gerendo connects every tool your business uses — Gmail, Drive, Asana, Meet, WhatsApp — and lets your team ask anything. Cited answers, secure by design, your AI of choice.",
+          "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks.",
       },
       { property: "og:title", content: "Gerendo — One brain for your whole business" },
       {
         property: "og:description",
         content:
-          "One brain for your whole business. Ask anything across every tool. Secure, private, never used to train AI.",
+          "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks.",
       },
     ],
   }),
