@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Gerendo — The Agency Brain
+/* Gerendo - The Agency Brain
  * Editorial · Intelligent · Warm-tech
  * Deep ink + warm amber + parchment cream
  */
@@ -90,13 +90,13 @@
 :root {
   --radius: 0.5rem;
 
-  /* Core surfaces — warm ink */
+  /* Core surfaces - warm ink */
   --ink: oklch(0.11 0.008 55);
   --ink-soft: oklch(0.16 0.01 55);
   --bone: oklch(0.96 0.012 80);
   --parchment: oklch(0.92 0.02 75);
 
-  /* Brand accent — warm amber ember */
+  /* Brand accent - warm amber ember */
   --ember: oklch(0.78 0.14 65);
   --ember-soft: oklch(0.85 0.08 70);
   --synapse: oklch(0.72 0.13 60);

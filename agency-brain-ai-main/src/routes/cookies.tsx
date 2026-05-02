@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 export const Route = createFileRoute("/cookies")({
   head: () => ({
     meta: [
-      { title: "Cookie Policy — Gerendo" },
+      { title: "Cookie Policy - Gerendo" },
       {
         name: "description",
         content: "How Gerendo uses cookies and similar technologies.",
@@ -18,14 +18,14 @@ const COOKIES = [
   {
     name: "__cf_bm",
     provider: "Cloudflare",
-    purpose: "Bot management — distinguishes humans from bots to protect the site.",
+    purpose: "Bot management - distinguishes humans from bots to protect the site.",
     type: "Essential",
     duration: "30 minutes",
   },
   {
     name: "_cfuvid",
     provider: "Cloudflare",
-    purpose: "Rate-limiting — used to identify individual clients behind a shared IP address.",
+    purpose: "Rate-limiting - used to identify individual clients behind a shared IP address.",
     type: "Essential",
     duration: "Session",
   },
@@ -72,7 +72,7 @@ function Cookies() {
             <h2 className="font-display text-2xl text-foreground">What are cookies?</h2>
             <p className="mt-3">
               Cookies are small text files placed on your device by a website. They let the site
-              remember information about your visit — such as your login state or preferences —
+              remember information about your visit - such as your login state or preferences -
               across page loads and sessions.
             </p>
           </section>
@@ -83,7 +83,7 @@ function Cookies() {
             <p className="mt-3">
               Gerendo uses only <strong className="text-foreground font-medium">essential</strong>{" "}
               and <strong className="text-foreground font-medium">functional</strong> cookies. We do
-              not use advertising or cross-site tracking cookies. Our analytics are cookieless —
+              not use advertising or cross-site tracking cookies. Our analytics are cookieless -
               Cloudflare Web Analytics collects aggregated, anonymous data (page views, countries,
               devices) without placing any cookie on your device.
             </p>
@@ -199,7 +199,7 @@ function Cookies() {
             <h2 className="font-display text-2xl text-foreground">Your choices</h2>
             <p className="mt-3">
               Because we only use essential and functional cookies, there is no cookie consent
-              banner — these cookies are necessary for the service to work. You can delete or
+              banner - these cookies are necessary for the service to work. You can delete or
               block cookies at any time through your browser settings, but doing so may prevent
               you from staying logged in or using certain features of Gerendo.
             </p>

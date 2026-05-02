@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 export const Route = createFileRoute("/privacy")({
   head: () => ({
     meta: [
-      { title: "Privacy Policy — Gerendo" },
+      { title: "Privacy Policy - Gerendo" },
       { name: "description", content: "How Gerendo collects, uses, and protects your business data." },
     ],
   }),
@@ -38,7 +38,7 @@ function Privacy() {
             <h2 className="font-display text-2xl text-foreground">2. What we collect</h2>
             <p className="mt-3">
               We only access the data you explicitly connect to Gerendo through OAuth (Gmail, Drive, Asana, Meet, WhatsApp, etc.).
-              We collect the minimum metadata needed to index and answer your queries — we do not store the full content of your documents, emails, or messages.
+              We collect the minimum metadata needed to index and answer your queries - we do not store the full content of your documents, emails, or messages.
             </p>
             <p className="mt-3">
               We also collect basic account information (name, email address) when you sign up, and standard usage logs for security and performance purposes.
@@ -51,9 +51,9 @@ function Privacy() {
               We process your data under the following legal bases as defined by the GDPR:
             </p>
             <ul className="mt-3 list-disc pl-5 space-y-2">
-              <li><strong className="text-foreground">Contract performance</strong> — to provide the Gerendo service you signed up for.</li>
-              <li><strong className="text-foreground">Legitimate interest</strong> — to maintain security, prevent abuse, and improve the product.</li>
-              <li><strong className="text-foreground">Consent</strong> — for any optional data uses, such as product updates or feedback requests. You may withdraw consent at any time.</li>
+              <li><strong className="text-foreground">Contract performance</strong> - to provide the Gerendo service you signed up for.</li>
+              <li><strong className="text-foreground">Legitimate interest</strong> - to maintain security, prevent abuse, and improve the product.</li>
+              <li><strong className="text-foreground">Consent</strong> - for any optional data uses, such as product updates or feedback requests. You may withdraw consent at any time.</li>
             </ul>
           </section>
 
@@ -77,7 +77,7 @@ function Privacy() {
               All data is encrypted in transit (TLS 1.3) and at rest (AES-256). OAuth tokens are stored in an isolated secrets vault, separate from your general workspace data.
             </p>
             <p className="mt-3">
-              Each workspace's data is isolated at the database level — never shared across tenants.
+              Each workspace's data is isolated at the database level - never shared across tenants.
             </p>
           </section>
 
@@ -87,11 +87,11 @@ function Privacy() {
               To deliver the service, we work with the following trusted sub-processors:
             </p>
             <ul className="mt-3 list-disc pl-5 space-y-2">
-              <li><strong className="text-foreground">Supabase</strong> — database and authentication infrastructure.</li>
-              <li><strong className="text-foreground">Vercel</strong> — application hosting and deployment.</li>
-              <li><strong className="text-foreground">Cloudflare</strong> — DNS, security, and content delivery.</li>
-              <li><strong className="text-foreground">Resend</strong> — transactional email delivery.</li>
-              <li><strong className="text-foreground">Anthropic, OpenAI, Google, Mistral</strong> — AI inference, via zero-retention endpoints where available.</li>
+              <li><strong className="text-foreground">Supabase</strong> - database and authentication infrastructure.</li>
+              <li><strong className="text-foreground">Vercel</strong> - application hosting and deployment.</li>
+              <li><strong className="text-foreground">Cloudflare</strong> - DNS, security, and content delivery.</li>
+              <li><strong className="text-foreground">Resend</strong> - transactional email delivery.</li>
+              <li><strong className="text-foreground">Anthropic, OpenAI, Google, Mistral</strong> - AI inference, via zero-retention endpoints where available.</li>
             </ul>
             <p className="mt-3">
               All processors are required to handle your data in compliance with GDPR.
@@ -111,13 +111,13 @@ function Privacy() {
               Under GDPR, you have the following rights regarding your personal data:
             </p>
             <ul className="mt-3 list-disc pl-5 space-y-2">
-              <li><strong className="text-foreground">Access</strong> — request a copy of the data we hold about you.</li>
-              <li><strong className="text-foreground">Rectification</strong> — ask us to correct inaccurate data.</li>
-              <li><strong className="text-foreground">Erasure</strong> — request permanent deletion of your data.</li>
-              <li><strong className="text-foreground">Portability</strong> — receive your data in a structured, machine-readable format.</li>
-              <li><strong className="text-foreground">Objection</strong> — object to processing based on legitimate interest.</li>
-              <li><strong className="text-foreground">Restriction</strong> — ask us to limit how we use your data.</li>
-              <li><strong className="text-foreground">Withdraw consent</strong> — at any time, for processing based on consent.</li>
+              <li><strong className="text-foreground">Access</strong> - request a copy of the data we hold about you.</li>
+              <li><strong className="text-foreground">Rectification</strong> - ask us to correct inaccurate data.</li>
+              <li><strong className="text-foreground">Erasure</strong> - request permanent deletion of your data.</li>
+              <li><strong className="text-foreground">Portability</strong> - receive your data in a structured, machine-readable format.</li>
+              <li><strong className="text-foreground">Objection</strong> - object to processing based on legitimate interest.</li>
+              <li><strong className="text-foreground">Restriction</strong> - ask us to limit how we use your data.</li>
+              <li><strong className="text-foreground">Withdraw consent</strong> - at any time, for processing based on consent.</li>
             </ul>
             <p className="mt-3">
               You can exercise most of these rights directly from your workspace settings. For anything else, email us at{" "}

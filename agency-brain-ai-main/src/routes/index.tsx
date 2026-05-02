@@ -15,13 +15,13 @@ import {
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Gerendo — One brain for your whole business" },
+      { title: "Gerendo - One brain for your whole business" },
       {
         name: "description",
         content:
           "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks.",
       },
-      { property: "og:title", content: "Gerendo — One brain for your whole business" },
+      { property: "og:title", content: "Gerendo - One brain for your whole business" },
       {
         property: "og:description",
         content:
@@ -117,7 +117,7 @@ function Hero({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             Your team's knowledge is scattered across Gmail, Drive, Asana, Meet,
             WhatsApp, and a dozen other tools. Gerendo brings it all into one place
             your team can simply{" "}
-            <em className="font-display italic text-foreground/90">talk to</em> —
+            <em className="font-display italic text-foreground/90">talk to</em> -
             and get answers backed by the source.
           </motion.p>
 
@@ -175,7 +175,7 @@ function Pillars() {
       n: "01",
       tag: "Ask",
       title: "Ask anything. Get cited answers.",
-      body: "“What did Acme decide about the homepage?” — answered in seconds with links to the Gmail thread, the WhatsApp message, and the Asana comment that prove it.",
+      body: "“What did Acme decide about the homepage?” - answered in seconds with links to the Gmail thread, the WhatsApp message, and the Asana comment that prove it.",
     },
     {
       n: "02",
@@ -187,7 +187,7 @@ function Pillars() {
       n: "03",
       tag: "Memory",
       title: "Your whole company, on tap.",
-      body: "New hires query your business's full memory instead of interrupting senior staff. Every account, every decision, every nuance — answerable on day one.",
+      body: "New hires query your business's full memory instead of interrupting senior staff. Every account, every decision, every nuance - answerable on day one.",
     },
   ];
   return (
@@ -268,17 +268,17 @@ function MeetingsToSOPs() {
     {
       tag: "01 · Capture",
       title: "Every meeting becomes context.",
-      body: "Gerendo turns your Google Meet calls into clean summaries — decisions, owners, deadlines, blockers — so nothing important gets lost in someone's notebook.",
+      body: "Gerendo turns your Google Meet calls into clean summaries - decisions, owners, deadlines, blockers - so nothing important gets lost in someone's notebook.",
     },
     {
       tag: "02 · Remember",
       title: "Your business never forgets.",
-      body: "Past calls, past decisions, past clients — all searchable. Ask “what did we promise the client in March?” and get the answer with the timestamp.",
+      body: "Past calls, past decisions, past clients - all searchable. Ask “what did we promise the client in March?” and get the answer with the timestamp.",
     },
     {
       tag: "03 · Act",
       title: "Turn talk into tasks.",
-      body: "From the same conversation, Gerendo drafts the Asana tasks that need to happen — owners assigned, context attached. You review, you ship.",
+      body: "From the same conversation, Gerendo drafts the Asana tasks that need to happen - owners assigned, context attached. You review, you ship.",
     },
   ];
 
@@ -296,7 +296,7 @@ function MeetingsToSOPs() {
             Stop running the process. <em className="italic text-muted-foreground">Let it run itself.</em>
           </h2>
           <p className="mt-6 max-w-md text-pretty text-muted-foreground">
-            Every client call holds context that shapes the next three months of work — and
+            Every client call holds context that shapes the next three months of work - and
             most of it gets lost. Gerendo summarizes your meetings, remembers the history of
             your business, and uses it to draft the tasks and SOPs that move things forward.
           </p>
@@ -368,7 +368,7 @@ function BringYourAI() {
           Pick your AI. <em className="italic text-muted-foreground">Any of them.</em>
         </h2>
         <p className="mt-5 max-w-xl text-pretty text-muted-foreground">
-          Gerendo plugs into the AI tools you already know — Claude, ChatGPT, Gemini,
+          Gerendo plugs into the AI tools you already know - Claude, ChatGPT, Gemini,
           Mistral. Use the one your team prefers. Switch any time. Your data is never
           used to train any of them.
         </p>
@@ -400,11 +400,11 @@ function Security() {
   const items = [
     {
       title: "Security is a first principle.",
-      body: "We're building Gerendo with security as a foundational concern — not something to bolt on later. Every architecture decision passes through it first.",
+      body: "We're building Gerendo with security as a foundational concern - not something to bolt on later. Every architecture decision passes through it first.",
     },
     {
       title: "Never used to train AI.",
-      body: "Your data is never used to train any model — ours or anyone else's. We route through zero-retention AI endpoints whenever available.",
+      body: "Your data is never used to train any model - ours or anyone else's. We route through zero-retention AI endpoints whenever available.",
     },
     {
       title: "Permission-aware by design.",
@@ -412,11 +412,11 @@ function Security() {
     },
     {
       title: "Multi-tenant from line one.",
-      body: "Each workspace's data is isolated at the database level — never retrofitted, never shared by mistake. We're building this in from day one, not later.",
+      body: "Each workspace's data is isolated at the database level - never retrofitted, never shared by mistake. We're building this in from day one, not later.",
     },
     {
       title: "You own the off switch.",
-      body: "Disconnect any source in one click. Export everything. Delete it all — permanently — whenever you want.",
+      body: "Disconnect any source in one click. Export everything. Delete it all - permanently - whenever you want.",
     },
     {
       title: "Compliance on the roadmap.",
@@ -490,7 +490,7 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
         </h2>
         <p className="mt-5 max-w-xl text-pretty text-muted-foreground">
           The first five businesses to come on board get Gerendo free, in exchange for
-          working closely with us — sharing feedback, shaping the roadmap, helping us
+          working closely with us - sharing feedback, shaping the roadmap, helping us
           build the product your team actually wants.
         </p>
       </div>
@@ -526,7 +526,7 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
           </div>
           <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
             Standard plans roll out once founding partners are happy. Join the waitlist
-            and we'll be in touch — no spam, just an email when access opens.
+            and we'll be in touch - no spam, just an email when access opens.
           </p>
           <button
             onClick={onWaitlistOpen}
@@ -550,9 +550,9 @@ function Manifesto() {
         Why now
       </p>
       <p className="mt-6 font-display text-balance text-[clamp(1.6rem,3.5vw,2.6rem)] leading-[1.2] tracking-tight">
-        The big AI tools were built for the Fortune 1000 — they assume one giant company,
+        The big AI tools were built for the Fortune 1000 - they assume one giant company,
         one source of truth. But your business doesn't run that way. Your knowledge lives{" "}
-        <span className="shimmer-text">between the tools</span> — in the WhatsApp thread
+        <span className="shimmer-text">between the tools</span> - in the WhatsApp thread
         nobody logged, the Drive folder nobody named, the meeting only one person remembers.
       </p>
       <p className="mt-6 max-w-3xl text-[17px] leading-relaxed text-muted-foreground">
@@ -631,7 +631,7 @@ function WaitlistDialog({
           </DialogTitle>
           <DialogDescription asChild>
             <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-              Drop your work email. We'll be in touch when your spot opens — and tell
+              Drop your work email. We'll be in touch when your spot opens - and tell
               you if you qualify for one of the five free founding partner spots.
             </p>
           </DialogDescription>
@@ -664,7 +664,7 @@ function WaitlistDialog({
             </div>
             <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
               {state.status === "ok"
-                ? "Check your inbox — a note from contact@gerendo.com is on its way."
+                ? "Check your inbox - a note from contact@gerendo.com is on its way."
                 : state.status === "error"
                   ? state.message
                   : "One email when access opens. No spam, ever."}

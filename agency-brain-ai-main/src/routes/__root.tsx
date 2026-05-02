@@ -29,15 +29,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Gerendo — One brain for your whole business" },
+      { title: "Gerendo - One brain for your whole business" },
       { name: "description", content: "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks." },
       { name: "author", content: "Gerendo" },
-      { property: "og:title", content: "Gerendo — One brain for your whole business" },
+      { property: "og:title", content: "Gerendo - One brain for your whole business" },
       { property: "og:description", content: "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks." },
       { property: "og:type", content: "website" },
       { property: "og:url", content: "https://gerendo.com" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:title", content: "Gerendo — One brain for your whole business" },
+      { name: "twitter:title", content: "Gerendo - One brain for your whole business" },
       { name: "twitter:description", content: "Gerendo is your business's brain. One OS connecting every tool you use, remembering every decision, answering anything your team asks." },
     ],
     links: [

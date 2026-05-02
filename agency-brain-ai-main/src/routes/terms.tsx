@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 export const Route = createFileRoute("/terms")({
   head: () => ({
     meta: [
-      { title: "Terms of Use — Gerendo" },
+      { title: "Terms of Use - Gerendo" },
       { name: "description", content: "Terms governing your use of Gerendo." },
     ],
   }),
@@ -47,9 +47,9 @@ function Terms() {
           <section>
             <h2 className="font-display text-2xl text-foreground">2. The service</h2>
             <p className="mt-3">
-              Gerendo is a B2B SaaS platform that connects to the tools your team already uses —
+              Gerendo is a B2B SaaS platform that connects to the tools your team already uses -
               including but not limited to Gmail, Google Drive, Asana, Google Meet, WhatsApp
-              Business, Slack, Notion, and Linear — and uses AI to help your team query, summarise,
+              Business, Slack, Notion, and Linear - and uses AI to help your team query, summarise,
               and act on your business knowledge. To deliver this, Gerendo reads and indexes data
               from the sources you connect, routes queries through AI providers of your choice, and
               stores derived outputs (summaries, tasks, memory) within your isolated workspace.
@@ -108,7 +108,7 @@ function Terms() {
 
           {/* 6. GDPR roles */}
           <section>
-            <h2 className="font-display text-2xl text-foreground">6. GDPR — controller & processor</h2>
+            <h2 className="font-display text-2xl text-foreground">6. GDPR - controller & processor</h2>
             <p className="mt-3">
               Gerendo is operated by a Romanian-registered entity and is subject to the EU General
               Data Protection Regulation (GDPR). With respect to personal data you feed into
@@ -118,7 +118,7 @@ function Terms() {
             </p>
             <p className="mt-3">
               If your use of Gerendo requires a Data Processing Agreement (DPA) under Article 28
-              GDPR — which is typical for any business processing personal data of EU residents —
+              GDPR - which is typical for any business processing personal data of EU residents -
               contact us at{" "}
               <a href="mailto:legal@gerendo.com" className="text-foreground underline underline-offset-2 hover:text-ember transition-colors">legal@gerendo.com</a>{" "}
               and we will provide one. Our full privacy practices are described in our{" "}
@@ -215,7 +215,7 @@ function Terms() {
               Gerendo is provided <strong className="text-foreground font-medium">"as is"</strong> and{" "}
               <strong className="text-foreground font-medium">"as available"</strong> without warranties
               of any kind, express or implied, including fitness for a particular purpose or
-              uninterrupted availability. AI-generated outputs may contain errors — you are
+              uninterrupted availability. AI-generated outputs may contain errors - you are
               responsible for verifying anything before acting on it.
             </p>
             <p className="mt-3">

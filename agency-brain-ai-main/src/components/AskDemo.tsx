@@ -21,7 +21,7 @@ const SAMPLES = [
   },
   {
     q: "Did anyone reply to the Northwind invoice question?",
-    a: "Yes — Dani confirmed net-30 in WhatsApp 22 min ago. Not yet logged in Asana.",
+    a: "Yes - Dani confirmed net-30 in WhatsApp 22 min ago. Not yet logged in Asana.",
     sources: [
       { app: "WhatsApp", who: "Dani · Northwind", when: "22m ago" },
     ],

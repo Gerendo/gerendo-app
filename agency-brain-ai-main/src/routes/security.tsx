@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 export const Route = createFileRoute("/security")({
   head: () => ({
     meta: [
-      { title: "Security — Gerendo" },
+      { title: "Security - Gerendo" },
       { name: "description", content: "How Gerendo keeps your business data private and secure." },
     ],
   }),
@@ -42,7 +42,7 @@ function Security() {
           </section>
           <section>
             <h2 className="font-display text-2xl text-foreground">You own the off switch</h2>
-            <p className="mt-3">Disconnect any source in one click. Export everything. Delete it all — permanently — whenever you want.</p>
+            <p className="mt-3">Disconnect any source in one click. Export everything. Delete it all - permanently - whenever you want.</p>
           </section>
           <section>
             <h2 className="font-display text-2xl text-foreground">Compliance roadmap</h2>
