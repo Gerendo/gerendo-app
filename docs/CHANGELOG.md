@@ -1,6 +1,32 @@
-# Gerendo — Changelog
+# Gerendo - Changelog
 
-## 2026-04-28 (evening — docs + deploy unblock)
+## 2026-05-02 (favicon, copy polish, two-way email)
+
+- Favicon (italic G PNG) shipped on both sites. Wired in `__root.tsx` and `src/app/layout.tsx`. Commit `925146a`.
+- Final SEO metadata on `__root.tsx` committed: title "Gerendo - One brain for your whole business", og:url, removed Lovable defaults.
+- Em dash purge across `agency-brain-ai-main/src/`. Founder rule locked: no `—` in any Gerendo prose. Commit `1da736a`.
+- Two-way email aliases. Cloudflare Routing inbound: `ermina@`, `contact@`, `privacy@`, `legal@`, `thankyou@` -> `tomagino28@gmail.com`. Gmail filters per alias. Gmail "Send mail as" via Resend SMTP (`smtp.resend.com:465`, user `resend`, password = API key, SSL, alias unchecked) so replies go out as the alias. Reply-from-same-address radio on. No Google Workspace needed.
+
+## 2026-04-29 -> 2026-05-02 (waitlist sites live)
+
+- Brand locked. Palette `#0E0F12` / `#F6F4EE` / `#E8A33D`. Fraunces (display) + Inter (body) + JetBrains Mono (Lovable site). Wordmark = "Gerendo" Fraunces 600 with amber dot. Standalone mark = italic Fraunces "G" in amber rounded square.
+- `app.gerendo.com` built (Next.js 16 / Turbopack at repo root). Single waitlist landing. Vercel.
+- `/api/waitlist` route: Resend `contacts.create` into General audience + `emails.send` welcome. CORS `*`. Lazy-init Resend client (env vars read inside handler so Vercel "collect page data" pass doesn't break).
+- Marketing site at `agency-brain-ai-main/` (TanStack Start + Vite + Tailwind 4 + framer-motion). Cloudflare Pages, root dir `agency-brain-ai-main`, build `npm run build`, output `dist`. Live on `gerendo.com`.
+- Lovable WaitlistDialog wired cross-origin to `https://app.gerendo.com/api/waitlist` via `WAITLIST_ENDPOINT` constant. One backend, two frontends.
+- Fictional client renamed Pescobar -> Marengo in `AskDemo.tsx`.
+- Homepage Security/AI sections softened to "we're building" framing. Dedicated `routes/security.tsx` and `routes/privacy.tsx` keep specific tech claims (TLS 1.3, AES-256, SOC 2 in progress) as aspirational architecture - founder's call.
+- Resend domain verified for `gerendo.com` (DKIM/SPF on `send.gerendo.com`, no conflict with Cloudflare apex).
+- Welcome email: From `Andrei from Gerendo <contact@gerendo.com>`, signed "Ermina here - co-founder behind Gerendo" (co-founder personas).
+
+### Decisions locked in this stretch
+
+- Subdomain split: `gerendo.com` = marketing (Cloudflare Pages), `app.gerendo.com` = product (Vercel).
+- One repo, two deploys: Vercel on root (Next.js), Cloudflare Pages on `agency-brain-ai-main/` subdir (TanStack Start).
+- Positioning leans generic ("your business" not "your agency"). Founder's call - watch for drift vs. CLAUDE.md original wedge focus.
+- Skip third-party analytics. Cloudflare Web Analytics (cookieless) + GSC. No consent banner needed.
+
+## 2026-04-28 (evening - docs + deploy unblock)
 
 **Session: Drafted core Phase 0 docs (BRIEF, ARCHITECTURE), unblocked Vercel deploys, validated RAG direction.**
 
