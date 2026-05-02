@@ -2,19 +2,35 @@ import * as fs from "fs";
 import Database from "better-sqlite3";
 import type { ChunkRow } from "./types.js";
 
+const SCHEMA_VERSION = 2;
+
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS chunks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     pointer_json TEXT NOT NULL,
     embedding BLOB NOT NULL,
     hash TEXT NOT NULL UNIQUE,
+    keyword_text TEXT NOT NULL DEFAULT '',
     indexed_at INTEGER NOT NULL
+  );
+
+  CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+    keyword_text,
+    tokenize='unicode61 remove_diacritics 1'
   );
 `;
 
 export function openDb(absPath: string): Database.Database {
   const db = new Database(absPath);
   db.pragma("journal_mode = WAL");
+
+  const version = (db.pragma("user_version") as Array<{ user_version: number }>)[0].user_version;
+  if (version < SCHEMA_VERSION) {
+    db.exec("DROP TABLE IF EXISTS chunks; DROP TABLE IF EXISTS chunks_fts;");
+    db.pragma(`user_version = ${SCHEMA_VERSION}`);
+    console.log(`DB schema upgraded to v${SCHEMA_VERSION} — full reindex required.`);
+  }
+
   db.exec(SCHEMA);
   return db;
 }
@@ -23,12 +39,38 @@ export function insertChunk(
   db: Database.Database,
   pointerJson: string,
   embedding: Float32Array,
-  hash: string
+  hash: string,
+  keywordText: string
 ): void {
-  db.prepare(
-    `INSERT OR IGNORE INTO chunks (pointer_json, embedding, hash, indexed_at)
-     VALUES (?, ?, ?, ?)`
-  ).run(pointerJson, Buffer.from(embedding.buffer), hash, Date.now());
+  const result = db.prepare(
+    `INSERT OR IGNORE INTO chunks (pointer_json, embedding, hash, keyword_text, indexed_at)
+     VALUES (?, ?, ?, ?, ?)`
+  ).run(pointerJson, Buffer.from(embedding.buffer), hash, keywordText, Date.now());
+
+  if (result.changes > 0) {
+    db.prepare(`INSERT INTO chunks_fts(rowid, keyword_text) VALUES (?, ?)`)
+      .run(result.lastInsertRowid, keywordText);
+  }
+}
+
+export function ftsSearch(
+  db: Database.Database,
+  query: string,
+  limit = 20
+): Array<{ id: number; rank: number }> {
+  const terms = query
+    .split(/\s+/)
+    .map((t) => t.replace(/['"*^(){}[\]|!]/g, "").trim())
+    .filter((t) => t.length > 2);
+  if (terms.length === 0) return [];
+  const ftsQuery = terms.join(" OR ");
+  try {
+    return db
+      .prepare(`SELECT rowid AS id, rank FROM chunks_fts WHERE keyword_text MATCH ? ORDER BY rank LIMIT ?`)
+      .all(ftsQuery, limit) as Array<{ id: number; rank: number }>;
+  } catch {
+    return [];
+  }
 }
 
 export function allChunks(db: Database.Database): ChunkRow[] {
@@ -54,7 +96,15 @@ export function allChunks(db: Database.Database): ChunkRow[] {
 }
 
 export function clearChunks(db: Database.Database): void {
+  db.prepare("DELETE FROM chunks_fts").run();
   db.prepare("DELETE FROM chunks").run();
+}
+
+function deleteByIds(db: Database.Database, ids: number[]): void {
+  if (ids.length === 0) return;
+  const placeholders = ids.map(() => "?").join(",");
+  db.prepare(`DELETE FROM chunks_fts WHERE rowid IN (${placeholders})`).run(...ids);
+  db.prepare(`DELETE FROM chunks WHERE id IN (${placeholders})`).run(...ids);
 }
 
 export function pruneUnlistedFiles(db: Database.Database, listedPaths: Set<string>): number {
@@ -62,8 +112,7 @@ export function pruneUnlistedFiles(db: Database.Database, listedPaths: Set<strin
   const toDelete = rows
     .filter((row) => !listedPaths.has((JSON.parse(row.pointer_json) as { path: string }).path))
     .map((row) => row.id);
-  if (toDelete.length === 0) return 0;
-  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  deleteByIds(db, toDelete);
   return toDelete.length;
 }
 
@@ -72,8 +121,7 @@ export function pruneDeletedFiles(db: Database.Database): number {
   const toDelete = rows
     .filter((row) => !fs.existsSync((JSON.parse(row.pointer_json) as { path: string }).path))
     .map((row) => row.id);
-  if (toDelete.length === 0) return 0;
-  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  deleteByIds(db, toDelete);
   return toDelete.length;
 }
 
@@ -86,7 +134,6 @@ export function pruneStaleChunks(db: Database.Database, filePath: string, curren
       toDelete.push(row.id);
     }
   }
-  if (toDelete.length === 0) return 0;
-  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  deleteByIds(db, toDelete);
   return toDelete.length;
 }

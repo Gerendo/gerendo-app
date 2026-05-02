@@ -4,13 +4,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import { embedTexts } from "./embed.js";
-import { openDb, allChunks } from "./db.js";
+import { openDb, allChunks, ftsSearch } from "./db.js";
 import type { Pointer } from "./types.js";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../");
 const DB_PATH = path.join(REPO_ROOT, "data/gerendo.db");
 const TOP_K = 5;
 const MAX_PER_FILE = 2;
+const MIN_VECTOR_SCORE = 0.3; // discard chunks with cosine < this before RRF merge
+const RRF_K = 60;             // reciprocal rank fusion constant
 
 const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY ?? "";
 if (!VOYAGE_API_KEY) {
@@ -64,11 +66,44 @@ server.tool(
 
     const [queryEmbedding] = await embedTexts([query], VOYAGE_API_KEY);
 
-    const fileCounts = new Map<string, number>();
-    const scored = rows
+    // --- Vector ranking (cosine, threshold-filtered) ---
+    const vecScored = rows
       .map((row) => ({ row, score: cosineSimilarity(queryEmbedding, row.embedding) }))
-      .sort((a, b) => b.score - a.score)
-      .filter(({ row }) => {
+      .filter(({ score }) => score >= MIN_VECTOR_SCORE)
+      .sort((a, b) => b.score - a.score);
+
+    const vecRankById = new Map<number, number>();
+    vecScored.forEach(({ row }, rank) => vecRankById.set(row.id, rank));
+
+    // --- FTS5 keyword ranking ---
+    const ftsRows = ftsSearch(db, query, 20);
+    const ftsRankById = new Map<number, number>();
+    ftsRows.forEach(({ id }, rank) => ftsRankById.set(id, rank));
+
+    // --- Reciprocal Rank Fusion ---
+    const candidateIds = new Set<number>([
+      ...vecScored.map(({ row }) => row.id),
+      ...ftsRows.map(({ id }) => id),
+    ]);
+
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+
+    const rrfScored = Array.from(candidateIds)
+      .map((id) => {
+        const vecRank = vecRankById.get(id) ?? null;
+        const ftsRank = ftsRankById.get(id) ?? null;
+        const rrf =
+          (vecRank !== null ? 1 / (RRF_K + vecRank) : 0) +
+          (ftsRank !== null ? 1 / (RRF_K + ftsRank) : 0);
+        return { id, rrf, vecScore: vecRank !== null ? vecScored[vecRank].score : 0 };
+      })
+      .sort((a, b) => b.rrf - a.rrf);
+
+    const fileCounts = new Map<string, number>();
+    const scored = rrfScored
+      .filter(({ id }) => {
+        const row = rowById.get(id);
+        if (!row) return false;
         const p = (JSON.parse(row.pointerJson) as { path: string }).path;
         const count = fileCounts.get(p) ?? 0;
         if (count >= MAX_PER_FILE) return false;
@@ -77,11 +112,12 @@ server.tool(
       })
       .slice(0, TOP_K);
 
-    const passages = scored.map(({ row, score }, i) => {
+    const passages = scored.map(({ id, vecScore }, i) => {
+      const row = rowById.get(id)!;
       const pointer: Pointer = JSON.parse(row.pointerJson);
       const preview = readChunkPreview(pointer, 120);
       const relPath = path.relative(REPO_ROOT, pointer.path) || pointer.path;
-      return `[${i + 1}] ${relPath} bytes ${pointer.byteStart}-${pointer.byteEnd} (score: ${score.toFixed(3)})\n${preview}`;
+      return `[${i + 1}] ${relPath} bytes ${pointer.byteStart}-${pointer.byteEnd} (score: ${vecScore.toFixed(3)})\n${preview}`;
     });
 
     return {

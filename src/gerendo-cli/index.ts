@@ -58,7 +58,7 @@ for (const absPath of files) {
     const pointerJson = JSON.stringify(chunk.pointer);
     const before = db.prepare("SELECT 1 FROM chunks WHERE hash = ?").get(chunk.hash);
 
-    insertChunk(db, pointerJson, embeddings[i], chunk.hash);
+    insertChunk(db, pointerJson, embeddings[i], chunk.hash, chunk.text);
 
     if (before) {
       process.stdout.write(`  [skip] chunk ${i + 1} (unchanged)\n`);

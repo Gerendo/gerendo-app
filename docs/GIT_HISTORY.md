@@ -1,3 +1,36 @@
+## 0703b8f - docs: update HOW_THE_CLI_WORKS and CHANGELOG for pointer-only search
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 18:06
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 68ec16e - perf: return pointers + preview from search_gerendo, not full chunks
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 18:04
+
+Drops per-search token cost from ~4,000-5,000 to ~200-300 tokens.
+Claude reads full content via the Read tool only when needed.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 926026d - feat: extend Voyage index to full codebase with declaration-based chunking
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 17:13
+
+- Add chunkCodeFile() in chunker.ts: splits .ts/.tsx files on top-level export declarations for semantic precision
+- Expand collectFiles() to glob src/**/*.{ts,tsx} and agency-brain-ai-main/src/**/*.{ts,tsx}, excluding .test.ts, .spec.ts, .d.ts
+- Update chunkFile() dispatcher to route code files to declaration-based chunking, markdown to paragraph chunking
+- Update MCP tool description to reflect full codebase + docs coverage
+- Update HOW_THE_CLI_WORKS.md with code sources inventory
+
+Index now has 165 total chunks: 108 from code + 57 from docs. search_gerendo is now a unified knowledge layer across the entire repo.
+
+---
 ## c5a9881 - fix: clean Voyage index - prune stale/unlisted chunks, cap per-file results
 
 **Author:** Tocki28  

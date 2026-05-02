@@ -4,7 +4,7 @@
 
 # Gerendo SaaS - Workspace Brain
 
-**Context rule:** Always query `search_gerendo` first for any project context. Only fall back to reading files directly if the pipeline returns no relevant results. Read files only when editing them.
+**Context rule:** Always query `search_gerendo` first for any project context. Do not read files to gather context - Voyage is the only source of truth for understanding the project. Read files only when you are about to edit them.
 
 **One-liner:** Unified intelligence layer for 15-50 person marketing agencies. Closed loop, not dashboard.
 
