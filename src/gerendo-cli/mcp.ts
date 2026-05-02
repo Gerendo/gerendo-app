@@ -28,12 +28,13 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
-function readChunkText(pointer: Pointer): string {
+function readChunkPreview(pointer: Pointer, maxChars = 120): string {
   const buf = Buffer.alloc(pointer.byteEnd - pointer.byteStart);
   const fd = fs.openSync(pointer.path, "r");
   fs.readSync(fd, buf, 0, buf.length, pointer.byteStart);
   fs.closeSync(fd);
-  return buf.toString("utf-8");
+  const text = buf.toString("utf-8");
+  return text.length > maxChars ? text.slice(0, maxChars).trimEnd() + "…" : text;
 }
 
 const server = new McpServer({
@@ -43,7 +44,7 @@ const server = new McpServer({
 
 server.tool(
   "search_gerendo",
-  "Search the entire Gerendo codebase and knowledge base (code, docs, notes, memory) using semantic search. Returns file path + byte range pointers for efficient retrieval. Call this before answering any question about the project.",
+  "Search the Gerendo codebase and knowledge base using semantic search. Returns file path, byte range, and a short preview per result. To read the full content of a result, use the Read tool with the returned path and byte range.",
   { query: z.string().describe("The question or topic to search for") },
   async ({ query }) => {
     if (!fs.existsSync(DB_PATH)) {
@@ -78,9 +79,9 @@ server.tool(
 
     const passages = scored.map(({ row, score }, i) => {
       const pointer: Pointer = JSON.parse(row.pointerJson);
-      const text = readChunkText(pointer);
+      const preview = readChunkPreview(pointer, 120);
       const relPath = path.relative(REPO_ROOT, pointer.path) || pointer.path;
-      return `[${i + 1}] ${relPath} (score: ${score.toFixed(3)})\n${text}`;
+      return `[${i + 1}] ${relPath} bytes ${pointer.byteStart}-${pointer.byteEnd} (score: ${score.toFixed(3)})\n${preview}`;
     });
 
     return {
