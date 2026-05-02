@@ -1,11 +1,8 @@
 {
   "mcpServers": {
     "gerendo": {
-      "command": "node",
-      "args": ["--import", "tsx/esm", "src/gerendo-cli/mcp.ts"],
-      "env": {
-        "VOYAGE_API_KEY": "${VOYAGE_API_KEY}"
-      }
+      "command": "bash",
+      "args": ["-c", "set -a; source .env.local; set +a; exec node --import tsx/esm src/gerendo-cli/mcp.ts"]
     }
   },
   "hooks": {

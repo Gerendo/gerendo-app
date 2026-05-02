@@ -1,3 +1,16 @@
+## 9f9353d - chore: harden Voyage pipeline - auto-refresh git history, update context rules
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 13:51
+
+- Regenerate GIT_HISTORY.md before every index run (index.ts)
+- Add full source inventory to HOW_THE_CLI_WORKS.md
+- CLAUDE.md: pipeline-first context rule with file fallback
+- docs/CHANGELOG.md: session log
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 53934df - feat: add Voyage RAG pipeline and MCP server for semantic context retrieval
 
 **Author:** Tocki28  

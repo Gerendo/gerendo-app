@@ -1,5 +1,7 @@
 @AGENTS.md
 
+> **MANDATORY FIRST ACTION:** Before responding to ANY message, call `search_gerendo` with the user's query. No exceptions. Do not answer from loaded context alone. If the tool is unavailable, say so explicitly before continuing.
+
 # Gerendo SaaS - Workspace Brain
 
 **Context rule:** Always query `search_gerendo` first for any project context. Only fall back to reading files directly if the pipeline returns no relevant results. Read files only when editing them.
