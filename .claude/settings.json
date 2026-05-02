@@ -1,8 +1,9 @@
 {
+  "enableAllProjectMcpServers": true,
   "mcpServers": {
     "gerendo": {
       "command": "bash",
-      "args": ["-c", "set -a; source .env.local; set +a; exec node --import tsx/esm src/gerendo-cli/mcp.ts"]
+      "args": ["-c", "set -a; source /Users/mingw/gerendo-app/.env.local; set +a; exec node --import /Users/mingw/gerendo-app/node_modules/tsx/dist/esm/index.mjs /Users/mingw/gerendo-app/src/gerendo-cli/mcp.ts"]
     }
   },
   "hooks": {

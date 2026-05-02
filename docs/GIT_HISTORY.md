@@ -1,3 +1,14 @@
+## 19c0240 - chore: fix Voyage MCP sourcing and harden search_gerendo rule
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 14:01
+
+- MCP server now sources .env.local via set -a before starting node
+- CLAUDE.md: mandatory search_gerendo blockquote at top of file
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 9f9353d - chore: harden Voyage pipeline - auto-refresh git history, update context rules
 
 **Author:** Tocki28  
