@@ -4,7 +4,42 @@ Read this at the start of every session. Update it at the end of every session.
 
 ---
 
-## Last session: 2026-04-29 → 2026-05-02 (waitlist sites live)
+## Last session: 2026-05-02 (favicon, copy polish, email aliases two-way)
+
+### What got done
+
+- **Favicon shipped.** `Gerendo-Favicon.png` (italic G) dropped into both `public/` (Next.js app) and `agency-brain-ai-main/public/` (marketing). Wired via `<link rel="icon">` in `__root.tsx` and `metadata.icons` in `src/app/layout.tsx`. Committed `925146a`.
+- **Final SEO metadata pass on `__root.tsx`** committed (had been local-only): "Gerendo - One brain for your whole business" title, og:url, removed Lovable og:image / `@Lovable` twitter:site, aligned description with hero copy.
+- **Em dash purge.** Founder doesn't want em dashes anywhere in marketing copy ("so AI"). Replaced every `—` with single `-` across `agency-brain-ai-main/src/` (titles, meta, body, AskDemo, all legal pages). CSS custom properties left alone. Committed `1da736a`. **Lock this in:** no em dashes in any future Gerendo copy.
+- **Email aliases set up two-way (Cloudflare Routing in + Resend SMTP out via Gmail).**
+  - Cloudflare Email Routing inbound: `ermina@`, `contact@`, `privacy@`, `legal@`, `thankyou@` all forward to `tomagino28@gmail.com`.
+  - Gmail filters: one per alias, matching on `to:<alias>@gerendo.com`, applies a label of the same name.
+  - Gmail "Send mail as" configured for ermina + contact (and likely privacy + legal) using Resend SMTP (`smtp.resend.com:465`, username `resend`, password = Resend API key, SSL, "Treat as alias" UNCHECKED).
+  - Reply-from-same-address radio enabled in Accounts and Import.
+  - Net effect: Gino can send and receive from any `@gerendo.com` alias inside his existing Gmail UI — no Google Workspace needed.
+
+### Current phase
+
+**Phase 0 - validation. Infra fully done** (both waitlists live, favicon, SEO metadata, two-way email). Outreach work is now the only thing standing between us and Phase 1.
+
+---
+
+## Old open questions (status)
+
+1. ✅ **Favicon** - shipped this session.
+2. ✅ **Cloudflare Email Routing aliases** - added ermina/privacy/legal this session.
+3. **DNS conflict on apex** - status unknown, may already be resolved since gerendo.com serves the marketing site. Verify if anything is still failing.
+4. ⚠️ **Rotate Resend API key** - STILL OPEN. Reminder given again this session before pasting into Gmail SMTP. Confirm with Gino that the key now in Vercel + `.env.local` + Gmail SMTP configs is the rotated one, not the original.
+5. **Slack/Notion/Linear in `terms.tsx`** - still references them. Prune or label "planned" before any enterprise call.
+6. ✅ **Cookies/analytics decision** - locked.
+7. **Romanian-lawyer pass on legal pages** - still pending; needed before first enterprise signup.
+8. **Phase 0 outreach work** - unchanged. Still need 4-of-7 agency conversations.
+
+---
+
+## Older sessions
+
+### 2026-04-29 → 2026-05-02 (waitlist sites live)
 
 ### What got done
 
