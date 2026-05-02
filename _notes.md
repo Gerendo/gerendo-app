@@ -6,8 +6,10 @@ Read at session start. Update at session end. Keep this short - history goes to 
 
 ## Current state (2026-05-02)
 
-- **Phase 0** - validation. All public infra is live: `gerendo.com` (marketing, Cloudflare Pages) and `app.gerendo.com` (Next.js, Vercel) both serve waitlists into Resend. Favicon, SEO metadata, and two-way email aliases all done.
-- **What's blocking Phase 1:** 4-of-7 agency conversations confirming the same pain. Outreach work hasn't started. No app code yet, by design.
+- **Phase 0** - validation. Public infra live: `gerendo.com` (marketing, Cloudflare Pages) and `app.gerendo.com` (Next.js, Vercel) both serve waitlists into Resend.
+- **Direction shift (2026-05-02):** Gino is customer zero. We're cutting under PLAN.md Phase 1 and building a local-first **memory layer** instead of a hosted multi-tenant web app. First data source = Gino's own markdown context, not Gmail. See [docs/MEMORY_LAYER.md](docs/MEMORY_LAYER.md) for the architecture and Step 1 spec.
+- **Hard storage rule:** no raw text persisted in Gerendo's DB. Only embeddings + pointers + derived map. Raw fetched live at query time, discarded after.
+- **Next:** Step 1 - `gerendo ask` CLI over Gino's existing markdown. ~1-2h. Spec in MEMORY_LAYER.md.
 
 ## Open
 
