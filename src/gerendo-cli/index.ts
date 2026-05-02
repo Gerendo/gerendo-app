@@ -3,7 +3,7 @@ import * as fs from "fs";
 import { execSync } from "child_process";
 import { collectFiles, chunkFile } from "./chunker.js";
 import { embedTexts } from "./embed.js";
-import { openDb, insertChunk } from "./db.js";
+import { openDb, insertChunk, pruneDeletedFiles, pruneStaleChunks, pruneUnlistedFiles } from "./db.js";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../");
 const DB_PATH = path.join(REPO_ROOT, "data/gerendo.db");
@@ -26,7 +26,13 @@ if (!VOYAGE_API_KEY) {
 fs.mkdirSync(path.dirname(DB_PATH), { recursive: true });
 const db = openDb(DB_PATH);
 
+const pruned = pruneDeletedFiles(db);
+if (pruned > 0) console.log(`Pruned ${pruned} chunk(s) from deleted files`);
+
 const files = collectFiles(REPO_ROOT);
+
+const unlistedPruned = pruneUnlistedFiles(db, new Set(files));
+if (unlistedPruned > 0) console.log(`Pruned ${unlistedPruned} chunk(s) from de-listed files`);
 console.log(`\nFound ${files.length} files to index:`);
 for (const f of files) console.log(" ", path.relative(REPO_ROOT, f) || f);
 
@@ -38,6 +44,9 @@ for (const absPath of files) {
   const rel = path.relative(REPO_ROOT, absPath) || absPath;
   const chunks = chunkFile(absPath);
   if (chunks.length === 0) continue;
+
+  const stale = pruneStaleChunks(db, absPath, new Set(chunks.map((c) => c.hash)));
+  if (stale > 0) process.stdout.write(`\n${rel} — pruned ${stale} stale chunk(s)`);
 
   process.stdout.write(`\n${rel} — ${chunks.length} chunk(s)\n`);
 

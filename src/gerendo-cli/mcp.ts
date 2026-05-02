@@ -10,6 +10,7 @@ import type { Pointer } from "./types.js";
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../");
 const DB_PATH = path.join(REPO_ROOT, "data/gerendo.db");
 const TOP_K = 5;
+const MAX_PER_FILE = 2;
 
 const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY ?? "";
 if (!VOYAGE_API_KEY) {
@@ -62,9 +63,17 @@ server.tool(
 
     const [queryEmbedding] = await embedTexts([query], VOYAGE_API_KEY);
 
+    const fileCounts = new Map<string, number>();
     const scored = rows
       .map((row) => ({ row, score: cosineSimilarity(queryEmbedding, row.embedding) }))
       .sort((a, b) => b.score - a.score)
+      .filter(({ row }) => {
+        const p = (JSON.parse(row.pointerJson) as { path: string }).path;
+        const count = fileCounts.get(p) ?? 0;
+        if (count >= MAX_PER_FILE) return false;
+        fileCounts.set(p, count + 1);
+        return true;
+      })
       .slice(0, TOP_K);
 
     const passages = scored.map(({ row, score }, i) => {

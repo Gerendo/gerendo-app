@@ -3,7 +3,8 @@ import * as path from "path";
 import * as crypto from "crypto";
 import type { Chunk } from "./types.js";
 
-const ROOT_FILES = ["CLAUDE.md", "AGENTS.md", "_notes.md", "README.md"];
+// CLAUDE.md is already loaded as system context every session - skip it to avoid flooding results
+const ROOT_FILES = ["AGENTS.md", "_notes.md", "README.md"];
 const MEMORY_DIR =
   "/Users/mingw/.claude/projects/-Users-mingw-gerendo-app/memory";
 

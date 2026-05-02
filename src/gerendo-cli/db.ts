@@ -1,3 +1,4 @@
+import * as fs from "fs";
 import Database from "better-sqlite3";
 import type { ChunkRow } from "./types.js";
 
@@ -54,4 +55,38 @@ export function allChunks(db: Database.Database): ChunkRow[] {
 
 export function clearChunks(db: Database.Database): void {
   db.prepare("DELETE FROM chunks").run();
+}
+
+export function pruneUnlistedFiles(db: Database.Database, listedPaths: Set<string>): number {
+  const rows = db.prepare("SELECT id, pointer_json FROM chunks").all() as Array<{ id: number; pointer_json: string }>;
+  const toDelete = rows
+    .filter((row) => !listedPaths.has((JSON.parse(row.pointer_json) as { path: string }).path))
+    .map((row) => row.id);
+  if (toDelete.length === 0) return 0;
+  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  return toDelete.length;
+}
+
+export function pruneDeletedFiles(db: Database.Database): number {
+  const rows = db.prepare("SELECT id, pointer_json FROM chunks").all() as Array<{ id: number; pointer_json: string }>;
+  const toDelete = rows
+    .filter((row) => !fs.existsSync((JSON.parse(row.pointer_json) as { path: string }).path))
+    .map((row) => row.id);
+  if (toDelete.length === 0) return 0;
+  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  return toDelete.length;
+}
+
+export function pruneStaleChunks(db: Database.Database, filePath: string, currentHashes: Set<string>): number {
+  const rows = db.prepare("SELECT id, hash, pointer_json FROM chunks").all() as Array<{ id: number; hash: string; pointer_json: string }>;
+  const toDelete: number[] = [];
+  for (const row of rows) {
+    const pointer = JSON.parse(row.pointer_json) as { path: string };
+    if (pointer.path === filePath && !currentHashes.has(row.hash)) {
+      toDelete.push(row.id);
+    }
+  }
+  if (toDelete.length === 0) return 0;
+  db.prepare(`DELETE FROM chunks WHERE id IN (${toDelete.map(() => "?").join(",")})`).run(...toDelete);
+  return toDelete.length;
 }
