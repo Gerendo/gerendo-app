@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS messages (
@@ -12,6 +12,7 @@ const SCHEMA = `
     thread_id TEXT,
     sender TEXT,
     subject TEXT,
+    mailbox TEXT NOT NULL DEFAULT 'inbox',
     received_at INTEGER NOT NULL,
     synced_at INTEGER NOT NULL,
     UNIQUE (source, external_id)
@@ -59,6 +60,7 @@ export function openAgencyDb(): Database.Database {
   const db = new Database(dbPath);
   db.pragma("journal_mode = WAL");
   db.pragma("foreign_keys = ON");
+  db.pragma("wal_checkpoint(PASSIVE)");
 
   const version = (db.pragma("user_version") as Array<{ user_version: number }>)[0].user_version;
   if (version < SCHEMA_VERSION) {
@@ -79,6 +81,7 @@ export function upsertMessage(
     threadId: string | null;
     sender: string;
     subject: string;
+    mailbox: string;
     receivedAt: number;
   }
 ): number {
@@ -86,9 +89,9 @@ export function upsertMessage(
   if (existing) return existing.id;
 
   const result = db.prepare(`
-    INSERT INTO messages (source, external_id, thread_id, sender, subject, received_at, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(msg.source, msg.externalId, msg.threadId, msg.sender, msg.subject, msg.receivedAt, Date.now());
+    INSERT INTO messages (source, external_id, thread_id, sender, subject, mailbox, received_at, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(msg.source, msg.externalId, msg.threadId, msg.sender, msg.subject, msg.mailbox, msg.receivedAt, Date.now());
 
   return result.lastInsertRowid as number;
 }

@@ -4,7 +4,12 @@ import { google } from "googleapis";
 import { openAgencyDb, upsertMessage, upsertEmbedding, getSyncState, setSyncState } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 
-const MAX_MESSAGES = 100;
+const MAX_MESSAGES_PER_MAILBOX = 100;
+
+const MAILBOXES = [
+  { label: "inbox", query: "in:inbox" },
+  { label: "sent",  query: "in:sent" },
+];
 
 export function stripHtml(html: string): string {
   return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
@@ -56,89 +61,99 @@ export async function POST(): Promise<NextResponse> {
   const gmail = google.gmail({ version: "v1", auth });
 
   const db = openAgencyDb();
-  const { cursor } = getSyncState(db, "gmail");
+  let totalSynced = 0;
 
-  let messageIds: string[] = [];
-  let newCursor = cursor;
+  for (const mailbox of MAILBOXES) {
+    const stateKey = `gmail:${mailbox.label}`;
+    const { cursor } = getSyncState(db, stateKey);
 
-  try {
-    if (cursor) {
-      const historyRes = await gmail.users.history.list({
-        userId: "me",
-        startHistoryId: cursor,
-        historyTypes: ["messageAdded"],
-        maxResults: MAX_MESSAGES,
-      });
-      const history = historyRes.data.history ?? [];
-      for (const h of history) {
-        for (const m of h.messagesAdded ?? []) {
-          if (m.message?.id) messageIds.push(m.message.id);
-        }
-      }
-      if (historyRes.data.historyId) newCursor = historyRes.data.historyId;
-    } else {
-      const listRes = await gmail.users.messages.list({ userId: "me", maxResults: MAX_MESSAGES, q: "in:inbox" });
-      messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
-      const profileRes = await gmail.users.getProfile({ userId: "me" });
-      if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
-    }
-  } catch (err: any) {
-    if (err?.code === 401) return NextResponse.json({ error: "Gmail token expired. Reconnect via /connect." }, { status: 401 });
-    return NextResponse.json({ error: "Gmail API error", details: String(err) }, { status: 502 });
-  }
+    let messageIds: string[] = [];
+    let newCursor = cursor;
 
-  if (messageIds.length === 0) {
-    if (newCursor) setSyncState(db, "gmail", newCursor);
-    return NextResponse.json({ synced: 0, message: "No new messages" });
-  }
-
-  const keywordTexts: string[] = [];
-  const messageRows: Array<{
-    source: string;
-    externalId: string;
-    threadId: string | null;
-    sender: string;
-    subject: string;
-    receivedAt: number;
-  }> = [];
-
-  for (const id of messageIds) {
     try {
-      const msgRes = await gmail.users.messages.get({ userId: "me", id, format: "full" });
-      const msg = msgRes.data;
-      const headers = msg.payload?.headers ?? [];
-      const sender = getHeader(headers, "from");
-      const subject = getHeader(headers, "subject") || "(no subject)";
-      const dateStr = getHeader(headers, "date");
-      const receivedAt = dateStr ? new Date(dateStr).getTime() : (msg.internalDate ? parseInt(msg.internalDate) : Date.now());
-      const body = extractBody(msg.payload);
-
-      // Use full body for embedding quality - not stored, only embedded
-      const keywordText = `${subject}. From: ${sender}. ${body}`.slice(0, 1500);
-
-      messageRows.push({ source: "gmail", externalId: id, threadId: msg.threadId ?? null, sender, subject, receivedAt });
-      keywordTexts.push(keywordText);
-    } catch {
+      if (cursor) {
+        const historyRes = await gmail.users.history.list({
+          userId: "me",
+          startHistoryId: cursor,
+          historyTypes: ["messageAdded"],
+          maxResults: MAX_MESSAGES_PER_MAILBOX,
+        });
+        const history = historyRes.data.history ?? [];
+        for (const h of history) {
+          for (const m of h.messagesAdded ?? []) {
+            if (m.message?.id) messageIds.push(m.message.id);
+          }
+        }
+        if (historyRes.data.historyId) newCursor = historyRes.data.historyId;
+      } else {
+        const listRes = await gmail.users.messages.list({
+          userId: "me",
+          maxResults: MAX_MESSAGES_PER_MAILBOX,
+          q: mailbox.query,
+        });
+        messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
+        const profileRes = await gmail.users.getProfile({ userId: "me" });
+        if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
+      }
+    } catch (err: any) {
+      console.error(`[sync] ${mailbox.label} list error:`, err?.message);
       continue;
     }
+
+    if (messageIds.length === 0) {
+      if (newCursor) setSyncState(db, stateKey, newCursor);
+      continue;
+    }
+
+    const keywordTexts: string[] = [];
+    const messageRows: Array<{
+      source: string;
+      externalId: string;
+      threadId: string | null;
+      sender: string;
+      subject: string;
+      mailbox: string;
+      receivedAt: number;
+    }> = [];
+
+    for (const id of messageIds) {
+      try {
+        const msgRes = await gmail.users.messages.get({ userId: "me", id, format: "full" });
+        const msg = msgRes.data;
+        const headers = msg.payload?.headers ?? [];
+        const sender = getHeader(headers, "from");
+        const subject = getHeader(headers, "subject") || "(no subject)";
+        const dateStr = getHeader(headers, "date");
+        const receivedAt = dateStr ? new Date(dateStr).getTime() : (msg.internalDate ? parseInt(msg.internalDate) : Date.now());
+        const body = extractBody(msg.payload);
+        const keywordText = `${subject}. From: ${sender}. ${body}`.slice(0, 1500);
+
+        messageRows.push({ source: "gmail", externalId: id, threadId: msg.threadId ?? null, sender, subject, mailbox: mailbox.label, receivedAt });
+        keywordTexts.push(keywordText);
+      } catch {
+        continue;
+      }
+    }
+
+    if (messageRows.length === 0) continue;
+
+    let embeddings: Float32Array[];
+    try {
+      embeddings = await embedTexts(keywordTexts);
+    } catch (err) {
+      console.error(`[sync] ${mailbox.label} embed error:`, err);
+      continue;
+    }
+
+    for (let i = 0; i < messageRows.length; i++) {
+      const messageId = upsertMessage(db, messageRows[i]);
+      upsertEmbedding(db, messageId, embeddings[i], keywordTexts[i]);
+      totalSynced++;
+    }
+
+    if (newCursor) setSyncState(db, stateKey, newCursor);
+    console.log(`[sync] ${mailbox.label}: ${messageRows.length} synced`);
   }
 
-  if (messageRows.length === 0) return NextResponse.json({ synced: 0, message: "No messages could be fetched" });
-
-  let embeddings: Float32Array[];
-  try {
-    embeddings = await embedTexts(keywordTexts);
-  } catch (err) {
-    return NextResponse.json({ error: "Voyage embedding failed", details: String(err) }, { status: 502 });
-  }
-
-  let synced = 0;
-  for (let i = 0; i < messageRows.length; i++) {
-    const messageId = upsertMessage(db, messageRows[i]);
-    upsertEmbedding(db, messageId, embeddings[i], keywordTexts[i]);
-    synced++;
-  }
-
-  if (newCursor) setSyncState(db, "gmail", newCursor);
-  return NextResponse.json({ synced, total: messageIds.length });
+  return NextResponse.json({ synced: totalSynced });
 }
