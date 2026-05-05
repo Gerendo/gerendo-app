@@ -36,7 +36,18 @@ function parseIntent(query: string, history: ConversationMessage[]): Intent {
     return { type: "recent", limit: Math.min(num, 10) };
   }
 
+  // Sent mailbox queries
+  if (/sent (by|from|through|via)|emails (i |we )?sent|my sent|from my|i sent/.test(q)) {
+    // Extract email address if present
+    const emailMatch = q.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/);
+    return { type: "sender", name: emailMatch ? emailMatch[0] : "ermina", limit: 10 };
+  }
+
   // Sender-based queries
+  const emailMatch = q.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/);
+  if (emailMatch) {
+    return { type: "sender", name: emailMatch[0], limit: 10 };
+  }
   const senderMatch = q.match(/from\s+([a-zA-Z][a-zA-Z\s]{1,30}?)(?:\s+about|\s+regarding|\s+said|\s+sent|\s+wrote|\s*\?|$)/) ||
     q.match(/what did\s+([a-zA-Z][a-zA-Z\s]{1,20}?)\s+(?:say|send|write|tell)/) ||
     q.match(/([a-zA-Z][a-zA-Z\s]{1,20}?)'s email/);

@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { Nango } from "@nangohq/node";
+
+export const maxDuration = 300; // 5 minutes - needed for full Gmail sync
 import { google } from "googleapis";
 import { openAgencyDb, upsertMessage, upsertEmbedding, getSyncState, setSyncState } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 
-const MAX_MESSAGES_PER_MAILBOX = 100;
+const BATCH_SIZE = 100; // Gmail API max per page
 
 const MAILBOXES = [
   { label: "inbox", query: "in:inbox" },
@@ -72,11 +74,12 @@ export async function POST(): Promise<NextResponse> {
 
     try {
       if (cursor) {
+        // Incremental sync - only new messages since last sync
         const historyRes = await gmail.users.history.list({
           userId: "me",
           startHistoryId: cursor,
           historyTypes: ["messageAdded"],
-          maxResults: MAX_MESSAGES_PER_MAILBOX,
+          maxResults: BATCH_SIZE,
         });
         const history = historyRes.data.history ?? [];
         for (const h of history) {
@@ -86,14 +89,27 @@ export async function POST(): Promise<NextResponse> {
         }
         if (historyRes.data.historyId) newCursor = historyRes.data.historyId;
       } else {
-        const listRes = await gmail.users.messages.list({
-          userId: "me",
-          maxResults: MAX_MESSAGES_PER_MAILBOX,
-          q: mailbox.query,
-        });
-        messageIds = (listRes.data.messages ?? []).map((m) => m.id!).filter(Boolean);
+        // Full sync - paginate through ALL messages
+        console.log(`[sync] ${mailbox.label}: full sync, paginating all messages...`);
+        let pageToken: string | undefined;
+        let page = 0;
+        do {
+          const listRes = await gmail.users.messages.list({
+            userId: "me",
+            maxResults: BATCH_SIZE,
+            q: mailbox.query,
+            pageToken,
+          });
+          const ids = (listRes.data.messages ?? []).map((m: any) => m.id!).filter(Boolean);
+          messageIds.push(...ids);
+          pageToken = listRes.data.nextPageToken ?? undefined;
+          page++;
+          console.log(`[sync] ${mailbox.label}: page ${page}, ${messageIds.length} total so far`);
+        } while (pageToken);
+
         const profileRes = await gmail.users.getProfile({ userId: "me" });
         if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
+        console.log(`[sync] ${mailbox.label}: found ${messageIds.length} total messages`);
       }
     } catch (err: any) {
       console.error(`[sync] ${mailbox.label} list error:`, err?.message);

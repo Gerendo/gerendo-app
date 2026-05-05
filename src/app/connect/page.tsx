@@ -29,7 +29,7 @@ export default function ConnectPage() {
 
       // OAuth done - now trigger Gmail sync
       setStatus("syncing");
-      setMessage("Connected! Syncing your emails...");
+      setMessage("Connected! Syncing all your emails - this may take a few minutes...");
 
       const syncRes = await fetch("/api/sync/gmail", { method: "POST" });
       if (!syncRes.ok) {
@@ -51,6 +51,7 @@ export default function ConnectPage() {
     setStatus("syncing");
     setMessage("Syncing new emails...");
     setSyncedCount(null);
+
 
     try {
       const syncRes = await fetch("/api/sync/gmail", { method: "POST" });
