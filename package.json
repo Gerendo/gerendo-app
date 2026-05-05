@@ -14,7 +14,10 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@nangohq/frontend": "^0.70.1",
+    "@nangohq/node": "^0.70.1",
     "better-sqlite3": "^11.10.0",
+    "googleapis": "^171.4.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
