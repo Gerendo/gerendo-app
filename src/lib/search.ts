@@ -15,9 +15,9 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
 export type SearchResult = {
   embeddingId: number;
   source: string;
+  externalId: string;
   sender: string;
   subject: string;
-  preview: string;
   receivedAt: number;
   threadId: string | null;
   gmailUrl: string;
@@ -70,9 +70,9 @@ export async function hybridSearch(query: string, limit = 5): Promise<SearchResu
     return {
       embeddingId: id,
       source: msg.source,
+      externalId: msg.externalId,
       sender: msg.sender,
       subject: msg.subject,
-      preview: msg.preview,
       receivedAt: msg.receivedAt,
       threadId: msg.threadId,
       gmailUrl: `https://mail.google.com/mail/u/0/#all/${msg.threadId ?? msg.externalId}`,

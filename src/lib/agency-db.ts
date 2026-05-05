@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS messages (
@@ -12,7 +12,6 @@ const SCHEMA = `
     thread_id TEXT,
     sender TEXT,
     subject TEXT,
-    preview TEXT NOT NULL,
     received_at INTEGER NOT NULL,
     synced_at INTEGER NOT NULL,
     UNIQUE (source, external_id)
@@ -30,6 +29,16 @@ const SCHEMA = `
     keyword_text,
     content='embeddings',
     tokenize='unicode61 remove_diacritics 1'
+  );
+
+  CREATE TABLE IF NOT EXISTS facts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    message_id INTEGER REFERENCES messages(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    subject TEXT,
+    detail TEXT NOT NULL,
+    client TEXT,
+    extracted_at INTEGER NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS sync_state (
@@ -53,6 +62,7 @@ export function openAgencyDb(): Database.Database {
 
   const version = (db.pragma("user_version") as Array<{ user_version: number }>)[0].user_version;
   if (version < SCHEMA_VERSION) {
+    db.exec("DROP TABLE IF EXISTS embeddings_fts; DROP TABLE IF EXISTS embeddings; DROP TABLE IF EXISTS facts; DROP TABLE IF EXISTS messages; DROP TABLE IF EXISTS sync_state;");
     db.exec(SCHEMA);
     db.pragma(`user_version = ${SCHEMA_VERSION}`);
   }
@@ -69,26 +79,16 @@ export function upsertMessage(
     threadId: string | null;
     sender: string;
     subject: string;
-    preview: string;
     receivedAt: number;
   }
 ): number {
+  const existing = db.prepare(`SELECT id FROM messages WHERE source = ? AND external_id = ?`).get(msg.source, msg.externalId) as { id: number } | undefined;
+  if (existing) return existing.id;
+
   const result = db.prepare(`
-    INSERT INTO messages (source, external_id, thread_id, sender, subject, preview, received_at, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (source, external_id) DO UPDATE SET
-      preview = excluded.preview,
-      synced_at = excluded.synced_at
-  `).run(
-    msg.source,
-    msg.externalId,
-    msg.threadId,
-    msg.sender,
-    msg.subject,
-    msg.preview,
-    msg.receivedAt,
-    Date.now()
-  );
+    INSERT INTO messages (source, external_id, thread_id, sender, subject, received_at, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(msg.source, msg.externalId, msg.threadId, msg.sender, msg.subject, msg.receivedAt, Date.now());
 
   return result.lastInsertRowid as number;
 }
@@ -114,6 +114,22 @@ export function upsertEmbedding(
     db.prepare(`INSERT INTO embeddings_fts (rowid, keyword_text) VALUES (?, ?)`)
       .run(result.lastInsertRowid, keywordText);
   }
+}
+
+export function insertFact(
+  db: Database.Database,
+  fact: {
+    messageId: number | null;
+    type: string;
+    subject: string | null;
+    detail: string;
+    client: string | null;
+  }
+): void {
+  db.prepare(`
+    INSERT INTO facts (message_id, type, subject, detail, client, extracted_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(fact.messageId, fact.type, fact.subject, fact.detail, fact.client, Date.now());
 }
 
 export function getSyncState(db: Database.Database, source: string): { lastSyncedAt: number | null; cursor: string | null } {
@@ -178,15 +194,24 @@ export function getMessagesByEmbeddingIds(
   threadId: string | null;
   sender: string;
   subject: string;
-  preview: string;
   receivedAt: number;
 }> {
   if (embeddingIds.length === 0) return [];
   const placeholders = embeddingIds.map(() => "?").join(",");
-  return db.prepare(`
-    SELECT e.id AS embedding_id, m.source, m.external_id, m.thread_id, m.sender, m.subject, m.preview, m.received_at
+  const rows = db.prepare(`
+    SELECT e.id AS embedding_id, m.source, m.external_id, m.thread_id, m.sender, m.subject, m.received_at
     FROM embeddings e
     JOIN messages m ON e.message_id = m.id
     WHERE e.id IN (${placeholders})
-  `).all(...embeddingIds) as any;
+  `).all(...embeddingIds) as any[];
+
+  return rows.map((r) => ({
+    embeddingId: r.embedding_id,
+    source: r.source,
+    externalId: r.external_id,
+    threadId: r.thread_id,
+    sender: r.sender,
+    subject: r.subject,
+    receivedAt: r.received_at,
+  }));
 }
