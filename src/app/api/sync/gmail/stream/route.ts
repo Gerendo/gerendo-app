@@ -73,18 +73,11 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
     const gmail = google.gmail({ version: "v1", auth });
     const gmailToken = token;
 
-    // Build label list
-    let labelsToSync: Array<{ id: string; name: string }> = SYSTEM_LABEL_IDS.map((id) => ({
-      id,
-      name: id.toLowerCase().replace("category_", ""),
-    }));
-    try {
-      const labelsRes = await gmail.users.labels.list({ userId: "me" });
-      const userLabels = (labelsRes.data.labels ?? [])
-        .filter((l) => l.type === "user" && l.id && l.name)
-        .map((l) => ({ id: l.id!, name: l.name! }));
-      labelsToSync = [...labelsToSync, ...userLabels];
-    } catch {}
+    // Only sync inbox and sent - promotions/social/updates are noise for agency use
+    const labelsToSync: Array<{ id: string; name: string }> = [
+      { id: "INBOX", name: "inbox" },
+      { id: "SENT", name: "sent" },
+    ];
 
     for (const l of labelsToSync) labelProgress[l.name] = { synced: 0, total: 0, status: "pending" };
     await updateJob({ current_label: labelsToSync[0]?.name, label_progress: labelProgress });
@@ -260,7 +253,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
     await updateJob({ status: "done", current_label: null, finished_at: new Date().toISOString() });
 
     // Rebuild workspace context in background
-    fetch(`http://localhost:3000/api/workspace/context/build`, {
+    fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/workspace/context/build`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ force: true }),
