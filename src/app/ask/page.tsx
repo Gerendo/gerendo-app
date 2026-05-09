@@ -142,7 +142,7 @@ export default function AskPage() {
       <div className="border-b border-[oklch(1_0_0_/_8%)] px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
-          <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything across your emails, Drive, and Asana</p>
+          <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
         </div>
         <a href="/connect" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
           Manage connections
@@ -294,7 +294,7 @@ export default function AskPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask anything about your emails, files, or tasks..."
+            placeholder="Ask anything about your workspace..."
             className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
             disabled={loading}
             autoFocus
