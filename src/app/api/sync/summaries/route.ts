@@ -1,7 +1,8 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
-import { openAgencyDb, upsertSummary, getOrCreateDefaultWorkspace, getGmailToken } from "@/lib/agency-db";
+import { openAgencyDb, upsertSummary, getGmailToken } from "@/lib/agency-db";
 import { extractBody } from "@/app/api/sync/gmail/route";
 
 export const maxDuration = 300;
@@ -9,7 +10,7 @@ export const maxDuration = 300;
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 export async function POST(): Promise<NextResponse> {
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
 
   let token: string;
   try {

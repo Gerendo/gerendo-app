@@ -571,3 +571,91 @@ export async function getOrCreateDefaultWorkspace(): Promise<{ workspaceId: stri
 
   return { workspaceId: ws.id, userId: PLACEHOLDER_USER_ID };
 }
+
+// Get workspace from the authenticated Supabase session.
+// Used by all API routes once real auth is enforced.
+export async function getWorkspaceFromSession(
+  userId: string
+): Promise<{ workspaceId: string; userId: string } | null> {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("workspace_members")
+    .select("workspace_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!data) return null;
+  return { workspaceId: data.workspace_id, userId };
+}
+
+// Create a new workspace for a user on first login.
+export async function createWorkspaceForUser(
+  userId: string,
+  name: string
+): Promise<string> {
+  const supabase = createServiceClient();
+  const { data: ws, error } = await supabase
+    .from("workspaces")
+    .insert({ name })
+    .select("id")
+    .single();
+  if (!ws) throw new Error(`Failed to create workspace: ${error?.message}`);
+  await supabase.from("workspace_members").insert({
+    workspace_id: ws.id,
+    user_id: userId,
+    role: "admin",
+  });
+  return ws.id;
+}
+
+// Join an existing workspace via invite token.
+export async function joinWorkspaceViaToken(
+  token: string,
+  userId: string
+): Promise<{ workspaceId: string } | { error: string }> {
+  const supabase = createServiceClient();
+  const { data: invite } = await supabase
+    .from("invite_tokens")
+    .select("id, workspace_id, used_by, expires_at")
+    .eq("token", token)
+    .maybeSingle();
+
+  if (!invite) return { error: "Invalid invite link" };
+  if (invite.used_by) return { error: "This invite link has already been used" };
+  if (new Date(invite.expires_at) < new Date()) return { error: "This invite link has expired" };
+
+  // Check if user is already in this workspace
+  const { data: existing } = await supabase
+    .from("workspace_members")
+    .select("id")
+    .eq("workspace_id", invite.workspace_id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!existing) {
+    await supabase.from("workspace_members").insert({
+      workspace_id: invite.workspace_id,
+      user_id: userId,
+      role: "member",
+    });
+  }
+
+  // Mark token as used
+  await supabase.from("invite_tokens").update({ used_by: userId }).eq("id", invite.id);
+
+  return { workspaceId: invite.workspace_id };
+}
+
+// Generate an invite token for a workspace.
+export async function createInviteToken(
+  workspaceId: string,
+  createdBy: string
+): Promise<string> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("invite_tokens")
+    .insert({ workspace_id: workspaceId, created_by: createdBy })
+    .select("token")
+    .single();
+  if (!data) throw new Error(`Failed to create invite: ${error?.message}`);
+  return data.token;
+}

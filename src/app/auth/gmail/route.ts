@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { getOrCreateDefaultWorkspace } from "@/lib/agency-db";
+import { getWorkspaceFromSession } from "@/lib/agency-db";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
@@ -32,10 +33,15 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.redirect(`${origin}/connect?gmail_error=token_failed`);
   }
 
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
-  const supabase = createServiceClient();
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.redirect(`${origin}/login`);
+  const ws = await getWorkspaceFromSession(user.id);
+  if (!ws) return NextResponse.redirect(`${origin}/login`);
+  const { workspaceId, userId } = ws;
+  const serviceSupabase = createServiceClient();
 
-  await supabase.from("oauth_tokens").upsert({
+  await serviceSupabase.from("oauth_tokens").upsert({
     workspace_id: workspaceId,
     user_id: userId,
     provider: "google-gmail",

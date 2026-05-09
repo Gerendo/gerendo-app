@@ -1,3 +1,149 @@
+## ee1cd99 - fix: clickable logo, single dash, progress bar with fill animation in sync banner
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:34
+
+
+---
+## 8575675 - Merge pull request #7 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:22
+
+v0.1.0.6 fix: Gerendo favicon on app subdomain
+---
+## 0913bcf - fix: replace Vercel default favicon with Gerendo favicon
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:22
+
+
+---
+## 48b6c7f - Merge pull request #6 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:20
+
+v0.1.0.5 feat: sync banner and completion toast
+---
+## b17bdb0 - feat: sync progress banner + completion toast on ask page
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:20
+
+
+---
+## f404090 - Merge pull request #5 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:19
+
+v0.1.0.4 fix: non-blocking sync, gated ask input
+---
+## cf52a67 - fix: non-blocking sync with progress bar, ask input gated on indexed data
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:19
+
+
+---
+## d62b3c9 - Merge pull request #4 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:12
+
+v0.1.0.3 feat: tool selector with categories and coming soon
+---
+## b587ca4 - feat: tool selector connect page with categories + coming soon, workspace-agnostic copy
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:12
+
+
+---
+## 6f08944 - Merge pull request #3 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:08
+
+v0.1.0.2 feat: smart onboarding flow
+---
+## a10cb90 - feat: smart onboarding state in /ask - no tools, no data, ready
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:08
+
+
+---
+## 231765d - Merge pull request #2 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:04
+
+v0.1.0.1 fix: redirect root to /ask
+---
+## 857f520 - feat: redirect root to /ask on app subdomain
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:03
+
+
+---
+## 991494b - Merge pull request #1 from Gerendo/feat/supabase-multi-source-brain
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 08:57
+
+v0.1.0.0 feat: Supabase migration + Gmail, Drive, and Asana integration
+---
+## 39ac4c6 - fix: flat amber button with radius-xl, no gradient
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:50
+
+
+---
+## 6144aa3 - fix: fire gradient pill button for Ask your agency brain
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:47
+
+
+---
+## 3ec4c11 - fix: bigger title, rounder borders, cleaner send button in /ask
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:45
+
+
+---
+## c9697d3 - feat: apply Gerendo design system to app pages
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:42
+
+Warm ink background, amber ember accent, Fraunces display font,
+consistent with marketing site. Updated ask, connect, and login pages.
+
+---
+## 8ea6a38 - chore: bump version to 0.1.0.0 and add changelog
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:35
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## f5b6f7b - feat: Supabase auth + Google OAuth login flow
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 08:34
+
+Add Supabase browser/server clients, middleware protecting all routes,
+login page with Google OAuth, and auth callback that creates workspace
+on first login.
+
+---
 ## 3e2a68c - feat: full Gmail sync - paginate all messages, no limit
 
 **Author:** Tocki28  

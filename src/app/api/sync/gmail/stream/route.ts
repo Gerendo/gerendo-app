@@ -1,6 +1,7 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
-import { openAgencyDb, batchUpsertMessages, batchUpsertEmbeddings, getSyncState, setSyncState, getOrCreateDefaultWorkspace, getGmailToken } from "@/lib/agency-db";
+import { openAgencyDb, batchUpsertMessages, batchUpsertEmbeddings, getSyncState, setSyncState, getGmailToken } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 import { getNangoGmailToken, extractBody, getHeader, SYSTEM_LABEL_IDS } from "../route";
 
@@ -272,7 +273,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
 }
 
 export async function GET(): Promise<Response> {
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) throw new Error("Not authenticated"); const { workspaceId, userId } = _ws;
   const supabase = createServiceClient();
 
   // Create a new sync job

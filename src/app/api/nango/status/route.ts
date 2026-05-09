@@ -1,10 +1,11 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { getOrCreateDefaultWorkspace } from "@/lib/agency-db";
+import {  } from "@/lib/agency-db";
 
 export async function GET(): Promise<NextResponse> {
   try {
-    const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+    const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
     const supabase = createServiceClient();
 
     const { data } = await supabase

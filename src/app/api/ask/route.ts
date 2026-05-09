@@ -1,7 +1,8 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
-import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getOrCreateDefaultWorkspace, getGmailToken, getDriveFileContent, type AgencyDb } from "@/lib/agency-db";
+import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
 
@@ -210,7 +211,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   if (!query?.trim()) return Response.json({ error: "Query is required" }, { status: 400 });
 
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
 
   let gmail: any;
   try {
