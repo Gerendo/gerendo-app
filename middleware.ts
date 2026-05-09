@@ -9,6 +9,8 @@ const PUBLIC_PATHS = [
   "/auth/asana",
   "/join",
   "/api/auth/",
+  "/api/webhooks/",
+  "/api/cron/",
 ];
 
 export async function middleware(request: NextRequest) {
