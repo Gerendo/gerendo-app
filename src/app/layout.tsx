@@ -19,8 +19,11 @@ export const metadata: Metadata = {
   description:
     "Gerendo turns your agency's scattered tools — Gmail, Drive, Asana, WhatsApp — into one place your whole team can ask questions to, with cited answers.",
   icons: {
-    icon: "/Gerendo-Favicon.png",
+    icon: [
+      { url: "/Gerendo-Favicon.png", type: "image/png" },
+    ],
     apple: "/Gerendo-Favicon.png",
+    shortcut: "/Gerendo-Favicon.png",
   },
 };
 
