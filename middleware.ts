@@ -11,6 +11,7 @@ const PUBLIC_PATHS = [
   "/api/auth/",
   "/api/webhooks/",
   "/api/cron/",
+  "/api/workspace/context/build",
 ];
 
 export async function middleware(request: NextRequest) {
