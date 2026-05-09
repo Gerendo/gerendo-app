@@ -38,26 +38,27 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Find user by email
   const supabase = createServiceClient();
-  const { data: userData } = await supabase.auth.admin.getUserByEmail(emailAddress);
-  if (!userData?.user) return NextResponse.json({ ok: true });
+  const { data: userData } = await supabase.auth.admin.listUsers();
+  const user = userData?.users?.find(u => u.email === emailAddress);
+  if (!user) return NextResponse.json({ ok: true });
 
   const { data: member } = await supabase
     .from("workspace_members")
     .select("workspace_id")
-    .eq("user_id", userData.user.id)
+    .eq("user_id", user.id)
     .maybeSingle();
 
   if (!member) return NextResponse.json({ ok: true });
 
   // Run Gmail sync, then kick off Drive sync in background
   try {
-    await runGmailSyncForUser(member.workspace_id, userData.user.id);
+    await runGmailSyncForUser(member.workspace_id, user.id);
   } catch (err: any) {
     console.error("[webhook/gmail] gmail sync failed:", err?.message);
   }
 
   // Drive sync fire-and-forget - picks up new transcription files after meetings
-  runDriveSyncForUser(member.workspace_id, userData.user.id).catch((err: any) => {
+  runDriveSyncForUser(member.workspace_id, user.id).catch((err: any) => {
     console.error("[webhook/gmail] drive sync failed:", err?.message);
   });
 
