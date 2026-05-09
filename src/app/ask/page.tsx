@@ -198,13 +198,16 @@ export default function AskPage() {
               <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
               Syncing your workspace in the background
             </div>
-            <span className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
-              {syncCount > 0 ? `${syncCount.toLocaleString()} items so far` : "starting..."}
+            <span className="text-xs font-medium" style={{ color: "oklch(0.78 0.14 65)" }}>
+              {syncCount > 0 ? `${Math.min(Math.round((syncCount / 2000) * 100), 99)}%` : "0%"}
             </span>
           </div>
-          <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
-            <div className="h-full rounded-full animate-pulse" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
+          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
+            <div className="h-full rounded-full" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 99)}%` : "3%", background: "oklch(0.78 0.14 65)", transition: "width 0.8s ease" }} />
           </div>
+          {syncCount > 0 && (
+            <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{syncCount.toLocaleString()} items indexed so far</p>
+          )}
         </div>
       )}
 
