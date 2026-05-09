@@ -47,7 +47,7 @@ async function batchFetchMessages(token: string, ids: string[]): Promise<Map<str
   return result;
 }
 
-async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
+async function runSyncJob(jobId: string, workspaceId: string, userId: string, selectedLabels: Array<{ id: string; name: string }>) {
   const supabase = createServiceClient();
   const db = openAgencyDb(workspaceId, userId);
 
@@ -73,11 +73,10 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
     const gmail = google.gmail({ version: "v1", auth });
     const gmailToken = token;
 
-    // Only sync inbox and sent - promotions/social/updates are noise for agency use
-    const labelsToSync: Array<{ id: string; name: string }> = [
-      { id: "INBOX", name: "inbox" },
-      { id: "SENT", name: "sent" },
-    ];
+    // Use labels passed from the UI, fallback to inbox+sent
+    const labelsToSync: Array<{ id: string; name: string }> = selectedLabels.length > 0
+      ? selectedLabels
+      : [{ id: "INBOX", name: "inbox" }, { id: "SENT", name: "sent" }];
 
     for (const l of labelsToSync) labelProgress[l.name] = { synced: 0, total: 0, status: "pending" };
     await updateJob({ current_label: labelsToSync[0]?.name, label_progress: labelProgress });
@@ -265,11 +264,17 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string) {
   }
 }
 
-export async function GET(): Promise<Response> {
+export async function GET(request: Request): Promise<Response> {
   const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) throw new Error("Not authenticated"); const { workspaceId, userId } = _ws;
   const supabase = createServiceClient();
 
-  // Create a new sync job
+  // Parse selected labels from query param: ?labels=INBOX,SENT,MyLabel
+  const { searchParams } = new URL(request.url);
+  const labelsParam = searchParams.get("labels");
+  const selectedLabels: Array<{ id: string; name: string }> = labelsParam
+    ? labelsParam.split(",").map(id => ({ id, name: id.toLowerCase().replace("category_", "") }))
+    : [];
+
   const { data: job } = await supabase
     .from("sync_jobs")
     .insert({ workspace_id: workspaceId, status: "running" })
@@ -280,9 +285,7 @@ export async function GET(): Promise<Response> {
     return Response.json({ error: "Failed to create sync job" }, { status: 500 });
   }
 
-  // Kick off background job - does NOT await
-  runSyncJob(job.id, workspaceId, userId);
+  runSyncJob(job.id, workspaceId, userId, selectedLabels);
 
-  // Return immediately with job ID
   return Response.json({ jobId: job.id });
 }

@@ -38,9 +38,15 @@ function ConnectPageInner() {
   const [toolError, setToolError] = useState<Record<string, string>>({});
   const [syncedCounts, setSyncedCounts] = useState<Record<string, number>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [initialSyncing, setInitialSyncing] = useState<string | null>(null); // which tool is doing first-time sync
+  const [initialSyncing, setInitialSyncing] = useState<string | null>(null);
   const [syncCount, setSyncCount] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Label picker modal
+  const [showLabelPicker, setShowLabelPicker] = useState(false);
+  const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; type: string; default: boolean }>>([]);
+  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
+  const [loadingLabels, setLoadingLabels] = useState(false);
 
   useEffect(() => {
     const gmailConnected = searchParams.get("gmail_connected");
@@ -103,6 +109,44 @@ function ConnectPageInner() {
     }, 2000);
   }
 
+  async function openLabelPicker() {
+    setShowLabelPicker(true);
+    setLoadingLabels(true);
+    try {
+      const res = await fetch("/api/sync/gmail/labels");
+      const { labels } = await res.json();
+      setAvailableLabels(labels ?? []);
+      setSelectedLabels(new Set((labels ?? []).filter((l: any) => l.default).map((l: any) => l.id)));
+    } catch {
+      setAvailableLabels([]);
+      setSelectedLabels(new Set(["INBOX", "SENT"]));
+    } finally {
+      setLoadingLabels(false);
+    }
+  }
+
+  async function startGmailSyncWithLabels() {
+    setShowLabelPicker(false);
+    const labelsParam = Array.from(selectedLabels).join(",");
+    setConnectedTools(p => new Set([...p, "gmail"]));
+    setToolStatus(p => ({ ...p, gmail: "syncing" }));
+    setToolError(p => { const n = { ...p }; delete n.gmail; return n; });
+    setInitialSyncing("gmail");
+
+    try {
+      const res = await fetch(`/api/sync/gmail/stream?labels=${encodeURIComponent(labelsParam)}`);
+      const { error } = await res.json();
+      if (error) throw new Error(error);
+      startPoll();
+      fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
+      setToolStatus(p => ({ ...p, gmail: "active" }));
+    } catch (err: any) {
+      setToolStatus(p => ({ ...p, gmail: "error" }));
+      setToolError(p => ({ ...p, gmail: err.message ?? "Something went wrong" }));
+      setInitialSyncing(null);
+    }
+  }
+
   async function doFirstSync(toolId: string) {
     setConnectedTools(p => new Set([...p, toolId]));
     setToolStatus(p => ({ ...p, [toolId]: "syncing" }));
@@ -111,11 +155,11 @@ function ConnectPageInner() {
 
     try {
       if (toolId === "gmail") {
-        const res = await fetch("/api/sync/gmail/stream");
-        const { error } = await res.json();
-        if (error) throw new Error(error);
-        startPoll();
-        fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
+        // Show label picker instead of starting immediately
+        setToolStatus(p => ({ ...p, gmail: "idle" }));
+        setInitialSyncing(null);
+        openLabelPicker();
+        return;
       } else if (toolId === "drive") {
         const res = await fetch("/api/sync/drive", { method: "POST" });
         const data = await res.json();
@@ -298,6 +342,74 @@ function ConnectPageInner() {
           </a>
         )}
       </div>
+
+      {/* Label picker modal */}
+      {showLabelPicker && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "oklch(0 0 0 / 70%)" }}>
+          <div className="w-full max-w-sm rounded-3xl flex flex-col gap-4 p-6" style={{ background: "oklch(0.14 0.009 55)", border: "1px solid oklch(1 0 0 / 10%)" }}>
+            <div>
+              <h3 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>Choose mailboxes to sync</h3>
+              <p className="text-xs mt-1" style={{ color: "oklch(0.55 0.012 60)" }}>Select which Gmail labels to index. You can change this later.</p>
+            </div>
+
+            {loadingLabels ? (
+              <div className="flex items-center justify-center py-8">
+                <span className="text-sm" style={{ color: "oklch(0.55 0.012 60)" }}>Loading mailboxes...</span>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
+                {availableLabels.map(label => (
+                  <button
+                    key={label.id}
+                    onClick={() => setSelectedLabels(p => {
+                      const next = new Set(p);
+                      if (next.has(label.id)) next.delete(label.id);
+                      else next.add(label.id);
+                      return next;
+                    })}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
+                    style={{
+                      background: selectedLabels.has(label.id) ? "oklch(0.78 0.14 65 / 12%)" : "oklch(0.11 0.008 55)",
+                      border: `1px solid ${selectedLabels.has(label.id) ? "oklch(0.78 0.14 65 / 30%)" : "oklch(1 0 0 / 8%)"}`,
+                    }}
+                  >
+                    <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                      style={{ background: selectedLabels.has(label.id) ? "oklch(0.78 0.14 65)" : "transparent", border: `1.5px solid ${selectedLabels.has(label.id) ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 25%)"}` }}>
+                      {selectedLabels.has(label.id) && (
+                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                          <path d="M1 4L3.5 6.5L9 1" stroke="oklch(0.11 0.008 55)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      )}
+                    </div>
+                    <span className="text-sm capitalize">{label.name}</span>
+                    {label.type === "system" && (
+                      <span className="ml-auto text-xs" style={{ color: "oklch(0.45 0.01 60)" }}>system</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setShowLabelPicker(false)}
+                className="flex-1 text-sm py-2.5 rounded-xl font-medium"
+                style={{ background: "oklch(0.11 0.008 55)", border: "1px solid oklch(1 0 0 / 10%)", color: "oklch(0.65 0.015 60)" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={startGmailSyncWithLabels}
+                disabled={selectedLabels.size === 0}
+                className="flex-1 text-sm py-2.5 rounded-xl font-medium disabled:opacity-40"
+                style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+              >
+                Start sync ({selectedLabels.size} selected)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
