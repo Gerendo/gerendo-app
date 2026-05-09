@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-type ToolStatus = "idle" | "connecting" | "syncing" | "done" | "error";
+type ToolStatus = "idle" | "connecting" | "syncing" | "active" | "error";
 
 interface Tool {
   id: string;
@@ -38,14 +38,11 @@ function ConnectPageInner() {
   const [toolError, setToolError] = useState<Record<string, string>>({});
   const [syncedCounts, setSyncedCounts] = useState<Record<string, number>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
-  const [totalSynced, setTotalSynced] = useState(0);
-
-  // Gmail-specific sync progress
-  const [gmailProgress, setGmailProgress] = useState<{ current: string; count: number } | null>(null);
-  const pollRef = { current: null as ReturnType<typeof setInterval> | null };
+  const [initialSyncing, setInitialSyncing] = useState<string | null>(null); // which tool is doing first-time sync
+  const [syncCount, setSyncCount] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    // Handle OAuth callbacks
     const gmailConnected = searchParams.get("gmail_connected");
     const driveConnected = searchParams.get("drive_connected");
     const asanaConnected = searchParams.get("asana_connected");
@@ -53,14 +50,14 @@ function ConnectPageInner() {
     const driveError = searchParams.get("drive_error");
     const asanaError = searchParams.get("asana_error");
 
-    if (gmailConnected === "1") { startSync("gmail"); window.history.replaceState({}, "", "/connect"); }
-    if (driveConnected === "1") { startSync("drive"); window.history.replaceState({}, "", "/connect"); }
-    if (asanaConnected === "1") { startSync("asana"); window.history.replaceState({}, "", "/connect"); }
+    if (gmailConnected === "1") { doFirstSync("gmail"); window.history.replaceState({}, "", "/connect"); }
+    if (driveConnected === "1") { doFirstSync("drive"); window.history.replaceState({}, "", "/connect"); }
+    if (asanaConnected === "1") { doFirstSync("asana"); window.history.replaceState({}, "", "/connect"); }
     if (gmailError) { setToolError(p => ({ ...p, gmail: "Authorization failed" })); setToolStatus(p => ({ ...p, gmail: "error" })); window.history.replaceState({}, "", "/connect"); }
     if (driveError) { setToolError(p => ({ ...p, drive: "Authorization failed" })); setToolStatus(p => ({ ...p, drive: "error" })); window.history.replaceState({}, "", "/connect"); }
     if (asanaError) { setToolError(p => ({ ...p, asana: "Authorization failed" })); setToolStatus(p => ({ ...p, asana: "error" })); window.history.replaceState({}, "", "/connect"); }
 
-    // Check existing connections
+    // Load current state
     fetch("/api/nango/status").then(r => r.json()).then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
       const connected_set = new Set<string>();
       if (connected) connected_set.add("gmail");
@@ -68,17 +65,22 @@ function ConnectPageInner() {
       if (ac) connected_set.add("asana");
       setConnectedTools(connected_set);
 
-      // Check if there's an active sync
+      // Set active status for already-connected tools
+      const statuses: Record<string, ToolStatus> = {};
+      if (connected) statuses.gmail = "active";
+      if (dc) statuses.drive = "active";
+      if (ac) statuses.asana = "active";
+      setToolStatus(p => ({ ...p, ...statuses }));
+
+      // Get indexed counts
       fetch("/api/sync/status").then(r => r.json()).then(job => {
+        if (job.totalSynced > 0) setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
+
+        // If a first-time sync is still running, poll for it
         if (job.status === "running") {
-          setToolStatus(p => ({ ...p, gmail: "syncing" }));
-          startGmailPoll();
-        } else if (job.status === "done" && job.totalSynced > 0) {
-          setToolStatus(p => ({ ...p, gmail: "done" }));
-          setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
-          setTotalSynced(job.totalSynced);
-        } else if (connected) {
-          setToolStatus(p => ({ ...p, gmail: "idle" }));
+          setInitialSyncing("gmail");
+          setSyncCount(job.totalSynced ?? 0);
+          startPoll();
         }
       }).catch(() => {});
     }).catch(() => {});
@@ -86,59 +88,53 @@ function ConnectPageInner() {
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  function startGmailPoll() {
+  function startPoll() {
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
         const job = await fetch("/api/sync/status").then(r => r.json());
-        if (job.labelProgress) {
-          const syncing = Object.entries(job.labelProgress as Record<string, any>).find(([, v]: any) => v.status === "syncing");
-          if (syncing) setGmailProgress({ current: syncing[0], count: job.totalSynced ?? 0 });
-        }
-        setTotalSynced(job.totalSynced ?? 0);
-        if (job.status === "done") {
-          setToolStatus(p => ({ ...p, gmail: "done" }));
-          setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
-          setGmailProgress(null);
-          if (pollRef.current) clearInterval(pollRef.current);
-        } else if (job.status === "error") {
-          setToolStatus(p => ({ ...p, gmail: "error" }));
-          setToolError(p => ({ ...p, gmail: "Sync failed" }));
+        if (job.totalSynced) setSyncCount(job.totalSynced);
+        if (job.status === "done" || job.status !== "running") {
+          setInitialSyncing(null);
+          setSyncedCounts(p => ({ ...p, gmail: job.totalSynced ?? 0 }));
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
     }, 2000);
   }
 
-  async function startSync(toolId: string) {
+  async function doFirstSync(toolId: string) {
     setConnectedTools(p => new Set([...p, toolId]));
     setToolStatus(p => ({ ...p, [toolId]: "syncing" }));
     setToolError(p => { const n = { ...p }; delete n[toolId]; return n; });
+    setInitialSyncing(toolId);
 
     try {
       if (toolId === "gmail") {
         const res = await fetch("/api/sync/gmail/stream");
         const { error } = await res.json();
         if (error) throw new Error(error);
-        startGmailPoll();
+        startPoll();
         fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
       } else if (toolId === "drive") {
         const res = await fetch("/api/sync/drive", { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setSyncedCounts(p => ({ ...p, drive: data.synced }));
-        setToolStatus(p => ({ ...p, drive: "done" }));
+        setInitialSyncing(null);
       } else if (toolId === "asana") {
         const res = await fetch("/api/sync/asana", { method: "POST" });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error);
         setSyncedCounts(p => ({ ...p, asana: data.synced }));
-        setToolStatus(p => ({ ...p, asana: "done" }));
+        setInitialSyncing(null);
         fetch("/api/webhooks/asana/register", { method: "POST" }).catch(() => {});
       }
+      setToolStatus(p => ({ ...p, [toolId]: "active" }));
     } catch (err: any) {
       setToolStatus(p => ({ ...p, [toolId]: "error" }));
       setToolError(p => ({ ...p, [toolId]: err.message ?? "Something went wrong" }));
+      setInitialSyncing(null);
     }
   }
 
@@ -153,12 +149,7 @@ function ConnectPageInner() {
 
   function handleToolAction(tool: Tool) {
     if (!tool.available || tool.comingSoon) return;
-    const status = toolStatus[tool.id];
-    if (connectedTools.has(tool.id)) {
-      if (status !== "syncing") startSync(tool.id);
-    } else {
-      handleConnect(tool.id);
-    }
+    if (!connectedTools.has(tool.id)) handleConnect(tool.id);
   }
 
   const categories = ["All", ...Array.from(new Set(ALL_TOOLS.map(t => t.category)))];
@@ -167,23 +158,14 @@ function ConnectPageInner() {
   function toolStatusLabel(tool: Tool): { text: string; color: string } {
     if (tool.comingSoon) return { text: "Coming soon", color: "oklch(0.45 0.01 60)" };
     const s = toolStatus[tool.id];
-    if (s === "done") return { text: `${syncedCounts[tool.id] ?? 0} indexed`, color: "oklch(0.78 0.14 65)" };
-    if (s === "syncing") {
-      if (tool.id === "gmail" && gmailProgress) return { text: `${gmailProgress.count} items in background`, color: "oklch(0.85 0.08 70)" };
-      return { text: "Running in background", color: "oklch(0.85 0.08 70)" };
+    if (s === "syncing") return { text: "Initial sync running...", color: "oklch(0.85 0.08 70)" };
+    if (s === "active") {
+      const count = syncedCounts[tool.id];
+      return { text: count ? `${count.toLocaleString()} indexed - auto-syncing` : "Active - auto-syncing", color: "oklch(0.78 0.14 65)" };
     }
     if (s === "error") return { text: toolError[tool.id] ?? "Error", color: "oklch(0.62 0.22 25)" };
-    if (connectedTools.has(tool.id)) return { text: "Connected", color: "oklch(0.78 0.14 65)" };
+    if (connectedTools.has(tool.id)) return { text: "Active - auto-syncing", color: "oklch(0.78 0.14 65)" };
     return { text: "Not connected", color: "oklch(0.45 0.01 60)" };
-  }
-
-  function toolButtonLabel(tool: Tool): string {
-    if (tool.comingSoon) return "Coming soon";
-    const s = toolStatus[tool.id];
-    if (s === "syncing") return "Syncing...";
-    if (s === "error") return "Try again";
-    if (connectedTools.has(tool.id)) return "Sync now";
-    return "Connect";
   }
 
   return (
@@ -206,26 +188,27 @@ function ConnectPageInner() {
             Your workspace
           </h2>
           <p className="text-sm" style={{ color: "oklch(0.65 0.015 60)" }}>
-            {totalSynced > 0
-              ? `${totalSynced.toLocaleString()} items indexed.`
+            {connectedTools.size > 0
+              ? "Your tools are connected and syncing automatically."
               : "Connect your tools to start building your agency brain."}
           </p>
-          {Object.values(toolStatus).some(s => s === "syncing") && (
-            <div className="mt-2 flex flex-col gap-2">
-              {/* Overall progress bar */}
-              {gmailProgress && (
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
-                    <span>Syncing {gmailProgress.current}...</span>
-                    <span>{gmailProgress.count.toLocaleString()} items</span>
-                  </div>
-                  <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
-                    <div className="h-full rounded-full animate-pulse" style={{ width: "60%", background: "oklch(0.78 0.14 65)" }} />
-                  </div>
+
+          {/* Initial sync progress banner */}
+          {initialSyncing && (
+            <div className="mt-3 flex flex-col gap-2 px-4 py-3 rounded-2xl" style={{ background: "oklch(0.78 0.14 65 / 8%)", border: "1px solid oklch(0.78 0.14 65 / 15%)" }}>
+              <div className="flex items-center justify-between text-xs" style={{ color: "oklch(0.85 0.08 70)" }}>
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
+                  First-time sync running in background
                 </div>
-              )}
-              <p className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
-                Running in background — <a href="/ask" className="underline" style={{ color: "oklch(0.78 0.14 65)" }}>you can start asking questions</a> while this finishes.
+                {syncCount > 0 && <span style={{ color: "oklch(0.65 0.015 60)" }}>{syncCount.toLocaleString()} items so far</span>}
+              </div>
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
+                <div className="h-full rounded-full animate-pulse" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
+              </div>
+              <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>
+                This only happens once. After this, new emails and tasks sync automatically.{" "}
+                <a href="/ask" className="underline" style={{ color: "oklch(0.78 0.14 65)" }}>You can start asking questions now.</a>
               </p>
             </div>
           )}
@@ -253,7 +236,7 @@ function ConnectPageInner() {
         <div className="flex flex-col gap-3">
           {filtered.map(tool => {
             const { text: statusText, color: statusColor } = toolStatusLabel(tool);
-            const buttonLabel = toolButtonLabel(tool);
+            const isConnected = connectedTools.has(tool.id);
             const isSyncing = toolStatus[tool.id] === "syncing";
 
             return (
@@ -261,8 +244,8 @@ function ConnectPageInner() {
                 key={tool.id}
                 className="flex items-center justify-between p-4 rounded-2xl border"
                 style={{
-                  borderColor: connectedTools.has(tool.id) && !tool.comingSoon ? "oklch(0.78 0.14 65 / 20%)" : "oklch(1 0 0 / 8%)",
-                  background: connectedTools.has(tool.id) && !tool.comingSoon ? "oklch(0.78 0.14 65 / 5%)" : "oklch(0.13 0.009 55)",
+                  borderColor: isConnected && !tool.comingSoon ? "oklch(0.78 0.14 65 / 20%)" : "oklch(1 0 0 / 8%)",
+                  background: isConnected && !tool.comingSoon ? "oklch(0.78 0.14 65 / 5%)" : "oklch(0.13 0.009 55)",
                   opacity: tool.comingSoon ? 0.6 : 1,
                 }}
               >
@@ -278,17 +261,17 @@ function ConnectPageInner() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
-                  {!tool.comingSoon && (
+                  {!tool.comingSoon && !isConnected && (
                     <button
                       onClick={() => handleToolAction(tool)}
                       disabled={isSyncing}
                       className="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
                       style={{
-                        background: connectedTools.has(tool.id) ? "oklch(0.16 0.01 55)" : "oklch(0.78 0.14 65)",
-                        color: connectedTools.has(tool.id) ? "oklch(0.96 0.012 80)" : "oklch(0.11 0.008 55)",
+                        background: "oklch(0.78 0.14 65)",
+                        color: "oklch(0.11 0.008 55)",
                       }}
                     >
-                      {buttonLabel}
+                      Connect
                     </button>
                   )}
                 </div>
