@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { runGmailSyncForUser } from "@/app/api/sync/gmail/route";
+import { runDriveSyncForUser } from "@/app/api/sync/drive/route";
 
 export const maxDuration = 300;
 
@@ -48,12 +49,17 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (!member) return NextResponse.json({ ok: true });
 
-  // Run incremental sync - always ack even if sync fails
+  // Run Gmail sync, then kick off Drive sync in background
   try {
     await runGmailSyncForUser(member.workspace_id, userData.user.id);
   } catch (err: any) {
-    console.error("[webhook/gmail] sync failed:", err?.message);
+    console.error("[webhook/gmail] gmail sync failed:", err?.message);
   }
+
+  // Drive sync fire-and-forget - picks up new transcription files after meetings
+  runDriveSyncForUser(member.workspace_id, userData.user.id).catch((err: any) => {
+    console.error("[webhook/gmail] drive sync failed:", err?.message);
+  });
 
   return NextResponse.json({ ok: true });
 }
