@@ -18,8 +18,13 @@ export async function GET(): Promise<NextResponse> {
 
   if (!data) return NextResponse.json({ status: "idle" });
 
+  // Treat jobs stuck running for more than 30 minutes as done
+  const status = data.status === "running" && data.started_at && Date.now() - data.started_at > 30 * 60 * 1000
+    ? "done"
+    : data.status;
+
   return NextResponse.json({
-    status: data.status,
+    status,
     currentLabel: data.current_label,
     labelProgress: data.label_progress,
     totalSynced: data.total_synced,
