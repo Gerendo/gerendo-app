@@ -131,6 +131,7 @@ export async function runDriveSyncForUser(workspaceId: string, userId: string): 
 
       const embRows = chunks.map((chunk, i) => ({
         workspace_id: workspaceId,
+        user_id: userId,
         file_id: fileRow.id,
         chunk_index: i,
         embedding: Array.from(embeddings[i]),

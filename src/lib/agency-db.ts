@@ -53,6 +53,7 @@ export async function batchUpsertEmbeddings(
 ): Promise<void> {
   const rows = items.map((item) => ({
     workspace_id: db.workspaceId,
+    user_id: db.userId,
     message_id: item.messageId,
     embedding: Array.from(item.embedding),
     keyword_text: item.keywordText,
@@ -657,6 +658,15 @@ export async function getWorkspaceFromSession(
     .maybeSingle();
   if (!data) return null;
   return { workspaceId: data.workspace_id, userId };
+}
+
+export async function asanaGet(token: string, path: string): Promise<any> {
+  const res = await fetch(`https://app.asana.com/api/1.0${path}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Asana API error ${res.status}: ${path}`);
+  const json = await res.json();
+  return json.data;
 }
 
 // Create a new workspace for a user on first login.

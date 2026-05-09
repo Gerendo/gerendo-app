@@ -1,19 +1,10 @@
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { getAsanaToken } from "@/lib/agency-db";
+import { getAsanaToken, asanaGet } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 
 export const maxDuration = 300;
-
-export async function asanaGet(token: string, path: string): Promise<any> {
-  const res = await fetch(`https://app.asana.com/api/1.0${path}`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`Asana API error ${res.status}: ${path}`);
-  const json = await res.json();
-  return json.data;
-}
 
 function chunkText(text: string, size = 1500): string[] {
   const chunks: string[] = [];
@@ -85,6 +76,7 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
   await supabase.from("asana_embeddings").insert(
     chunks.map((chunk, i) => ({
       workspace_id: workspaceId,
+      user_id: userId,
       item_id: itemRow.id,
       chunk_index: i,
       embedding: Array.from(embeddings[i]),
@@ -182,6 +174,7 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
           await supabase.from("asana_embeddings").insert(
             chunks.map((chunk, i) => ({
               workspace_id: workspaceId,
+              user_id: userId,
               item_id: itemRow.id,
               chunk_index: i,
               embedding: Array.from(embeddings[i]),
