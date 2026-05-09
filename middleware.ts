@@ -44,6 +44,10 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/waitlist");
 
   if (!user && !isPublic) {
+    // API routes get 401, not a redirect - redirecting a POST to /login causes 405
+    if (path.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
