@@ -7,20 +7,20 @@ import { getGmailToken } from "@/lib/agency-db";
 const EXCLUDED_LABELS = new Set(["UNREAD", "CHAT"]);
 
 const LABEL_META: Record<string, { displayName: string; icon: string; default: boolean }> = {
-  INBOX:                  { displayName: "Inbox",        icon: "inbox",    default: true },
-  SENT:                   { displayName: "Sent",         icon: "send",     default: true },
-  DRAFT:                  { displayName: "Drafts",       icon: "draft",    default: false },
-  STARRED:                { displayName: "Starred",      icon: "star",     default: false },
-  IMPORTANT:              { displayName: "Important",    icon: "label",    default: false },
-  SPAM:                   { displayName: "Spam",         icon: "report",   default: false },
-  TRASH:                  { displayName: "Trash",        icon: "delete",   default: false },
-  SNOOZED:                { displayName: "Snoozed",      icon: "snooze",   default: false },
-  SCHEDULED:              { displayName: "Scheduled",    icon: "schedule", default: false },
-  CATEGORY_PERSONAL:      { displayName: "Personal",     icon: "person",   default: false },
-  CATEGORY_SOCIAL:        { displayName: "Social",       icon: "people",   default: false },
-  CATEGORY_PROMOTIONS:    { displayName: "Promotions",   icon: "sell",     default: false },
-  CATEGORY_UPDATES:       { displayName: "Updates",      icon: "info",     default: false },
-  CATEGORY_FORUMS:        { displayName: "Forums",       icon: "forum",    default: false },
+  INBOX:                  { displayName: "Inbox",        icon: "inbox",          default: true },
+  SENT:                   { displayName: "Sent",         icon: "send",           default: true },
+  DRAFT:                  { displayName: "Drafts",       icon: "drafts",         default: false },
+  STARRED:                { displayName: "Starred",      icon: "star",           default: false },
+  IMPORTANT:              { displayName: "Important",    icon: "label_important", default: false },
+  SPAM:                   { displayName: "Spam",         icon: "report",         default: false },
+  TRASH:                  { displayName: "Trash",        icon: "delete",         default: false },
+  SNOOZED:                { displayName: "Snoozed",      icon: "snooze",         default: false },
+  SCHEDULED:              { displayName: "Scheduled",    icon: "schedule_send",  default: false },
+  CATEGORY_PERSONAL:      { displayName: "Personal",     icon: "person",         default: false },
+  CATEGORY_SOCIAL:        { displayName: "Social",       icon: "people",         default: false },
+  CATEGORY_PROMOTIONS:    { displayName: "Promotions",   icon: "local_offer",    default: false },
+  CATEGORY_UPDATES:       { displayName: "Updates",      icon: "info",           default: false },
+  CATEGORY_FORUMS:        { displayName: "Forums",       icon: "forum",          default: false },
 };
 
 export async function GET(): Promise<NextResponse> {
