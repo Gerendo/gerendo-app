@@ -1,13 +1,25 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 
 @theme inline {
-  --color-bg: #0e0f12;
-  --color-fg: #f6f4ee;
-  --color-soft: #b8b3a7;
-  --color-muted: #6b6760;
-  --color-border: #2a2b30;
-  --color-accent: #e8a33d;
-  --color-accent-hover: #f0b255;
+  /* Gerendo design tokens - warm ink + amber ember */
+  --color-ink: oklch(0.11 0.008 55);
+  --color-ink-soft: oklch(0.16 0.01 55);
+  --color-bone: oklch(0.96 0.012 80);
+  --color-parchment: oklch(0.92 0.02 75);
+  --color-ember: oklch(0.78 0.14 65);
+  --color-ember-soft: oklch(0.85 0.08 70);
+  --color-muted: oklch(0.65 0.015 60);
+  --color-border: oklch(1 0 0 / 8%);
+  --color-card: oklch(0.13 0.009 55);
+  --color-input: oklch(1 0 0 / 10%);
+
+  /* Legacy aliases used in existing pages */
+  --color-bg: oklch(0.11 0.008 55);
+  --color-fg: oklch(0.96 0.012 80);
+  --color-soft: oklch(0.65 0.015 60);
+  --color-accent: oklch(0.78 0.14 65);
+  --color-accent-hover: oklch(0.85 0.08 70);
 
   --font-display: var(--font-fraunces);
   --font-sans: var(--font-inter);
@@ -15,12 +27,27 @@
 
 html,
 body {
-  background: var(--color-bg);
-  color: var(--color-fg);
+  background: var(--color-ink);
+  color: var(--color-bone);
   font-family: var(--font-sans), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 ::selection {
-  background: var(--color-accent);
-  color: var(--color-bg);
+  background: var(--color-ember);
+  color: var(--color-ink);
+}
+
+/* Prose overrides for dark background */
+.prose {
+  --tw-prose-body: oklch(0.96 0.012 80);
+  --tw-prose-headings: oklch(0.96 0.012 80);
+  --tw-prose-bold: oklch(0.96 0.012 80);
+  --tw-prose-links: oklch(0.78 0.14 65);
+  --tw-prose-code: oklch(0.85 0.08 70);
+  --tw-prose-bullets: oklch(0.65 0.015 60);
+  --tw-prose-counters: oklch(0.65 0.015 60);
+  --tw-prose-hr: oklch(1 0 0 / 8%);
+  --tw-prose-quotes: oklch(0.65 0.015 60);
+  --tw-prose-quote-borders: oklch(0.78 0.14 65);
 }

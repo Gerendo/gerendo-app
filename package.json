@@ -1,6 +1,6 @@
 {
   "name": "gerendo-app",
-  "version": "0.1.0",
+  "version": "0.1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,10 +14,16 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.52.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@nangohq/node": "^0.70.1",
+    "@supabase/ssr": "^0.10.2",
+    "@supabase/supabase-js": "^2.105.3",
+    "@tailwindcss/typography": "^0.5.19",
     "better-sqlite3": "^11.10.0",
+    "googleapis": "^171.4.0",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
     "resend": "^6.12.2"
   },
   "devDependencies": {
