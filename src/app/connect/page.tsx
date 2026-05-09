@@ -269,13 +269,20 @@ function ConnectPageInner() {
                 <button
                   onClick={async () => {
                     await fetch("/api/sync/stop", { method: "POST" });
+                    await fetch("/api/sync/disconnect", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ tool: "gmail" }),
+                    });
                     setInitialSyncing(null);
-                    setToolStatus(p => ({ ...p, gmail: "active" }));
+                    setConnectedTools(p => { const n = new Set(p); n.delete("gmail"); return n; });
+                    setToolStatus(p => { const n = { ...p }; delete n.gmail; return n; });
+                    setSyncedCounts(p => { const n = { ...p }; delete n.gmail; return n; });
                   }}
                   className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
                   style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
                 >
-                  Stop import
+                  Stop
                 </button>
               </div>
               <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
