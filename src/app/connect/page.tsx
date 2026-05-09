@@ -264,22 +264,19 @@ function ConnectPageInner() {
               <div className="flex items-center justify-between text-xs" style={{ color: "oklch(0.85 0.08 70)" }}>
                 <div className="flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
-                  First-time sync running in background
+                  Importing existing emails — {syncCount > 0 ? `${syncCount.toLocaleString()} indexed so far` : "starting..."}
                 </div>
-                <div className="flex items-center gap-3">
-                  {syncCount > 0 && <span style={{ color: "oklch(0.65 0.015 60)" }}>{syncCount.toLocaleString()} items so far</span>}
-                  <button
-                    onClick={async () => {
-                      await fetch("/api/sync/stop", { method: "POST" });
-                      setInitialSyncing(null);
-                      setToolStatus(p => ({ ...p, gmail: "active" }));
-                    }}
-                    className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity"
-                    style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
-                  >
-                    Stop sync
-                  </button>
-                </div>
+                <button
+                  onClick={async () => {
+                    await fetch("/api/sync/stop", { method: "POST" });
+                    setInitialSyncing(null);
+                    setToolStatus(p => ({ ...p, gmail: "active" }));
+                  }}
+                  className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
+                  style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
+                >
+                  Stop import
+                </button>
               </div>
               <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
                 <div className="h-full rounded-full animate-pulse" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
