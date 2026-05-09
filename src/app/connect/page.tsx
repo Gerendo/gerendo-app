@@ -188,10 +188,10 @@ function ConnectPageInner() {
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>
       {/* Header */}
       <div className="border-b px-6 py-4 flex items-center justify-between" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
-        <div>
+        <a href="/ask" className="hover:opacity-80 transition-opacity">
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Connect your tools</p>
-        </div>
+        </a>
         <a href="/ask" className="text-xs underline underline-offset-2 transition-colors" style={{ color: "oklch(0.55 0.012 60)" }}>
           Ask questions
         </a>
