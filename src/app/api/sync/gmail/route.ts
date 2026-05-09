@@ -1,6 +1,7 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
-import { openAgencyDb, upsertMessage, upsertEmbedding, getSyncState, setSyncState, getOrCreateDefaultWorkspace, getGmailToken } from "@/lib/agency-db";
+import { openAgencyDb, upsertMessage, upsertEmbedding, getSyncState, setSyncState, getGmailToken } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 
 export const maxDuration = 300;
@@ -166,7 +167,7 @@ async function fetchAndStoreMessages(
 }
 
 export async function POST(): Promise<NextResponse> {
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
 
   const secretKey = process.env.NANGO_SECRET_KEY;
   if (!secretKey) return NextResponse.json({ error: "NANGO_SECRET_KEY not set" }, { status: 500 });

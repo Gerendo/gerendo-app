@@ -1,6 +1,7 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
-import { getOrCreateDefaultWorkspace } from "@/lib/agency-db";
+import {  } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
 
 export const maxDuration = 300;
@@ -60,7 +61,7 @@ function chunkText(text: string, size = 1500): string[] {
 }
 
 export async function POST(): Promise<NextResponse> {
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
   const supabase = createServiceClient();
 
   let token: string;

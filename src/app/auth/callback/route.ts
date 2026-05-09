@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { createServiceClient } from "@/lib/supabase-server";
+import { createWorkspaceForUser, getWorkspaceFromSession } from "@/lib/agency-db";
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const next = searchParams.get("next") ?? "/";
 
   if (!code) {
     return NextResponse.redirect(`${origin}/login?error=no_code`);
@@ -18,33 +19,14 @@ export async function GET(request: Request) {
   }
 
   // Create workspace for new users on first login
-  const service = createServiceClient();
-  const { data: existing } = await service
-    .from("workspace_members")
-    .select("workspace_id")
-    .eq("user_id", data.user.id)
-    .maybeSingle();
-
+  const existing = await getWorkspaceFromSession(data.user.id);
   if (!existing) {
     const name =
       data.user.user_metadata?.full_name ??
       data.user.email?.split("@")[0] ??
       "My Agency";
-
-    const { data: workspace } = await service
-      .from("workspaces")
-      .insert({ name: `${name}'s Workspace` })
-      .select("id")
-      .single();
-
-    if (workspace) {
-      await service.from("workspace_members").insert({
-        workspace_id: workspace.id,
-        user_id: data.user.id,
-        role: "admin",
-      });
-    }
+    await createWorkspaceForUser(data.user.id, `${name}'s Workspace`);
   }
 
-  return NextResponse.redirect(`${origin}/`);
+  return NextResponse.redirect(`${origin}${next}`);
 }

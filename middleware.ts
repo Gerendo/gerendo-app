@@ -1,7 +1,15 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth/callback", "/api/", "/connect", "/"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/auth/callback",
+  "/auth/gmail",
+  "/auth/drive",
+  "/auth/asana",
+  "/join",
+  "/api/auth/",
+];
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -11,13 +19,9 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
+        getAll() { return request.cookies.getAll(); },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
           supabaseResponse = NextResponse.next({ request });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
@@ -29,9 +33,12 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  const isPublic = PUBLIC_PATHS.some((p) =>
-    request.nextUrl.pathname.startsWith(p)
-  );
+  const path = request.nextUrl.pathname;
+  const isPublic =
+    path === "/" ||
+    PUBLIC_PATHS.some((p) => path.startsWith(p)) ||
+    path.startsWith("/_next") ||
+    path.startsWith("/api/waitlist");
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

@@ -178,9 +178,14 @@ export default function AskPage() {
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
         </a>
-        <a href="/connect" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
-          Manage connections
-        </a>
+        <div className="flex items-center gap-4">
+          <a href="/connect" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
+            Connect tools
+          </a>
+          <a href="/settings" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
+            Settings
+          </a>
+        </div>
       </div>
 
       {/* Sync banner with progress bar */}

@@ -1,7 +1,8 @@
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
-import { openAgencyDb, upsertWorkspaceContext, getWorkspaceContext, getOrCreateDefaultWorkspace, getGmailToken } from "@/lib/agency-db";
+import { openAgencyDb, upsertWorkspaceContext, getWorkspaceContext, getGmailToken } from "@/lib/agency-db";
 import { extractBody } from "@/app/api/sync/gmail/route";
 
 export const maxDuration = 300;
@@ -14,7 +15,7 @@ export async function POST(req: Request): Promise<NextResponse> {
   const body = await req.json().catch(() => ({}));
   const force = body?.force === true;
 
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
 
   const db = openAgencyDb(workspaceId, userId);
 
@@ -161,7 +162,7 @@ ${emailSample}`,
 }
 
 export async function GET(): Promise<NextResponse> {
-  const { workspaceId, userId } = await getOrCreateDefaultWorkspace();
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
   const db = openAgencyDb(workspaceId, userId);
   const ctx = await getWorkspaceContext(db);
 

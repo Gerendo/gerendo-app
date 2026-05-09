@@ -45,42 +45,200 @@ Two background loops:
 
 ## Data model
 
-Every table carries `workspace_id` and (where applicable) `user_id` and `is_shared`. RLS policies enforce visibility.
+> **Last verified:** 2026-05-09. This section reflects the actual implemented schema (derived from `src/lib/agency-db.ts` and the sync routes), not the original design-doc intent. Keep it updated when schema changes.
+
+Every table carries `workspace_id` and (where applicable) `user_id`. RLS policies enforce tenant and personal-data isolation.
+
+---
+
+### Tenancy and auth
 
 ```
-workspaces        — top-level tenant (one per agency)
-  id, name, plan, created_at, query_quota_monthly
+workspaces
+  id (uuid, PK)
+  name (text)
+  created_at
 
-users             — members of a workspace
-  id, workspace_id, email, role, created_at
+workspace_members        — join table: which users belong to which workspace
+  id
+  workspace_id (FK workspaces)
+  user_id      (FK auth.users)
+  role         ('admin' | 'member')
 
-sources           — connected tools (Gmail, Asana, Drive, etc.) per user/workspace
-  id, workspace_id, user_id (nullable for shared), kind ('gmail'|'asana'|'drive'|'meet'|'whatsapp'|'discord'),
-  is_shared, nango_connection_id, status, last_synced_at
-
-documents         — a logical unit of content (an email, a task, a transcript, a WhatsApp thread)
-  id, workspace_id, source_id, user_id (nullable for shared), is_shared,
-  external_id, external_url, title, author, created_at_external, ingested_at,
-  raw_content_ref (S3 / Supabase Storage path)
-
-chunks            — sub-units of a document for retrieval
-  id, document_id, workspace_id, user_id (nullable), is_shared,
-  content (text), position, token_count, metadata (jsonb: speaker, timestamp, page, etc.)
-
-embeddings        — vector for each chunk
-  chunk_id (PK, FK), embedding vector(1024), model_version
-
-queries           — log of every user query for cost + analytics + dogfooding
-  id, workspace_id, user_id, question, retrieved_chunk_ids, model_used,
-  input_tokens, output_tokens, cost_usd, latency_ms, created_at
-
-drift_findings    — output of the drift loop
-  id, workspace_id, topic_key (e.g. 'client:acme:launch_date'), severity,
-  variants (jsonb: [{source, doc_id, value, timestamp}, ...]),
-  llm_explanation, status ('open'|'dismissed'|'resolved'), created_at
+invite_tokens            — single-use invite links
+  id
+  token        (uuid, unique)
+  workspace_id (FK workspaces)
+  created_by   (user_id)
+  used_by      (user_id, nullable — null means unused)
+  expires_at
 ```
 
-> [GINO: decide embedding dimension. Voyage-3 = 1024 (default in schema above), OpenAI text-embedding-3-small = 1536, Cohere embed-v3 = 1024. Pick one and stick with it — changing later means re-embedding every document. Recommendation: Voyage-3 (best quality/€ ratio in 2025–2026 benchmarks).]
+---
+
+### Gmail
+
+```
+messages                 — one row per email message (metadata only, no body)
+  id           (bigint, PK)
+  workspace_id
+  user_id
+  source       ('gmail')
+  external_id  (Gmail message ID — pointer back to Google)
+  thread_id    (Gmail thread ID)
+  sender       (From: header — email address + display name)
+  subject      (Subject: header)
+  mailbox      ('inbox' | 'sent')
+  received_at  (epoch ms)
+  synced_at    (epoch ms)
+  UNIQUE (workspace_id, user_id, source, external_id)
+
+embeddings               — one row per message, for search
+  id           (bigint, PK)
+  workspace_id
+  message_id   (FK messages, UNIQUE)
+  embedding    (float[] — 1024-dim Voyage vector)
+  keyword_text (text — up to 1500 chars: "{subject}. From: {sender}. {body_start}")
+               ⚠️  This stores the beginning of the email body as plain text.
+               Design intent was "no raw text in DB"; this is a known deviation.
+  indexed_at   (epoch ms)
+```
+
+**What `keyword_text` contains for Gmail:** the subject line, the sender address, and the first ~1500 characters of the decoded email body (HTML stripped). This is used for both FTS and as the text sent to Voyage for embedding.
+
+**What is NOT stored:** the full email body. At query time, the Gmail API is called live with the stored `external_id` to fetch the full message.
+
+---
+
+### Google Drive
+
+```
+drive_files              — one row per Drive file (metadata only)
+  id           (bigint, PK)
+  workspace_id
+  user_id
+  external_id  (Google Drive file ID — pointer back to Drive)
+  name         (file name)
+  mime_type    ('application/vnd.google-apps.document' | 'spreadsheet' | 'presentation' | ...)
+  web_view_link (Google Drive URL, nullable)
+  synced_at
+
+drive_embeddings         — one row per chunk of a Drive file
+  id           (bigint, PK)
+  workspace_id
+  file_id      (FK drive_files)
+  chunk_index  (int — position within the file)
+  embedding    (float[] — 1024-dim Voyage vector)
+  keyword_text (text — chunk of extracted file text)
+  indexed_at
+```
+
+**What `keyword_text` contains for Drive:** a chunked slice of the exported file text (Google Docs exported as plain text, Sheets as CSV, Presentations as plain text). At query time, `getDriveFileContent` fetches up to 8000 chars from the Drive API live.
+
+---
+
+### Asana
+
+```
+asana_items              — one row per Asana task or project item
+  id           (bigint, PK)
+  workspace_id
+  user_id
+  external_id  (Asana task GID)
+  name         (task title)
+  project_name (parent project name)
+  assignee     (assignee display name)
+  due_date     (text)
+  status       (task completion status)
+  permalink_url (Asana task URL)
+  synced_at
+
+asana_embeddings         — one row per chunk of an Asana item
+  id           (bigint, PK)
+  workspace_id
+  item_id      (FK asana_items)
+  chunk_index
+  embedding    (float[] — 1024-dim Voyage vector)
+  keyword_text (text — task name + description + comments chunk)
+  indexed_at
+```
+
+---
+
+### Derived / AI-generated
+
+```
+summaries                — Claude-generated summary per message
+  id
+  workspace_id
+  message_id   (FK messages)
+  summary      (text — AI-written summary of the email)
+  summarized_at
+
+facts                    — structured facts extracted by Claude from messages
+  id
+  workspace_id
+  message_id   (FK messages, nullable)
+  type         (text — fact category, e.g. 'deadline', 'decision')
+  subject      (text — what the fact is about)
+  detail       (text — the fact content)
+  client       (text — client name if extractable)
+  extracted_at
+
+workspace_contexts       — one pre-built context blob per workspace (used for prompt caching)
+  id
+  workspace_id (UNIQUE)
+  context_text (text — distilled summary of all synced data, injected as cached prompt prefix)
+  built_at
+  sources_used (int — how many messages/files contributed)
+  token_count
+```
+
+---
+
+### Auth and sync state
+
+```
+oauth_tokens             — stored OAuth credentials per provider per user
+  id
+  workspace_id
+  user_id
+  provider     ('google-gmail' | 'google-drive' | 'asana')
+  access_token (text — live access token, refreshed automatically)
+  refresh_token (text — used to get new access tokens)
+  expires_at   (epoch ms)
+  UNIQUE (workspace_id, user_id, provider)
+
+sync_state               — cursor/checkpoint per sync job
+  id
+  workspace_id
+  user_id
+  source       ('gmail:INBOX' | 'gmail:SENT' | 'drive' | 'asana' | ...)
+  last_synced_at (epoch ms)
+  cursor       (text — provider-specific pagination token, e.g. Gmail historyId)
+  UNIQUE (workspace_id, user_id, source)
+```
+
+---
+
+### Privacy notes
+
+| Category | Stored as plain text? | Where |
+|---|---|---|
+| Email subject | Yes | `messages.subject` |
+| Email sender address | Yes | `messages.sender` |
+| First ~1500 chars of email body | Yes | `embeddings.keyword_text` |
+| Full email body | No | fetched live from Gmail API |
+| Drive file name | Yes | `drive_files.name` |
+| Drive file content (chunks) | Yes | `drive_embeddings.keyword_text` |
+| Asana task name, assignee, project | Yes | `asana_items.*` |
+| AI-written summaries | Yes | `summaries.summary` |
+| Extracted facts | Yes | `facts.detail` |
+| OAuth access + refresh tokens | Yes | `oauth_tokens.*` |
+
+> **Known deviation from architectural rule:** CLAUDE.md states "No raw text in DB." `embeddings.keyword_text`, `drive_embeddings.keyword_text`, and `asana_embeddings.keyword_text` all store plain-text content snippets. This was a pragmatic implementation choice for hybrid FTS+vector search. Fix before customer data onboarding if the privacy pitch is "data never stored in the cloud."
+
+> [GINO: decide embedding dimension. Currently using Voyage-3 = 1024. Changing later requires re-embedding all documents. Lock this in before first customer.]
 
 ---
 
