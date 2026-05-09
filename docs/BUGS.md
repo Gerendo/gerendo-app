@@ -104,6 +104,60 @@ Add `cursor-pointer` to the base button styles in `src/components/ui/button.tsx`
 
 ---
 
+## BUG-008 - Sync progress bar disappears when navigating away from Connect page
+
+**Status:** Open  
+**Platform:** All  
+**Area:** Connect / Sync UX
+
+**Description:**  
+When connecting Google Drive or Asana, the tool shows a "Starting..." status with a progress bar. If the user navigates to the Ask page during this time, the progress bar disappears entirely. On returning to Connect, the tools show "Active - auto-syncing" with no indication of whether the initial sync actually completed or how far along it is.
+
+**Expected behavior:**  
+Sync progress should persist across navigation. Either (1) show a persistent sync indicator in the global header/sidebar while a sync is in progress, or (2) restore the progress state when the user returns to the Connect page. The user should always know if a sync is still running.
+
+**Fix:**  
+Poll sync status from the server on Connect page mount and resume displaying progress if a sync is still in progress. Optionally add a small global indicator (e.g. a pulsing dot next to the tool icon in the nav) that is visible from any page during active syncs.
+
+---
+
+## BUG-009 - Mobile header shows raw buttons instead of a menu
+
+**Status:** Open  
+**Platform:** iOS / Android (mobile browsers)  
+**Area:** Mobile UX / Header
+
+**Description:**  
+On mobile, the top header shows "Ask questions" and "Log out" as full-width buttons side by side. They look cramped, are not well sized for touch, and take up too much header space. This is visible on both the Connect page and other app pages.
+
+**Expected behavior:**  
+On mobile, the header should collapse navigation actions into a hamburger menu or a compact icon-only layout. The primary CTA ("Ask questions") can remain visible but secondary actions ("Log out", settings) should be hidden behind a menu.
+
+**Fix:**  
+Add a responsive header: on `md+` show the current button row, on mobile show the app name/logo + a hamburger icon that opens a drawer or dropdown with all navigation actions.
+
+---
+
+## BUG-010 - Mobile Connect page layout issues
+
+**Status:** Open  
+**Platform:** iOS / Android (mobile browsers)  
+**Area:** Mobile UX / Connect page
+
+**Description:**  
+Several layout problems on the Connect page on mobile:
+1. "Not connected" status text wraps to two lines inside the tool card, making cards taller and harder to scan.
+2. Tool descriptions are verbose and take up too much vertical space on small screens.
+3. The category filter row (All, Communication, Files, Project Management, CRM, Calendar) wraps across two rows and feels overwhelming on mobile.
+
+**Expected behavior:**  
+Tool cards should stay compact on mobile with status text on a single line. Category filters should either scroll horizontally (single row) or show only the most relevant 3-4 on mobile. Descriptions can be shortened or hidden behind a "details" expand.
+
+**Fix:**  
+(1) Truncate "Not connected" to an icon + short badge or shorten to "Connect" only. (2) Limit the description to one line with `truncate` on mobile. (3) Make the category filter row `overflow-x-auto` with `whitespace-nowrap` so it scrolls horizontally instead of wrapping.
+
+---
+
 ## BUG-004 - Chat AI claims it cannot access full Asana data when it can
 
 **Status:** Open  

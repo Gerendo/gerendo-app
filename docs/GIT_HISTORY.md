@@ -1,3 +1,79 @@
+## cfeabf8 - feat: lock in always-helpful behavior for no-tools and partial-tools states
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 20:56
+
+Add explicit system prompt section with concrete rules:
+- No tools: answer general questions + show specific value of each integration,
+  never refuse to engage
+- Partial tools: answer from what's connected, one-sentence gap mention
+- All tools: answer directly, no preamble
+
+Previously this relied on Claude inferring behavior from a one-liner.
+Now it's deterministic regardless of model version.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## a18c748 - fix: Asana webhook key alignment - use asana_ws GID for per-workspace deduplication
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 20:43
+
+- Pass asana_ws=<gid> in webhook target URL at registration time
+- Handshake handler now stores key=asanaWsKey (from URL param, falls back to 'default')
+  instead of always storing key='default'
+- HMAC verification looks up secret by asanaWsKey to match
+- Deduplication in register route now correctly finds existing rows by workspace GID
+- Supports multiple Asana workspaces per user independently
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 3494f43 - fix: cursor pointer, iPhone zoom, invite token generation, logout accessibility
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 20:41
+
+BUG-006: add cursor-pointer globally to button/a/[role=button] in globals.css
+BUG-001: set font-size min 16px on inputs to prevent iOS Safari zoom on focus
+BUG-003: generate invite token in app code (crypto.getRandomValues hex) instead
+  of relying on Postgres base64url encoding which is not supported
+BUG-005: add Log out link to ask and connect page headers so users can log out
+  from anywhere without navigating to Settings first
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 79fb861 - fix: debounce Gmail webhook and limit to INBOX+SENT to stop rate limit storm
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 20:39
+
+- Add 30s debounce on webhook handler via sync_state gmail:webhook_lock key
+  so rapid Pub/Sub retries and duplicate notifications are dropped immediately
+- Webhook-triggered syncs now only process INBOX and SENT (2 API calls) instead
+  of all 9 system labels + user labels (was 9+ calls per webhook hit)
+- Add labelsOnly option to runGmailSyncForUser for webhook vs full sync distinction
+- Daily cron continues to sync all labels unaffected
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 6e312fc - feat: add live Asana tool + email body fetch to ask route, track known bugs
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 20:38
+
+- Split tool definitions into named consts (EMAIL_DETAIL_TOOL, EMAIL_BODY_TOOL, DRIVE_CONTENT_TOOL, LIST_DRIVE_TOOL, ASANA_TASKS_TOOL)
+- Add get_email_body tool: fetches full Gmail message live when summaries are insufficient
+- Add get_asana_tasks tool: queries Asana API live for real-time task data (fixes BUG-004)
+- Import getAsanaToken + asanaGet from agency-db for live Asana queries
+- Add docs/BUGS.md with tracked open bugs
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 70c2f0b - fix: return 401 for unauthenticated API routes instead of redirecting to /login
 
 **Author:** Tocki28  

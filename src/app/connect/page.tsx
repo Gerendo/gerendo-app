@@ -49,6 +49,7 @@ function ConnectPageInner() {
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const gmailConnected = searchParams.get("gmail_connected");
@@ -80,11 +81,15 @@ function ConnectPageInner() {
       if (ac) statuses.asana = "active";
       setToolStatus(p => ({ ...p, ...statuses }));
 
-      // Get indexed counts
+      // Get indexed counts from both sync job (Gmail live) and workspace info (all tools)
+      fetch("/api/workspace/info").then(r => r.json()).then(info => {
+        if (info.emailCount > 0) setSyncedCounts(p => ({ ...p, gmail: info.emailCount }));
+        if (info.driveCount > 0) setSyncedCounts(p => ({ ...p, drive: info.driveCount }));
+        if (info.asanaCount > 0) setSyncedCounts(p => ({ ...p, asana: info.asanaCount }));
+      }).catch(() => {});
+
       fetch("/api/sync/status").then(r => r.json()).then(job => {
         if (job.totalSynced > 0) setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
-
-        // If a first-time sync is still running, poll for it
         if (job.status === "running") {
           setInitialSyncing("gmail");
           setSyncCount(job.totalSynced ?? 0);
@@ -236,12 +241,13 @@ function ConnectPageInner() {
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>
       {/* Header */}
-      <div className="border-b px-6 py-4 flex items-center justify-between" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
+      <div className="relative border-b px-6 py-4 flex items-center justify-between" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
         <a href="/ask" className="hover:opacity-80 transition-opacity">
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Connect your tools</p>
         </a>
-        <div className="flex items-center gap-2">
+        {/* Desktop nav */}
+        <div className="hidden sm:flex items-center gap-2">
           <a href="/ask" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
             style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}>
             Ask questions
@@ -251,6 +257,32 @@ function ConnectPageInner() {
             Log out
           </a>
         </div>
+        {/* Mobile hamburger */}
+        <button
+          className="sm:hidden p-2 rounded-xl transition-colors"
+          style={{ color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
+          onClick={() => setMenuOpen(v => !v)}
+          aria-label="Menu"
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect y="3" width="18" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect y="8.25" width="18" height="1.5" rx="0.75" fill="currentColor"/>
+            <rect y="13.5" width="18" height="1.5" rx="0.75" fill="currentColor"/>
+          </svg>
+        </button>
+        {menuOpen && (
+          <div className="absolute top-full left-0 right-0 z-50 flex flex-col gap-1 px-6 py-3 sm:hidden"
+            style={{ background: "oklch(0.13 0.009 55)", borderBottom: "1px solid oklch(1 0 0 / 8%)" }}>
+            <a href="/ask" className="text-sm font-medium py-2.5 transition-colors hover:opacity-80"
+              style={{ color: "oklch(0.78 0.14 65)" }}>
+              Ask questions
+            </a>
+            <a href="/api/auth/signout" className="text-sm py-2.5 transition-colors hover:opacity-80"
+              style={{ color: "oklch(0.55 0.012 60)" }}>
+              Log out
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">
@@ -271,40 +303,48 @@ function ConnectPageInner() {
               <div className="flex items-center justify-between text-xs" style={{ color: "oklch(0.85 0.08 70)" }}>
                 <div className="flex items-center gap-2">
                   <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
-                  Importing existing emails — {syncCount > 0 ? `${syncCount.toLocaleString()} indexed so far` : "starting..."}
+                  {initialSyncing === "gmail"
+                    ? `Importing emails${syncCount > 0 ? ` — ${syncCount.toLocaleString()} indexed` : "..."}`
+                    : initialSyncing === "drive"
+                    ? "Indexing Google Drive files..."
+                    : "Syncing Asana tasks..."}
                 </div>
-                <button
-                  onClick={async () => {
-                    await fetch("/api/sync/stop", { method: "POST" });
-                    await fetch("/api/sync/disconnect", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ tool: "gmail" }),
-                    });
-                    setInitialSyncing(null);
-                    setConnectedTools(p => { const n = new Set(p); n.delete("gmail"); return n; });
-                    setToolStatus(p => { const n = { ...p }; delete n.gmail; return n; });
-                    setSyncedCounts(p => { const n = { ...p }; delete n.gmail; return n; });
-                  }}
-                  className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
-                  style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
-                >
-                  Stop
-                </button>
+                {initialSyncing === "gmail" && (
+                  <button
+                    onClick={async () => {
+                      await fetch("/api/sync/stop", { method: "POST" });
+                      await fetch("/api/sync/disconnect", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tool: "gmail" }),
+                      });
+                      setInitialSyncing(null);
+                      setConnectedTools(p => { const n = new Set(p); n.delete("gmail"); return n; });
+                      setToolStatus(p => { const n = { ...p }; delete n.gmail; return n; });
+                      setSyncedCounts(p => { const n = { ...p }; delete n.gmail; return n; });
+                    }}
+                    className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
+                    style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
+                  >
+                    Stop
+                  </button>
+                )}
               </div>
-              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
-                <div className="h-full rounded-full animate-pulse" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
-              </div>
+              {initialSyncing === "gmail" && (
+                <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
+                  <div className="h-full rounded-full" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
+                </div>
+              )}
               <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>
-                This only happens once. After this, new emails and tasks sync automatically.{" "}
+                This only happens once. After this, everything syncs automatically.{" "}
                 <a href="/ask" className="underline" style={{ color: "oklch(0.78 0.14 65)" }}>You can start asking questions now.</a>
               </p>
             </div>
           )}
         </div>
 
-        {/* Category filter */}
-        <div className="flex gap-2 flex-wrap">
+        {/* Category filter - horizontal scroll on mobile, wraps on desktop */}
+        <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-nowrap sm:flex-wrap">
           {categories.map(cat => (
             <button
               key={cat}
@@ -340,8 +380,8 @@ function ConnectPageInner() {
                 }}
               >
                 <div className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold"
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold flex-shrink-0"
                       style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)" }}>
                       {tool.name[0]}
                     </div>
@@ -350,8 +390,8 @@ function ConnectPageInner() {
                       <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs whitespace-nowrap" style={{ color: statusColor }}>{statusText}</span>
                     {!tool.comingSoon && isConnected && !isConfirming && (
                       <button
                         onClick={() => setConfirmDisconnect(tool.id)}
