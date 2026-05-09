@@ -136,6 +136,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
 
       // Process in sub-batches using Gmail batch API (100 messages per HTTP request)
       for (let b = 0; b < messageIds.length; b += SUB_BATCH) {
+        if (await isCancelled()) break;
         const batchIds = messageIds.slice(b, b + SUB_BATCH);
         const keywordTexts: string[] = [];
         const messageRows: Array<{
