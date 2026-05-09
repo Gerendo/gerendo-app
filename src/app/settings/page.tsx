@@ -1,12 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface Member {
+  userId: string;
+  role: string;
+  joinedAt: string;
+  name: string;
+  email: string;
+  avatar: string | null;
+  isYou: boolean;
+}
+
+interface WorkspaceInfo {
+  workspace: { id: string; name: string; created_at: string };
+  members: Member[];
+  currentUser: { id: string; name: string; email: string; avatar: string | null };
+}
 
 export default function SettingsPage() {
+  const [info, setInfo] = useState<WorkspaceInfo | null>(null);
   const [inviteUrl, setInviteUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/workspace/info")
+      .then(r => r.json())
+      .then(setInfo)
+      .catch(() => {});
+  }, []);
 
   async function generateInvite() {
     setGenerating(true);
@@ -15,8 +39,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/workspace/invite", { method: "POST" });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      const url = `${window.location.origin}/join?token=${data.token}`;
-      setInviteUrl(url);
+      setInviteUrl(`${window.location.origin}/join?token=${data.token}`);
     } catch (err: any) {
       setError(err.message ?? "Failed to generate invite");
     } finally {
@@ -30,28 +53,95 @@ export default function SettingsPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const borderColor = "oklch(1 0 0 / 8%)";
+  const mutedColor = "oklch(0.65 0.015 60)";
+  const dimColor = "oklch(0.55 0.012 60)";
+  const emberColor = "oklch(0.78 0.14 65)";
+  const inkSoft = "oklch(0.16 0.01 55)";
+
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>
       {/* Header */}
-      <div className="border-b px-6 py-4 flex items-center justify-between" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
+      <div className="border-b px-6 py-4 flex items-center justify-between" style={{ borderColor }}>
         <a href="/ask" className="hover:opacity-80 transition-opacity">
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
-          <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Settings</p>
+          <p className="text-xs mt-0.5" style={{ color: dimColor }}>Settings</p>
         </a>
         <div className="flex gap-4">
-          <a href="/connect" className="text-xs underline underline-offset-2" style={{ color: "oklch(0.55 0.012 60)" }}>Connect tools</a>
-          <a href="/ask" className="text-xs underline underline-offset-2" style={{ color: "oklch(0.55 0.012 60)" }}>Ask questions</a>
+          <a href="/connect" className="text-xs underline underline-offset-2" style={{ color: dimColor }}>Connect tools</a>
+          <a href="/ask" className="text-xs underline underline-offset-2" style={{ color: dimColor }}>Ask questions</a>
         </div>
       </div>
 
       <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-8">
 
-        {/* Team section */}
-        <div className="flex flex-col gap-4">
+        {/* Current user */}
+        {info?.currentUser && (
+          <div className="flex items-center gap-4 p-4 rounded-2xl border" style={{ borderColor, background: "oklch(0.13 0.009 55)" }}>
+            {info.currentUser.avatar ? (
+              <img src={info.currentUser.avatar} className="w-10 h-10 rounded-full" alt="" />
+            ) : (
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold" style={{ background: inkSoft, color: emberColor }}>
+                {info.currentUser.name?.[0]?.toUpperCase()}
+              </div>
+            )}
+            <div>
+              <p className="text-sm font-medium">{info.currentUser.name}</p>
+              <p className="text-xs" style={{ color: mutedColor }}>{info.currentUser.email}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Workspace */}
+        {info?.workspace && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>Workspace</h2>
+            <div className="p-4 rounded-2xl border" style={{ borderColor, background: "oklch(0.13 0.009 55)" }}>
+              <p className="text-sm font-medium">{info.workspace.name}</p>
+              <p className="text-xs mt-0.5" style={{ color: mutedColor }}>
+                Created {new Date(info.workspace.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Team members */}
+        {info?.members && (
+          <div className="flex flex-col gap-3">
+            <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>
+              Team ({info.members.length})
+            </h2>
+            <div className="flex flex-col gap-2">
+              {info.members.map((m) => (
+                <div key={m.userId} className="flex items-center gap-3 p-3 rounded-2xl border" style={{ borderColor, background: "oklch(0.13 0.009 55)" }}>
+                  {m.avatar ? (
+                    <img src={m.avatar} className="w-8 h-8 rounded-full" alt="" />
+                  ) : (
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold" style={{ background: inkSoft, color: emberColor }}>
+                      {m.name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {m.name} {m.isYou && <span style={{ color: mutedColor }} className="font-normal text-xs">(you)</span>}
+                    </p>
+                    <p className="text-xs truncate" style={{ color: mutedColor }}>{m.email}</p>
+                  </div>
+                  <span className="text-xs px-2 py-1 rounded-lg capitalize" style={{ background: inkSoft, color: m.role === "admin" ? emberColor : mutedColor }}>
+                    {m.role}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Invite */}
+        <div className="flex flex-col gap-3">
           <div>
             <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>Invite team members</h2>
-            <p className="text-sm mt-1" style={{ color: "oklch(0.65 0.015 60)" }}>
-              Generate an invite link and share it with your team. Anyone with the link can join your workspace.
+            <p className="text-sm mt-1" style={{ color: mutedColor }}>
+              Share this link with your team. Anyone with it can join your workspace.
             </p>
           </div>
 
@@ -60,58 +150,39 @@ export default function SettingsPage() {
               onClick={generateInvite}
               disabled={generating}
               className="self-start px-5 py-2.5 text-sm font-semibold rounded-xl transition-colors disabled:opacity-50"
-              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+              style={{ background: emberColor, color: "oklch(0.11 0.008 55)" }}
             >
               {generating ? "Generating..." : "Generate invite link"}
             </button>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
               <div className="flex gap-2">
                 <input
                   readOnly
                   value={inviteUrl}
                   className="flex-1 px-4 py-2.5 text-sm rounded-xl border"
-                  style={{
-                    background: "oklch(0.13 0.009 55)",
-                    borderColor: "oklch(1 0 0 / 12%)",
-                    color: "oklch(0.96 0.012 80)",
-                  }}
+                  style={{ background: "oklch(0.13 0.009 55)", borderColor: "oklch(1 0 0 / 12%)", color: "oklch(0.96 0.012 80)" }}
                 />
                 <button
                   onClick={copyInvite}
                   className="px-4 py-2.5 text-sm font-semibold rounded-xl transition-colors"
-                  style={{
-                    background: copied ? "oklch(0.65 0.15 145)" : "oklch(0.78 0.14 65)",
-                    color: "oklch(0.11 0.008 55)",
-                  }}
+                  style={{ background: copied ? "oklch(0.65 0.15 145)" : emberColor, color: "oklch(0.11 0.008 55)" }}
                 >
                   {copied ? "Copied!" : "Copy"}
                 </button>
               </div>
-              <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>
-                This link expires in 30 days. Generate a new one anytime.
-              </p>
-              <button
-                onClick={generateInvite}
-                disabled={generating}
-                className="self-start text-xs underline underline-offset-2"
-                style={{ color: "oklch(0.55 0.012 60)" }}
-              >
+              <p className="text-xs" style={{ color: dimColor }}>Expires in 30 days. Generate a new one anytime.</p>
+              <button onClick={generateInvite} disabled={generating} className="self-start text-xs underline underline-offset-2" style={{ color: dimColor }}>
                 Generate new link
               </button>
             </div>
           )}
-
           {error && <p className="text-sm" style={{ color: "oklch(0.62 0.22 25)" }}>{error}</p>}
         </div>
 
         {/* Sign out */}
-        <div className="pt-4 border-t" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
-          <a
-            href="/api/auth/signout"
-            className="text-sm underline underline-offset-2"
-            style={{ color: "oklch(0.55 0.012 60)" }}
-          >
+        <div className="pt-4 border-t" style={{ borderColor }}>
+          <a href="/api/auth/signout" className="text-sm underline underline-offset-2" style={{ color: dimColor }}>
             Sign out
           </a>
         </div>

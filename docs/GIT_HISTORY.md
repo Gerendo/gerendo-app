@@ -1,3 +1,18 @@
+## 1304ec4 - feat: multi-tenant auth - real session, invite links, settings page
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 09:56
+
+- requireWorkspace() replaces getOrCreateDefaultWorkspace() in all API routes
+- middleware enforces auth on /ask, /connect, /settings
+- /join page handles invite token acceptance
+- /settings page generates shareable invite links (30 day expiry)
+- /api/auth/signout route
+- createWorkspaceForUser() on first login
+- joinWorkspaceViaToken() for invite flow
+- Settings link in ask header
+
+---
 ## ee1cd99 - fix: clickable logo, single dash, progress bar with fill animation in sync banner
 
 **Author:** Tocki28  
