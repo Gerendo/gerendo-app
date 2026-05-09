@@ -167,8 +167,8 @@ function ConnectPageInner() {
     const s = toolStatus[tool.id];
     if (s === "done") return { text: `${syncedCounts[tool.id] ?? 0} indexed`, color: "oklch(0.78 0.14 65)" };
     if (s === "syncing") {
-      if (tool.id === "gmail" && gmailProgress) return { text: `${gmailProgress.count} synced...`, color: "oklch(0.85 0.08 70)" };
-      return { text: "Syncing...", color: "oklch(0.85 0.08 70)" };
+      if (tool.id === "gmail" && gmailProgress) return { text: `${gmailProgress.count} items in background`, color: "oklch(0.85 0.08 70)" };
+      return { text: "Running in background", color: "oklch(0.85 0.08 70)" };
     }
     if (s === "error") return { text: toolError[tool.id] ?? "Error", color: "oklch(0.62 0.22 25)" };
     if (connectedTools.has(tool.id)) return { text: "Connected", color: "oklch(0.78 0.14 65)" };
@@ -199,15 +199,34 @@ function ConnectPageInner() {
 
       <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">
         {/* Summary */}
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight mb-1" style={{ fontFamily: "var(--font-display)" }}>
+        <div className="flex flex-col gap-1">
+          <h2 className="text-lg font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>
             Your workspace
           </h2>
           <p className="text-sm" style={{ color: "oklch(0.65 0.015 60)" }}>
             {totalSynced > 0
-              ? `${totalSynced.toLocaleString()} items indexed across ${connectedTools.size} tool${connectedTools.size !== 1 ? "s" : ""}.`
+              ? `${totalSynced.toLocaleString()} items indexed.`
               : "Connect your tools to start building your agency brain."}
           </p>
+          {Object.values(toolStatus).some(s => s === "syncing") && (
+            <div className="mt-2 flex flex-col gap-2">
+              {/* Overall progress bar */}
+              {gmailProgress && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
+                    <span>Syncing {gmailProgress.current}...</span>
+                    <span>{gmailProgress.count.toLocaleString()} items</span>
+                  </div>
+                  <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
+                    <div className="h-full rounded-full animate-pulse" style={{ width: "60%", background: "oklch(0.78 0.14 65)" }} />
+                  </div>
+                </div>
+              )}
+              <p className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
+                Running in background — <a href="/ask" className="underline" style={{ color: "oklch(0.78 0.14 65)" }}>you can start asking questions</a> while this finishes.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Category filter */}
