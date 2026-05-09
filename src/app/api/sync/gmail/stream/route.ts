@@ -117,7 +117,8 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
           const profileRes = await gmail.users.getProfile({ userId: "me" });
           if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
         }
-      } catch {
+      } catch (err: any) {
+        console.error(`[sync] failed to list messages for label ${label.name}:`, err?.message, err?.code, err?.status);
         labelProgress[label.name] = { synced: 0, total: 0, status: "error" };
         await pushProgress();
         continue;
@@ -143,7 +144,9 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
         }> = [];
 
         // One HTTP request fetches all 100 messages at once
+        console.log(`[sync] fetching batch of ${batchIds.length} messages for label ${label.name}`);
         const msgMap = await batchFetchMessages(gmailToken, batchIds);
+        console.log(`[sync] batch returned ${msgMap.size} messages`);
 
         for (const id of batchIds) {
           const msg = msgMap.get(id);
