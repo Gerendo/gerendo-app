@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 
 type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
@@ -17,12 +17,30 @@ export default function AskPage() {
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [streamingSources, setStreamingSources] = useState<Source[]>([]);
+  const [setupState, setSetupState] = useState<"checking" | "no-tools" | "no-data" | "ready">("checking");
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
+
+  useEffect(() => {
+    // Check if user has tools connected and data synced
+    Promise.all([
+      fetch("/api/nango/status").then(r => r.json()).catch(() => ({ connected: false, driveConnected: false, asanaConnected: false })),
+      fetch("/api/sync/status").then(r => r.json()).catch(() => ({ totalSynced: 0 })),
+    ]).then(([status, syncStatus]) => {
+      const anyConnected = status.connected || status.driveConnected || status.asanaConnected;
+      if (!anyConnected) {
+        setSetupState("no-tools");
+      } else if (!syncStatus.totalSynced || syncStatus.totalSynced === 0) {
+        setSetupState("no-data");
+      } else {
+        setSetupState("ready");
+      }
+    });
+  }, []);
 
   // Build history for API — last 4 messages (2 exchanges) only.
   // Assistant content is truncated to 300 chars so prior verbose answers
@@ -133,7 +151,61 @@ export default function AskPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full">
-        {messages.length === 0 && !loading && (
+        {messages.length === 0 && !loading && setupState === "checking" && (
+          <div className="flex items-center justify-center mt-20">
+            <div className="w-1 h-1 rounded-full bg-[oklch(0.45_0.01_60)] animate-pulse" />
+          </div>
+        )}
+
+        {messages.length === 0 && !loading && setupState === "no-tools" && (
+          <div className="flex flex-col items-center text-center gap-6 mt-16 px-4">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight mb-2" style={{ fontFamily: "var(--font-display)" }}>
+                Welcome to Gerendo
+              </h2>
+              <p className="text-[oklch(0.65_0.015_60)] text-sm max-w-sm">
+                Connect your tools to get started. Gerendo indexes your emails, files, and tasks so you can ask questions across all of them.
+              </p>
+            </div>
+            <a
+              href="/connect"
+              className="px-8 py-3 text-sm font-semibold rounded-[var(--radius-xl)] transition-colors hover:opacity-90"
+              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+            >
+              Connect your tools
+            </a>
+            <div className="flex flex-col gap-2 w-full max-w-sm mt-2">
+              {["Gmail", "Google Drive", "Asana"].map((tool) => (
+                <div key={tool} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
+                  <div className="w-2 h-2 rounded-full bg-[oklch(1_0_0_/_15%)]" />
+                  <span className="text-sm text-[oklch(0.65_0.015_60)]">{tool} — not connected</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.length === 0 && !loading && setupState === "no-data" && (
+          <div className="flex flex-col items-center text-center gap-6 mt-16 px-4">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight mb-2" style={{ fontFamily: "var(--font-display)" }}>
+                Tools connected — sync your data
+              </h2>
+              <p className="text-[oklch(0.65_0.015_60)] text-sm max-w-sm">
+                Your tools are connected but nothing has been indexed yet. Run a sync to start building your agency brain.
+              </p>
+            </div>
+            <a
+              href="/connect"
+              className="px-8 py-3 text-sm font-semibold rounded-[var(--radius-xl)] transition-colors hover:opacity-90"
+              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+            >
+              Sync your data
+            </a>
+          </div>
+        )}
+
+        {messages.length === 0 && !loading && setupState === "ready" && (
           <div className="flex flex-col gap-3 mt-8">
             <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
             {[
