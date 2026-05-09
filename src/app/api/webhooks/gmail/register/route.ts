@@ -49,7 +49,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { historyId, expiration } = watchRes.data;
 
   const supabase = createServiceClient();
-  await supabase.from("webhook_secrets").upsert({
+  const { error: upsertError } = await supabase.from("webhook_secrets").upsert({
     workspace_id: workspaceId,
     user_id: userId,
     provider: "gmail",
@@ -58,5 +58,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     meta: { expiration, registeredAt: Date.now() },
   }, { onConflict: "workspace_id,user_id,provider,key" });
 
-  return NextResponse.json({ ok: true, expiration });
+  if (upsertError) {
+    console.error("[webhook/gmail/register] upsert failed:", upsertError.message, { workspaceId, userId });
+    return NextResponse.json({ error: upsertError.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, expiration, workspaceId, userId });
 }
