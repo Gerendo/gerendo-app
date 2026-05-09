@@ -123,8 +123,8 @@ export default function AskPage() {
       {/* Header */}
       <div className="border-b border-[oklch(1_0_0_/_8%)] px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-sm font-semibold font-display tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
-          <p className="text-[oklch(0.55_0.012_60)] text-xs">Ask anything across your emails, Drive, and Asana</p>
+          <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
+          <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything across your emails, Drive, and Asana</p>
         </div>
         <a href="/connect" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
           Manage connections
@@ -145,7 +145,7 @@ export default function AskPage() {
               <button
                 key={suggestion}
                 onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}
-                className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-lg px-4 py-3 transition-colors"
+                className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors"
               >
                 {suggestion}
               </button>
@@ -176,7 +176,7 @@ export default function AskPage() {
                         href={s.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="flex flex-col gap-0.5 p-3 rounded-lg border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] transition-colors"
+                        className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] transition-colors"
                       >
                         <span className="text-xs text-white font-medium">{s.subject}</span>
                         <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date} · <span className="text-[oklch(0.45_0.01_60)]">{s.mailbox ?? "inbox"}</span></span>
@@ -197,7 +197,7 @@ export default function AskPage() {
                 <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
                 {streamingSources.map((s, j) => (
                   <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col gap-0.5 p-3 rounded-lg border border-[oklch(1_0_0_/_8%)]">
+                    className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
                     <span className="text-xs text-white font-medium">{s.subject}</span>
                     <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date}</span>
                   </a>
@@ -223,14 +223,14 @@ export default function AskPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Ask anything about your emails, files, or tasks..."
-            className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
+            className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
             disabled={loading}
             autoFocus
           />
           <button
             type="submit"
             disabled={!query.trim() || loading}
-            className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-medium px-5 py-3 rounded-xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-semibold px-5 py-3 rounded-2xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
           >
             {loading ? "..." : "Send"}
           </button>
