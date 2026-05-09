@@ -198,73 +198,73 @@ function ConnectPageInner() {
   const activeLabel = currentLabel;
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-8 p-8">
+    <div className="min-h-screen bg-[oklch(0.11_0.008_55)] text-white flex flex-col items-center justify-center gap-8 p-8">
       <div className="max-w-md w-full flex flex-col gap-6">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Connect your tools</h1>
-          <p className="text-zinc-400 mt-1 text-sm">
-            Connect your Gmail to start building your agency brain.
+          <h1 className="text-2xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Connect your tools</h1>
+          <p className="text-[oklch(0.65_0.015_60)] mt-1 text-sm">
+            Connect your tools to start building your agency brain.
           </p>
         </div>
 
-        <div className="border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">G</div>
+              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">G</div>
               <div>
                 <div className="font-medium text-sm">Gmail</div>
-                <div className="text-zinc-500 text-xs">Read email threads</div>
+                <div className="text-[oklch(0.55_0.012_60)] text-xs">Read email threads</div>
               </div>
             </div>
             {(status === "done" || status === "syncing") && (
-              <span className="text-xs text-green-400 font-medium">Connected</span>
+              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
             )}
           </div>
 
           {status === "checking" && (
-            <div className="text-zinc-500 text-sm text-center py-1">Checking connection...</div>
+            <div className="text-[oklch(0.55_0.012_60)] text-sm text-center py-1">Checking connection...</div>
           )}
 
           {status === "idle" && (
             <button
               onClick={handleConnect}
-              className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
             >
               Connect Gmail
             </button>
           )}
 
           {status === "connecting" && (
-            <button disabled className="w-full bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg cursor-not-allowed">
+            <button disabled className="w-full bg-[oklch(0.16_0.01_55)] text-[oklch(0.65_0.015_60)] text-sm py-2 rounded-lg cursor-not-allowed">
               Connecting...
             </button>
           )}
 
           {status === "syncing" && (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between text-xs text-zinc-400">
+              <div className="flex items-center justify-between text-xs text-[oklch(0.65_0.015_60)]">
                 <span>{activeLabel ? `Syncing ${activeLabel}...` : "Starting sync..."}</span>
                 <span>{totalSynced} emails</span>
               </div>
-              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="w-full h-1.5 bg-[oklch(0.16_0.01_55)] rounded-full overflow-hidden">
                 <div
                   className="h-full bg-white rounded-full transition-all duration-500"
                   style={{ width: `${progressPct}%` }}
                 />
               </div>
-              <div className="text-zinc-600 text-xs text-center">
+              <div className="text-[oklch(0.45_0.01_60)] text-xs text-center">
                 {doneCount} of {labels.length} mailboxes done
               </div>
               {labels.length > 0 && (
                 <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
                   {labels.map(([label, v]) => (
                     <div key={label} className="flex items-center justify-between text-xs">
-                      <span className="text-zinc-400 capitalize">{label}</span>
+                      <span className="text-[oklch(0.65_0.015_60)] capitalize">{label}</span>
                       <span className={
-                        v.status === "done" ? "text-green-400" :
+                        v.status === "done" ? "text-[oklch(0.78_0.14_65)]" :
                         v.status === "error" ? "text-red-400" :
-                        v.status === "syncing" ? "text-yellow-400" :
-                        "text-zinc-600"
+                        v.status === "syncing" ? "text-[oklch(0.85_0.08_70)]" :
+                        "text-[oklch(0.45_0.01_60)]"
                       }>
                         {v.status === "done"
                           ? `${v.synced} emails`
@@ -283,12 +283,12 @@ function ConnectPageInner() {
 
           {status === "done" && (
             <div className="flex flex-col gap-2">
-              <p className="text-zinc-400 text-xs text-center">
+              <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
                 {totalSynced === 0 ? "Already up to date." : `${totalSynced} emails indexed.`}
               </p>
               <button
                 onClick={startSync}
-                className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
               >
                 Sync new emails
               </button>
@@ -300,7 +300,7 @@ function ConnectPageInner() {
               <p className="text-red-400 text-xs">{error}</p>
               <button
                 onClick={startSync}
-                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
               >
                 Try again
               </button>
@@ -309,24 +309,24 @@ function ConnectPageInner() {
         </div>
 
         {/* Google Drive card */}
-        <div className="border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">D</div>
+              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">D</div>
               <div>
                 <div className="font-medium text-sm">Google Drive</div>
-                <div className="text-zinc-500 text-xs">Docs, Sheets, Slides</div>
+                <div className="text-[oklch(0.55_0.012_60)] text-xs">Docs, Sheets, Slides</div>
               </div>
             </div>
             {driveStatus === "done" && (
-              <span className="text-xs text-green-400 font-medium">Connected</span>
+              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
             )}
           </div>
 
           {driveStatus === "idle" && !driveConnected && (
             <button
               onClick={handleDriveConnect}
-              className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
             >
               Connect Drive
             </button>
@@ -335,20 +335,20 @@ function ConnectPageInner() {
           {driveStatus === "idle" && driveConnected && (
             <button
               onClick={syncDrive}
-              className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+              className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
             >
               Sync Drive
             </button>
           )}
 
           {driveStatus === "connecting" && (
-            <button disabled className="w-full bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg cursor-not-allowed">
+            <button disabled className="w-full bg-[oklch(0.16_0.01_55)] text-[oklch(0.65_0.015_60)] text-sm py-2 rounded-lg cursor-not-allowed">
               Connecting...
             </button>
           )}
 
           {driveStatus === "syncing" && (
-            <div className="text-zinc-400 text-sm text-center py-1 animate-pulse">
+            <div className="text-[oklch(0.65_0.015_60)] text-sm text-center py-1 animate-pulse">
               Indexing Drive files...
             </div>
           )}
@@ -356,13 +356,13 @@ function ConnectPageInner() {
           {driveStatus === "done" && (
             <div className="flex flex-col gap-2">
               {driveSynced && (
-                <p className="text-zinc-400 text-xs text-center">
+                <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
                   {driveSynced.synced} of {driveSynced.total} files indexed.
                 </p>
               )}
               <button
                 onClick={syncDrive}
-                className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
               >
                 Sync Drive
               </button>
@@ -374,7 +374,7 @@ function ConnectPageInner() {
               <p className="text-red-400 text-xs">{driveError}</p>
               <button
                 onClick={handleDriveConnect}
-                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
               >
                 Try again
               </button>
@@ -383,24 +383,24 @@ function ConnectPageInner() {
         </div>
 
         {/* Asana card */}
-        <div className="border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">A</div>
+              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">A</div>
               <div>
                 <div className="font-medium text-sm">Asana</div>
-                <div className="text-zinc-500 text-xs">Tasks, projects, comments</div>
+                <div className="text-[oklch(0.55_0.012_60)] text-xs">Tasks, projects, comments</div>
               </div>
             </div>
             {asanaStatus === "done" && (
-              <span className="text-xs text-green-400 font-medium">Connected</span>
+              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
             )}
           </div>
 
           {asanaStatus === "idle" && !asanaConnected && (
             <button
               onClick={() => { window.location.href = "/api/auth/asana"; }}
-              className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
             >
               Connect Asana
             </button>
@@ -409,14 +409,14 @@ function ConnectPageInner() {
           {asanaStatus === "idle" && asanaConnected && (
             <button
               onClick={syncAsana}
-              className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+              className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
             >
               Sync Asana
             </button>
           )}
 
           {asanaStatus === "syncing" && (
-            <div className="text-zinc-400 text-sm text-center py-1 animate-pulse">
+            <div className="text-[oklch(0.65_0.015_60)] text-sm text-center py-1 animate-pulse">
               Indexing Asana tasks...
             </div>
           )}
@@ -424,13 +424,13 @@ function ConnectPageInner() {
           {asanaStatus === "done" && (
             <div className="flex flex-col gap-2">
               {asanaSynced && (
-                <p className="text-zinc-400 text-xs text-center">
+                <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
                   {asanaSynced.synced} tasks indexed.
                 </p>
               )}
               <button
                 onClick={syncAsana}
-                className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
               >
                 Sync Asana
               </button>
@@ -442,7 +442,7 @@ function ConnectPageInner() {
               <p className="text-red-400 text-xs">{asanaError}</p>
               <button
                 onClick={() => { window.location.href = "/api/auth/asana"; }}
-                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
               >
                 Try again
               </button>
@@ -452,7 +452,7 @@ function ConnectPageInner() {
 
         <a
           href="/ask"
-          className="w-full bg-white text-black text-sm font-medium py-3 rounded-lg hover:bg-zinc-100 transition-colors text-center block"
+          className="w-full bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.85_0.08_70)] transition-colors text-center block font-medium"
         >
           Ask your agency brain
         </a>
