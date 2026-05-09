@@ -1,3 +1,23 @@
+## 97810fc - fix: mobile layout, mailbox filter for recent emails, smarter label hints
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 14:25
+
+- Use h-dvh + min-h-0 so input bar stays pinned to bottom on mobile
+- Constrain user message bubble to 85% width to prevent horizontal scroll
+- Filter recent email queries to inbox+sent only (was returning all labels including F5Bot_Reddit)
+- System prompt now tells Claude to flag off-inbox results and offer to refine
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 9ecafe9 - feat: settings page shows current user, workspace name, team members with avatars
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 10:00
+
+
+---
 ## 1304ec4 - feat: multi-tenant auth - real session, invite links, settings page
 
 **Author:** Tocki28  
