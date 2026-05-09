@@ -286,8 +286,8 @@ export default function AskPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
-      <div className="border-t border-[oklch(1_0_0_/_8%)] px-6 py-4">
+      {/* Input - only shown when data is ready */}
+      {(setupState === "ready" || messages.length > 0) && <div className="border-t border-[oklch(1_0_0_/_8%)] px-6 py-4">
         <form onSubmit={handleSubmit} className="flex gap-3 max-w-2xl mx-auto">
           <input
             ref={inputRef}
@@ -307,7 +307,7 @@ export default function AskPage() {
             {loading ? "..." : "Send"}
           </button>
         </form>
-      </div>
+      </div>}
     </div>
   );
 }
