@@ -47,6 +47,7 @@ function ConnectPageInner() {
   const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; type: string; default: boolean }>>([]);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [loadingLabels, setLoadingLabels] = useState(false);
+  const [disconnecting, setDisconnecting] = useState<string | null>(null);
 
   useEffect(() => {
     const gmailConnected = searchParams.get("gmail_connected");
@@ -179,6 +180,25 @@ function ConnectPageInner() {
       setToolStatus(p => ({ ...p, [toolId]: "error" }));
       setToolError(p => ({ ...p, [toolId]: err.message ?? "Something went wrong" }));
       setInitialSyncing(null);
+    }
+  }
+
+  async function handleDisconnect(toolId: string) {
+    if (!confirm(`Disconnect ${toolId}? This will remove all indexed data for this tool.`)) return;
+    setDisconnecting(toolId);
+    try {
+      await fetch("/api/sync/disconnect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: toolId }),
+      });
+      setConnectedTools(p => { const n = new Set(p); n.delete(toolId); return n; });
+      setToolStatus(p => { const n = { ...p }; delete n[toolId]; return n; });
+      setSyncedCounts(p => { const n = { ...p }; delete n[toolId]; return n; });
+    } catch {
+      setToolError(p => ({ ...p, [toolId]: "Disconnect failed" }));
+    } finally {
+      setDisconnecting(null);
     }
   }
 
@@ -316,17 +336,25 @@ function ConnectPageInner() {
                     <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2">
                   <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
+                  {!tool.comingSoon && isConnected && (
+                    <button
+                      onClick={() => handleDisconnect(tool.id)}
+                      disabled={disconnecting === tool.id}
+                      title="Disconnect and remove indexed data"
+                      className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-40"
+                      style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
+                    >
+                      {disconnecting === tool.id ? "..." : "Stop"}
+                    </button>
+                  )}
                   {!tool.comingSoon && !isConnected && (
                     <button
                       onClick={() => handleToolAction(tool)}
                       disabled={isSyncing}
                       className="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
-                      style={{
-                        background: "oklch(0.78 0.14 65)",
-                        color: "oklch(0.11 0.008 55)",
-                      }}
+                      style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
                     >
                       Connect
                     </button>
