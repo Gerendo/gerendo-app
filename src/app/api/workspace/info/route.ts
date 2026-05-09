@@ -1,0 +1,54 @@
+import { NextResponse } from "next/server";
+import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
+import { createServiceClient } from "@/lib/supabase-server";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+
+export async function GET(): Promise<NextResponse> {
+  const _ws = await requireWorkspace();
+  if (isErrorResponse(_ws)) return _ws;
+  const { workspaceId } = _ws;
+
+  const supabase = createServiceClient();
+  const authSupabase = await createServerSupabaseClient();
+
+  const { data: { user } } = await authSupabase.auth.getUser();
+
+  const { data: workspace } = await supabase
+    .from("workspaces")
+    .select("id, name, created_at")
+    .eq("id", workspaceId)
+    .single();
+
+  const { data: members } = await supabase
+    .from("workspace_members")
+    .select("user_id, role, joined_at")
+    .eq("workspace_id", workspaceId)
+    .order("joined_at", { ascending: true });
+
+  // Get user metadata from auth.users for each member
+  const memberProfiles = await Promise.all(
+    (members ?? []).map(async (m) => {
+      const { data } = await supabase.auth.admin.getUserById(m.user_id);
+      return {
+        userId: m.user_id,
+        role: m.role,
+        joinedAt: m.joined_at,
+        name: data.user?.user_metadata?.full_name ?? data.user?.email?.split("@")[0] ?? "Unknown",
+        email: data.user?.email ?? "",
+        avatar: data.user?.user_metadata?.avatar_url ?? null,
+        isYou: m.user_id === user?.id,
+      };
+    })
+  );
+
+  return NextResponse.json({
+    workspace,
+    members: memberProfiles,
+    currentUser: {
+      id: user?.id,
+      name: user?.user_metadata?.full_name ?? user?.email?.split("@")[0],
+      email: user?.email,
+      avatar: user?.user_metadata?.avatar_url ?? null,
+    },
+  });
+}

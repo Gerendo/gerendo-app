@@ -223,20 +223,30 @@ sync_state               — cursor/checkpoint per sync job
 
 ### Privacy notes
 
-| Category | Stored as plain text? | Where |
-|---|---|---|
-| Email subject | Yes | `messages.subject` |
-| Email sender address | Yes | `messages.sender` |
-| First ~1500 chars of email body | Yes | `embeddings.keyword_text` |
-| Full email body | No | fetched live from Gmail API |
-| Drive file name | Yes | `drive_files.name` |
-| Drive file content (chunks) | Yes | `drive_embeddings.keyword_text` |
-| Asana task name, assignee, project | Yes | `asana_items.*` |
-| AI-written summaries | Yes | `summaries.summary` |
-| Extracted facts | Yes | `facts.detail` |
-| OAuth access + refresh tokens | Yes | `oauth_tokens.*` |
+| Category | Stored as plain text? | Where | Notes |
+|---|---|---|---|
+| Email subject line | Yes | `messages.subject` | Always stored, even without body |
+| Email sender (address + display name) | Yes | `messages.sender` | From: header verbatim |
+| First ~1500 chars of email body | Yes | `embeddings.keyword_text` | Includes subject + sender + body start concatenated |
+| Full email body | No | - | Fetched live from Gmail API at query time |
+| Drive file name | Yes | `drive_files.name` | |
+| Drive file content (chunks) | Yes | `drive_embeddings.keyword_text` | |
+| Full Drive file content | No | - | Fetched live from Drive API at query time (capped at 8000 chars) |
+| Asana task name | Yes | `asana_items.name` | |
+| Asana project name | Yes | `asana_items.project_name` | |
+| Asana assignee name | Yes | `asana_items.assignee` | Display name as returned by Asana API |
+| Asana task content (chunks) | Yes | `asana_embeddings.keyword_text` | |
+| AI-written email summaries | Yes | `summaries.summary` | Derived, but contains information from email body |
+| Extracted facts | Yes | `facts.detail` | Derived, structured — type/subject/detail/client |
+| OAuth access + refresh tokens | Yes | `oauth_tokens.*` | Sensitive — grants access to user's Gmail/Drive/Asana |
 
-> **Known deviation from architectural rule:** CLAUDE.md states "No raw text in DB." `embeddings.keyword_text`, `drive_embeddings.keyword_text`, and `asana_embeddings.keyword_text` all store plain-text content snippets. This was a pragmatic implementation choice for hybrid FTS+vector search. Fix before customer data onboarding if the privacy pitch is "data never stored in the cloud."
+> **Known deviations from "no raw text in DB" rule (CLAUDE.md):**
+> 1. `messages.subject` and `messages.sender` - raw email metadata stored permanently on every sync
+> 2. `asana_items.name`, `.project_name`, `.assignee` - raw Asana metadata stored permanently
+> 3. `embeddings.keyword_text`, `drive_embeddings.keyword_text`, `asana_embeddings.keyword_text` - plain-text content snippets for hybrid search
+> 4. `summaries.summary` and `facts.detail` - AI-derived text that encodes content from the original sources
+>
+> These are pragmatic choices that need to be resolved before customer onboarding if the privacy pitch is "your data never leaves your machine" or "no content stored in the cloud."
 
 > [GINO: decide embedding dimension. Currently using Voyage-3 = 1024. Changing later requires re-embedding all documents. Lock this in before first customer.]
 
