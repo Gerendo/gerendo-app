@@ -467,12 +467,21 @@ function ConnectPageInner() {
 
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => setShowLabelPicker(false)}
+                onClick={() => {
+                  setShowLabelPicker(false);
+                  // Reset gmail status back to whatever it was before
+                  setToolStatus(p => ({
+                    ...p,
+                    gmail: connectedTools.has("gmail") ? "active" : "idle",
+                  }));
+                  setInitialSyncing(null);
+                }}
                 className="flex-1 text-sm py-2.5 rounded-xl font-medium"
                 style={{ background: "oklch(0.11 0.008 55)", border: "1px solid oklch(1 0 0 / 10%)", color: "oklch(0.65 0.015 60)" }}
               >
                 Cancel
               </button>
+
               <button
                 onClick={startGmailSyncWithLabels}
                 disabled={selectedLabels.size === 0}
