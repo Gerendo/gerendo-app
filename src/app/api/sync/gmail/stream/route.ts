@@ -66,6 +66,11 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     }).eq("id", jobId);
   }
 
+  async function isCancelled(): Promise<boolean> {
+    const { data } = await supabase.from("sync_jobs").select("status").eq("id", jobId).single();
+    return data?.status === "cancelled";
+  }
+
   try {
     const token = await getGmailToken(workspaceId, userId);
     const auth = new google.auth.OAuth2();
@@ -82,6 +87,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     await updateJob({ current_label: labelsToSync[0]?.name, label_progress: labelProgress });
 
     for (const label of labelsToSync) {
+      if (await isCancelled()) break;
       await updateJob({ current_label: label.name });
 
       const stateKey = `gmail:${label.id}`;

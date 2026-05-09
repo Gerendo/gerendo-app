@@ -100,7 +100,7 @@ function ConnectPageInner() {
       try {
         const job = await fetch("/api/sync/status").then(r => r.json());
         if (job.totalSynced) setSyncCount(job.totalSynced);
-        if (job.status === "done" || job.status !== "running") {
+        if (job.status === "done" || job.status === "cancelled" || job.status !== "running") {
           setInitialSyncing(null);
           setSyncedCounts(p => ({ ...p, gmail: job.totalSynced ?? 0 }));
           if (pollRef.current) clearInterval(pollRef.current);
@@ -247,7 +247,17 @@ function ConnectPageInner() {
                 </div>
                 <div className="flex items-center gap-3">
                   {syncCount > 0 && <span style={{ color: "oklch(0.65 0.015 60)" }}>{syncCount.toLocaleString()} items so far</span>}
-                  <button onClick={() => setInitialSyncing(null)} className="text-xs opacity-50 hover:opacity-100 transition-opacity" style={{ color: "oklch(0.96 0.012 80)" }}>Dismiss</button>
+                  <button
+                    onClick={async () => {
+                      await fetch("/api/sync/stop", { method: "POST" });
+                      setInitialSyncing(null);
+                      setToolStatus(p => ({ ...p, gmail: "active" }));
+                    }}
+                    className="text-xs opacity-60 hover:opacity-100 transition-opacity"
+                    style={{ color: "oklch(0.96 0.012 80)" }}
+                  >
+                    Stop
+                  </button>
                 </div>
               </div>
               <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
