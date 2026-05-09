@@ -399,7 +399,7 @@ function ConnectPageInner() {
                         className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-40"
                         style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
                       >
-                        {disconnecting === tool.id ? "..." : "Stop"}
+                        {disconnecting === tool.id ? "..." : "Disconnect"}
                       </button>
                     )}
                     {!tool.comingSoon && !isConnected && (
