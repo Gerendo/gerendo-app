@@ -1,4 +1,294 @@
-## 97810fc - fix: mobile layout, mailbox filter for recent emails, smarter label hints
+## 70c2f0b - fix: return 401 for unauthenticated API routes instead of redirecting to /login
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 19:05
+
+Redirecting POST /api/* to /login causes 405 since login page only accepts GET.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 767fa4f - fix: allow workspace context build route through middleware - called internally by sync worker
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 19:03
+
+
+---
+## 0eaa769 - fix: check cancellation inside batch loop not just between labels
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 19:01
+
+
+---
+## 2d3ca58 - fix: correct Pub/Sub JWT verification - audience is service account email via tokeninfo endpoint
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 18:59
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 7b67d68 - fix: allow webhook and cron routes through middleware without auth session
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 18:53
+
+Gmail Pub/Sub and Asana webhooks have no session cookie - middleware
+was redirecting them to /login with 307. Cron jobs same issue.
+These routes do their own auth via JWT verification and CRON_SECRET.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 63f1066 - fix: add error logging to gmail stream sync to debug stuck jobs
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 18:52
+
+
+---
+## 9ecd69c - docs: add QA checklist with debugging guide for sync issues
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 18:48
+
+
+---
+## dade7df - fix: stamp user_id on all embedding writes - required after RLS migration
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 18:45
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## aa2b107 - fix: replace tiny text links with proper button styling in headers
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:25
+
+
+---
+## 5a76940 - fix: Stop button fully disconnects Gmail including webhook, not just batch job
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:21
+
+
+---
+## 3c73bd7 - fix: rename Stop sync to Stop import - clarifies it stops bulk import not the webhook
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:18
+
+
+---
+## ad81402 - fix: show percentage on sync banner, remove starting... text, smooth progress bar
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:15
+
+
+---
+## adaec98 - fix: ask page checks actual DB item counts not just gmail sync job
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:14
+
+Any connected tool with indexed data now unlocks the ask UI.
+Previously only gmail sync jobs were counted, blocking users with
+only Drive or Asana connected.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 598e6ea - fix: correct Material Icons names for Gmail labels
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:12
+
+
+---
+## e621074 - fix: reset gmail status to active when label picker is cancelled
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:09
+
+
+---
+## edd454f - feat: show all Gmail labels with Material Icons in label picker
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:08
+
+- Include all labels (Starred, Snoozed, Drafts, Purchases, custom labels etc.)
+- Only exclude UNREAD and CHAT (true internals)
+- Each label shows its Gmail icon (inbox, send, star, draft, etc.)
+- User labels tagged as 'label', system labels shown first
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 56e1b90 - feat: inline branded confirm panel instead of browser alert, red stop button styling
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 17:04
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 45456b9 - feat: per-tool Stop button - disconnects tool and removes all indexed data
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:59
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 3d4c547 - feat: stop sync button - cancels running job, stops loop between label batches
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:55
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 7f10d7b - feat: Gmail label picker modal before first sync
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:51
+
+- New /api/sync/gmail/labels endpoint fetches user's labels, excludes noise (spam/trash/promotions)
+- Connect page shows modal after Gmail OAuth with checkboxes for each label
+- Inbox and sent pre-selected by default
+- Stream sync accepts ?labels=INBOX,SENT,... param to sync only chosen labels
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 4af192b - fix: only sync inbox+sent on first sync, skip promotions/social/updates
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:49
+
+Reduces first-time sync from 20+ labels to 2, cuts sync time dramatically.
+Also fixes localhost hardcode in context rebuild call.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 3039644 - fix: dismiss stuck sync banner, treat jobs running >30min as done
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:47
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 01b8e59 - feat: redesign connect page for auto-sync model
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:44
+
+- Remove manual Sync now button - tools show Active/auto-syncing once connected
+- First-time sync shows a progress banner that disappears when done
+- No more stuck syncing state on page reload
+- Connect button only shows for unconnected tools
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## af203f3 - feat: add Cloudflare Web Analytics to app.gerendo.com
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:41
+
+
+---
+## dc0d0c2 - fix: log upsert error in gmail register route
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:27
+
+
+---
+## 22f74f8 - fix: use listUsers to find user by email - getUserByEmail does not exist in this Supabase version
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:08
+
+
+---
+## f5e833d - fix: cron to once per day - Hobby plan limitation
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:05
+
+
+---
+## 5f6bd68 - feat: trigger Drive sync on every Gmail webhook event
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 16:02
+
+Piggybacks Drive sync onto Gmail push notifications so new Meet
+transcription files are indexed in near-real-time without needing
+a frequent cron job on the Hobby plan.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 6b9d233 - fix: cron schedules to once/day for Vercel Hobby plan
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 15:53
+
+
+---
+## 154e1eb - chore: trigger Vercel redeploy
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 15:49
+
+
+---
+## 3a06c14 - fix: remove redundant Gmail + Asana cron jobs - webhooks handle real-time updates
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 14:53
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## b83525e - feat: automated indexing - cron + Gmail Pub/Sub webhooks + Asana webhooks
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 14:52
+
+- vercel.json: cron every 15min Gmail, 10min Drive, 30min Asana, 6-day watch renewal
+- /api/cron/sync: fan-out handler iterates all workspace members, calls sync per user
+- /api/webhooks/gmail: Pub/Sub push receiver, verifies JWT, runs incremental sync
+- /api/webhooks/gmail/register: registers Gmail watch (called post-OAuth + by cron)
+- /api/webhooks/asana: handles handshake + HMAC-verified event delivery, syncs changed tasks
+- /api/webhooks/asana/register: registers Asana webhook per workspace
+- Extracted runGmailSyncForUser, runDriveSyncForUser, runAsanaSyncForUser as standalone exports
+- Extracted syncSingleAsanaTask for targeted single-task resync from webhook events
+- Moved getDriveToken + getAsanaToken to agency-db.ts alongside getGmailToken
+- Connect page triggers webhook registration fire-and-forget after Gmail/Asana OAuth
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 0bd37c0 - docs: update git history
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 14:29
+
+
+---
+## 4e672ef - fix: mobile layout, mailbox filter for recent emails, smarter label hints
 
 **Author:** Tocki28  
 **Date:** 2026-05-09 14:25
@@ -11,12 +301,26 @@
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 
 ---
+## a117263 - Merge pull request #10 from Gerendo/feat/settings-team-view
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 10:00
+
+v0.2.0.1 feat: settings shows user, workspace, team members
+---
 ## 9ecafe9 - feat: settings page shows current user, workspace name, team members with avatars
 
 **Author:** Tocki28  
 **Date:** 2026-05-09 10:00
 
 
+---
+## 0186fe6 - Merge pull request #9 from Gerendo/feat/multi-tenant-auth
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:56
+
+v0.2.0.0 feat: multi-tenant auth with invite links
 ---
 ## 1304ec4 - feat: multi-tenant auth - real session, invite links, settings page
 
@@ -32,6 +336,13 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 - joinWorkspaceViaToken() for invite flow
 - Settings link in ask header
 
+---
+## 98452f5 - Merge pull request #8 from Gerendo/fix/ask-ui-improvements
+
+**Author:** Gerendo  
+**Date:** 2026-05-09 09:34
+
+v0.1.0.7 fix: logo navigation, sync progress bar, no double dash
 ---
 ## ee1cd99 - fix: clickable logo, single dash, progress bar with fill animation in sync banner
 
