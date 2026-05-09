@@ -241,10 +241,16 @@ function ConnectPageInner() {
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Connect your tools</p>
         </a>
-        <a href="/ask" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-          style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}>
-          Ask questions
-        </a>
+        <div className="flex items-center gap-2">
+          <a href="/ask" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
+            style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}>
+            Ask questions
+          </a>
+          <a href="/api/auth/signout" className="text-sm px-3 py-2 rounded-xl transition-colors hover:opacity-90"
+            style={{ color: "oklch(0.55 0.012 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
+            Log out
+          </a>
+        </div>
       </div>
 
       <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">

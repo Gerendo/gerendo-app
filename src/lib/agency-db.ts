@@ -733,9 +733,13 @@ export async function createInviteToken(
   createdBy: string
 ): Promise<string> {
   const supabase = createServiceClient();
+  // Generate token in app code - Postgres base64url encoding is not supported
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
   const { data, error } = await supabase
     .from("invite_tokens")
-    .insert({ workspace_id: workspaceId, created_by: createdBy })
+    .insert({ workspace_id: workspaceId, created_by: createdBy, token })
     .select("token")
     .single();
   if (!data) throw new Error(`Failed to create invite: ${error?.message}`);

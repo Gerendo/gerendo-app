@@ -38,6 +38,16 @@ body {
   color: var(--color-ink);
 }
 
+/* BUG-006: pointer cursor on all interactive elements */
+button, [role="button"], a {
+  cursor: pointer;
+}
+
+/* BUG-001: prevent iOS Safari from zooming on input focus */
+input, textarea, select {
+  font-size: max(16px, 1em);
+}
+
 /* Prose overrides for dark background */
 .prose {
   --tw-prose-body: oklch(0.96 0.012 80);
