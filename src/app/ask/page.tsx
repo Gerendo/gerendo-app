@@ -18,6 +18,10 @@ export default function AskPage() {
   const [streamingText, setStreamingText] = useState("");
   const [streamingSources, setStreamingSources] = useState<Source[]>([]);
   const [setupState, setSetupState] = useState<"checking" | "no-tools" | "no-data" | "ready">("checking");
+  const [syncingInBackground, setSyncingInBackground] = useState(false);
+  const [syncCount, setSyncCount] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -26,21 +30,51 @@ export default function AskPage() {
   }, [messages, streamingText]);
 
   useEffect(() => {
-    // Check if user has tools connected and data synced
     Promise.all([
       fetch("/api/nango/status").then(r => r.json()).catch(() => ({ connected: false, driveConnected: false, asanaConnected: false })),
-      fetch("/api/sync/status").then(r => r.json()).catch(() => ({ totalSynced: 0 })),
+      fetch("/api/sync/status").then(r => r.json()).catch(() => ({ totalSynced: 0, status: "idle" })),
     ]).then(([status, syncStatus]) => {
       const anyConnected = status.connected || status.driveConnected || status.asanaConnected;
       if (!anyConnected) {
         setSetupState("no-tools");
       } else if (!syncStatus.totalSynced || syncStatus.totalSynced === 0) {
         setSetupState("no-data");
+        // If a sync is already running, show the background banner
+        if (syncStatus.status === "running") {
+          setSyncingInBackground(true);
+          startSyncPoll();
+        }
       } else {
         setSetupState("ready");
+        if (syncStatus.status === "running") {
+          setSyncingInBackground(true);
+          setSyncCount(syncStatus.totalSynced);
+          startSyncPoll();
+        }
       }
     });
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
+
+  function startSyncPoll() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(async () => {
+      try {
+        const job = await fetch("/api/sync/status").then(r => r.json());
+        if (job.totalSynced) setSyncCount(job.totalSynced);
+        if (job.status === "done") {
+          setSyncingInBackground(false);
+          setSetupState("ready");
+          setToast(`Sync complete — ${job.totalSynced?.toLocaleString() ?? 0} items indexed.`);
+          setTimeout(() => setToast(null), 5000);
+          if (pollRef.current) clearInterval(pollRef.current);
+        } else if (job.status === "error") {
+          setSyncingInBackground(false);
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch {}
+    }, 3000);
+  }
 
   // Build history for API — last 4 messages (2 exchanges) only.
   // Assistant content is truncated to 300 chars so prior verbose answers
@@ -148,6 +182,25 @@ export default function AskPage() {
           Manage connections
         </a>
       </div>
+
+      {/* Sync banner */}
+      {syncingInBackground && (
+        <div className="px-6 py-2 text-xs flex items-center gap-2" style={{ background: "oklch(0.78 0.14 65 / 10%)", color: "oklch(0.85 0.08 70)", borderBottom: "1px solid oklch(0.78 0.14 65 / 20%)" }}>
+          <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
+          Syncing your workspace in the background — {syncCount > 0 ? `${syncCount.toLocaleString()} items so far` : "starting..."}
+        </div>
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-medium shadow-lg z-50 cursor-pointer"
+          style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+          onClick={() => setToast(null)}
+        >
+          {toast}
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full">
