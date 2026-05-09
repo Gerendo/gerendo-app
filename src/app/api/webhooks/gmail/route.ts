@@ -15,12 +15,22 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const idToken = authHeader.slice(7);
   try {
-    const client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID);
-    await client.verifyIdToken({
-      idToken,
-      audience: process.env.PUBSUB_AUDIENCE,
-    });
-  } catch {
+    // Pub/Sub push JWT audience is the push endpoint URL, not the service account email.
+    // Verify by decoding and checking the email claim matches our service account.
+    const tokenInfoRes = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`
+    );
+    if (!tokenInfoRes.ok) {
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+    }
+    const tokenInfo = await tokenInfoRes.json();
+    // Verify the token was issued for our service account
+    if (tokenInfo.email !== process.env.PUBSUB_AUDIENCE) {
+      console.error("[webhook/gmail] token email mismatch:", tokenInfo.email, "expected:", process.env.PUBSUB_AUDIENCE);
+      return NextResponse.json({ error: "Invalid token audience" }, { status: 401 });
+    }
+  } catch (err: any) {
+    console.error("[webhook/gmail] token verification failed:", err?.message);
     return NextResponse.json({ error: "Invalid token" }, { status: 401 });
   }
 
