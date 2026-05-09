@@ -33,13 +33,15 @@ export default function AskPage() {
     Promise.all([
       fetch("/api/nango/status").then(r => r.json()).catch(() => ({ connected: false, driveConnected: false, asanaConnected: false })),
       fetch("/api/sync/status").then(r => r.json()).catch(() => ({ totalSynced: 0, status: "idle" })),
-    ]).then(([status, syncStatus]) => {
+      fetch("/api/workspace/info").then(r => r.json()).catch(() => ({ emailCount: 0, driveCount: 0, asanaCount: 0 })),
+    ]).then(([status, syncStatus, info]) => {
       const anyConnected = status.connected || status.driveConnected || status.asanaConnected;
+      const totalIndexed = (info.emailCount ?? 0) + (info.driveCount ?? 0) + (info.asanaCount ?? 0);
+
       if (!anyConnected) {
         setSetupState("no-tools");
-      } else if (!syncStatus.totalSynced || syncStatus.totalSynced === 0) {
+      } else if (totalIndexed === 0) {
         setSetupState("no-data");
-        // If a sync is already running, show the background banner
         if (syncStatus.status === "running") {
           setSyncingInBackground(true);
           startSyncPoll();
@@ -226,54 +228,28 @@ export default function AskPage() {
         )}
 
         {messages.length === 0 && !loading && setupState === "no-tools" && (
-          <div className="flex flex-col items-center text-center gap-6 mt-16 px-4">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight mb-2" style={{ fontFamily: "var(--font-display)" }}>
-                Welcome to Gerendo
-              </h2>
-              <p className="text-[oklch(0.65_0.015_60)] text-sm max-w-sm">
-                Connect your tools to get started. Gerendo indexes your emails, files, and tasks so you can ask questions across all of them.
-              </p>
-            </div>
-            <a
-              href="/connect"
-              className="px-8 py-3 text-sm font-semibold rounded-[var(--radius-xl)] transition-colors hover:opacity-90"
-              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-            >
-              Connect your tools
-            </a>
-            <div className="flex flex-col gap-2 w-full max-w-sm mt-2">
-              {["Gmail", "Google Drive", "Asana"].map((tool) => (
-                <div key={tool} className="flex items-center gap-3 px-4 py-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
-                  <div className="w-2 h-2 rounded-full bg-[oklch(1_0_0_/_15%)]" />
-                  <span className="text-sm text-[oklch(0.65_0.015_60)]">{tool} — not connected</span>
-                </div>
-              ))}
-            </div>
+          <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
+               style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
+            No tools connected yet.{" "}
+            <a href="/connect" className="underline underline-offset-2 hover:opacity-80">
+              Connect Gmail, Drive, or Asana
+            </a>{" "}
+            for full search — or ask a general question.
           </div>
         )}
 
         {messages.length === 0 && !loading && setupState === "no-data" && (
-          <div className="flex flex-col items-center text-center gap-6 mt-16 px-4">
-            <div>
-              <h2 className="text-2xl font-semibold tracking-tight mb-2" style={{ fontFamily: "var(--font-display)" }}>
-                Tools connected — sync your data
-              </h2>
-              <p className="text-[oklch(0.65_0.015_60)] text-sm max-w-sm">
-                Your tools are connected but nothing has been indexed yet. Run a sync to start building your agency brain.
-              </p>
-            </div>
-            <a
-              href="/connect"
-              className="px-8 py-3 text-sm font-semibold rounded-[var(--radius-xl)] transition-colors hover:opacity-90"
-              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-            >
+          <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
+               style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
+            Tools connected but not synced yet.{" "}
+            <a href="/connect" className="underline underline-offset-2 hover:opacity-80">
               Sync your data
-            </a>
+            </a>{" "}
+            for full answers — or ask anyway.
           </div>
         )}
 
-        {messages.length === 0 && !loading && setupState === "ready" && (
+        {messages.length === 0 && !loading && (setupState === "ready" || setupState === "no-data") && (
           <div className="flex flex-col gap-3 mt-8">
             <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
             {[
@@ -354,8 +330,8 @@ export default function AskPage() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input - only shown when data is ready */}
-      {(setupState === "ready" || messages.length > 0) && (
+      {/* Input - always shown */}
+      {setupState !== "checking" && (
         <div className="border-t border-[oklch(1_0_0_/_8%)] px-4 py-3 flex-shrink-0 bg-[oklch(0.11_0.008_55)]">
           <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
             <input
@@ -365,6 +341,7 @@ export default function AskPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Ask anything about your workspace..."
               className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
+              style={{ fontSize: "16px" }}
               disabled={loading}
               autoFocus
             />

@@ -41,6 +41,12 @@ export async function GET(): Promise<NextResponse> {
     })
   );
 
+  const [emailCount, driveCount, asanaCount] = await Promise.all([
+    supabase.from("messages").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+    supabase.from("drive_files").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+    supabase.from("asana_items").select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId),
+  ]);
+
   return NextResponse.json({
     workspace,
     members: memberProfiles,
@@ -50,5 +56,8 @@ export async function GET(): Promise<NextResponse> {
       email: user?.email,
       avatar: user?.user_metadata?.avatar_url ?? null,
     },
+    emailCount: emailCount.count ?? 0,
+    driveCount: driveCount.count ?? 0,
+    asanaCount: asanaCount.count ?? 0,
   });
 }
