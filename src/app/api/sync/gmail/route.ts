@@ -166,7 +166,11 @@ async function fetchAndStoreMessages(
   return messageRows.length;
 }
 
-export async function runGmailSyncForUser(workspaceId: string, userId: string): Promise<{ synced: number }> {
+export async function runGmailSyncForUser(
+  workspaceId: string,
+  userId: string,
+  options?: { labelsOnly?: string[] }
+): Promise<{ synced: number }> {
   const token = await getGmailToken(workspaceId, userId);
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: token });
@@ -174,19 +178,27 @@ export async function runGmailSyncForUser(workspaceId: string, userId: string): 
   const db = openAgencyDb(workspaceId, userId);
   let totalSynced = 0;
 
-  let labelsToSync: Array<{ id: string; name: string }> = SYSTEM_LABEL_IDS.map((id) => ({
-    id,
-    name: id.toLowerCase().replace("category_", ""),
-  }));
+  let labelsToSync: Array<{ id: string; name: string }>;
 
-  try {
-    const labelsRes = await gmail.users.labels.list({ userId: "me" });
-    const userLabels = (labelsRes.data.labels ?? [])
-      .filter((l) => l.type === "user" && l.id && l.name)
-      .map((l) => ({ id: l.id!, name: l.name! }));
-    labelsToSync = [...labelsToSync, ...userLabels];
-  } catch (err: any) {
-    console.error("[sync] failed to fetch label list, using system labels only:", err?.message);
+  if (options?.labelsOnly) {
+    labelsToSync = options.labelsOnly.map((id) => ({
+      id,
+      name: id.toLowerCase().replace("category_", ""),
+    }));
+  } else {
+    labelsToSync = SYSTEM_LABEL_IDS.map((id) => ({
+      id,
+      name: id.toLowerCase().replace("category_", ""),
+    }));
+    try {
+      const labelsRes = await gmail.users.labels.list({ userId: "me" });
+      const userLabels = (labelsRes.data.labels ?? [])
+        .filter((l) => l.type === "user" && l.id && l.name)
+        .map((l) => ({ id: l.id!, name: l.name! }));
+      labelsToSync = [...labelsToSync, ...userLabels];
+    } catch (err: any) {
+      console.error("[sync] failed to fetch label list, using system labels only:", err?.message);
+    }
   }
 
   for (const label of labelsToSync) {

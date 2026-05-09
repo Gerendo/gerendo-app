@@ -60,9 +60,30 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (!member) return NextResponse.json({ ok: true });
 
-  // Run Gmail sync, then kick off Drive sync in background
+  // Debounce: skip if a webhook sync ran for this user in the last 30 seconds.
+  // Prevents thundering herd when Pub/Sub delivers multiple notifications rapidly.
+  const DEBOUNCE_MS = 30_000;
+  const now = Date.now();
+  const { data: lockState } = await supabase
+    .from("sync_state")
+    .select("last_synced_at")
+    .eq("workspace_id", member.workspace_id)
+    .eq("user_id", user.id)
+    .eq("source", "gmail:webhook_lock")
+    .maybeSingle();
+
+  if (lockState?.last_synced_at && (now - lockState.last_synced_at) < DEBOUNCE_MS) {
+    return NextResponse.json({ ok: true });
+  }
+
+  await supabase.from("sync_state").upsert(
+    { workspace_id: member.workspace_id, user_id: user.id, source: "gmail:webhook_lock", last_synced_at: now, cursor: null },
+    { onConflict: "workspace_id,user_id,source" }
+  );
+
+  // Webhook syncs only process INBOX + SENT - the daily cron handles remaining labels.
   try {
-    await runGmailSyncForUser(member.workspace_id, user.id);
+    await runGmailSyncForUser(member.workspace_id, user.id, { labelsOnly: ["INBOX", "SENT"] });
   } catch (err: any) {
     console.error("[webhook/gmail] gmail sync failed:", err?.message);
   }
