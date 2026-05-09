@@ -48,6 +48,7 @@ function ConnectPageInner() {
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
+  const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
 
   useEffect(() => {
     const gmailConnected = searchParams.get("gmail_connected");
@@ -183,9 +184,9 @@ function ConnectPageInner() {
     }
   }
 
-  async function handleDisconnect(toolId: string) {
-    if (!confirm(`Disconnect ${toolId}? This will remove all indexed data for this tool.`)) return;
+  async function confirmAndDisconnect(toolId: string) {
     setDisconnecting(toolId);
+    setConfirmDisconnect(null);
     try {
       await fetch("/api/sync/disconnect", {
         method: "POST",
@@ -273,10 +274,10 @@ function ConnectPageInner() {
                       setInitialSyncing(null);
                       setToolStatus(p => ({ ...p, gmail: "active" }));
                     }}
-                    className="text-xs opacity-60 hover:opacity-100 transition-opacity"
-                    style={{ color: "oklch(0.96 0.012 80)" }}
+                    className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity"
+                    style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
                   >
-                    Stop
+                    Stop sync
                   </button>
                 </div>
               </div>
@@ -315,51 +316,78 @@ function ConnectPageInner() {
             const { text: statusText, color: statusColor } = toolStatusLabel(tool);
             const isConnected = connectedTools.has(tool.id);
             const isSyncing = toolStatus[tool.id] === "syncing";
+            const isConfirming = confirmDisconnect === tool.id;
 
             return (
               <div
                 key={tool.id}
-                className="flex items-center justify-between p-4 rounded-2xl border"
+                className="flex flex-col rounded-2xl border overflow-hidden"
                 style={{
-                  borderColor: isConnected && !tool.comingSoon ? "oklch(0.78 0.14 65 / 20%)" : "oklch(1 0 0 / 8%)",
+                  borderColor: isConfirming ? "oklch(0.62 0.22 25 / 40%)" : isConnected && !tool.comingSoon ? "oklch(0.78 0.14 65 / 20%)" : "oklch(1 0 0 / 8%)",
                   background: isConnected && !tool.comingSoon ? "oklch(0.78 0.14 65 / 5%)" : "oklch(0.13 0.009 55)",
                   opacity: tool.comingSoon ? 0.6 : 1,
                 }}
               >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold"
-                    style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)" }}>
-                    {tool.name[0]}
+                <div className="flex items-center justify-between p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold"
+                      style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)" }}>
+                      {tool.name[0]}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">{tool.name}</div>
+                      <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">{tool.name}</div>
-                    <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
+                    {!tool.comingSoon && isConnected && !isConfirming && (
+                      <button
+                        onClick={() => setConfirmDisconnect(tool.id)}
+                        disabled={disconnecting === tool.id}
+                        className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-40"
+                        style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
+                      >
+                        {disconnecting === tool.id ? "..." : "Stop"}
+                      </button>
+                    )}
+                    {!tool.comingSoon && !isConnected && (
+                      <button
+                        onClick={() => handleToolAction(tool)}
+                        disabled={isSyncing}
+                        className="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
+                        style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+                      >
+                        Connect
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
-                  {!tool.comingSoon && isConnected && (
-                    <button
-                      onClick={() => handleDisconnect(tool.id)}
-                      disabled={disconnecting === tool.id}
-                      title="Disconnect and remove indexed data"
-                      className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-40"
-                      style={{ background: "oklch(0.62 0.22 25 / 15%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
-                    >
-                      {disconnecting === tool.id ? "..." : "Stop"}
-                    </button>
-                  )}
-                  {!tool.comingSoon && !isConnected && (
-                    <button
-                      onClick={() => handleToolAction(tool)}
-                      disabled={isSyncing}
-                      className="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
-                      style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-                    >
-                      Connect
-                    </button>
-                  )}
-                </div>
+
+                {/* Inline confirm panel */}
+                {isConfirming && (
+                  <div className="flex items-center justify-between px-4 py-3 gap-3" style={{ background: "oklch(0.62 0.22 25 / 8%)", borderTop: "1px solid oklch(0.62 0.22 25 / 20%)" }}>
+                    <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>
+                      Stop {tool.name}? This removes all indexed data for this tool.
+                    </p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => setConfirmDisconnect(null)}
+                        className="text-xs px-3 py-1.5 rounded-xl font-medium"
+                        style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => confirmAndDisconnect(tool.id)}
+                        className="text-xs px-3 py-1.5 rounded-xl font-medium"
+                        style={{ background: "oklch(0.62 0.22 25)", color: "white" }}
+                      >
+                        Confirm
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
