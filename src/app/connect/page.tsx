@@ -1,466 +1,295 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 
-type SyncStatus = "checking" | "idle" | "connecting" | "syncing" | "done" | "error";
-type DriveStatus = "idle" | "connecting" | "syncing" | "done" | "error";
+type ToolStatus = "idle" | "connecting" | "syncing" | "done" | "error";
 
-interface LabelProgress {
-  synced: number;
-  total: number | null;
-  status: "pending" | "syncing" | "done" | "error";
+interface Tool {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  available: boolean;
+  comingSoon?: boolean;
 }
+
+const ALL_TOOLS: Tool[] = [
+  { id: "gmail", name: "Gmail", description: "Emails, threads, sent messages", category: "Communication", available: true },
+  { id: "drive", name: "Google Drive", description: "Docs, Sheets, Slides", category: "Files", available: true },
+  { id: "asana", name: "Asana", description: "Tasks, projects, comments", category: "Project Management", available: true },
+  { id: "slack", name: "Slack", description: "Messages, channels, threads", category: "Communication", available: false, comingSoon: true },
+  { id: "notion", name: "Notion", description: "Pages, databases, notes", category: "Files", available: false, comingSoon: true },
+  { id: "whatsapp", name: "WhatsApp Business", description: "Client conversations", category: "Communication", available: false, comingSoon: true },
+  { id: "hubspot", name: "HubSpot", description: "CRM contacts, deals, notes", category: "CRM", available: false, comingSoon: true },
+  { id: "meet", name: "Google Meet", description: "Meeting transcripts", category: "Communication", available: false, comingSoon: true },
+  { id: "calendar", name: "Google Calendar", description: "Events, meetings, attendees", category: "Calendar", available: false, comingSoon: true },
+  { id: "linear", name: "Linear", description: "Issues, projects, cycles", category: "Project Management", available: false, comingSoon: true },
+  { id: "dropbox", name: "Dropbox", description: "Files and folders", category: "Files", available: false, comingSoon: true },
+  { id: "jira", name: "Jira", description: "Issues, sprints, epics", category: "Project Management", available: false, comingSoon: true },
+];
 
 function ConnectPageInner() {
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<SyncStatus>("checking");
-  const [driveStatus, setDriveStatus] = useState<DriveStatus>("idle");
-  const [driveSynced, setDriveSynced] = useState<{ synced: number; total: number } | null>(null);
-  const [driveError, setDriveError] = useState("");
-  const [driveConnected, setDriveConnected] = useState(false);
-  const [asanaStatus, setAsanaStatus] = useState<DriveStatus>("idle");
-  const [asanaSynced, setAsanaSynced] = useState<{ synced: number } | null>(null);
-  const [asanaError, setAsanaError] = useState("");
-  const [asanaConnected, setAsanaConnected] = useState(false);
-  const [error, setError] = useState("");
-  const [labelProgress, setLabelProgress] = useState<Record<string, LabelProgress>>({});
-  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
+
+  const [connectedTools, setConnectedTools] = useState<Set<string>>(new Set());
+  const [toolStatus, setToolStatus] = useState<Record<string, ToolStatus>>({});
+  const [toolError, setToolError] = useState<Record<string, string>>({});
+  const [syncedCounts, setSyncedCounts] = useState<Record<string, number>>({});
+  const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [totalSynced, setTotalSynced] = useState(0);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Gmail-specific sync progress
+  const [gmailProgress, setGmailProgress] = useState<{ current: string; count: number } | null>(null);
+  const pollRef = { current: null as ReturnType<typeof setInterval> | null };
 
   useEffect(() => {
-    const driveConnectedParam = searchParams.get("drive_connected");
-    const driveErrorParam = searchParams.get("drive_error");
-    const gmailConnectedParam = searchParams.get("gmail_connected");
-    const gmailErrorParam = searchParams.get("gmail_error");
+    // Handle OAuth callbacks
+    const gmailConnected = searchParams.get("gmail_connected");
+    const driveConnected = searchParams.get("drive_connected");
+    const asanaConnected = searchParams.get("asana_connected");
+    const gmailError = searchParams.get("gmail_error");
+    const driveError = searchParams.get("drive_error");
+    const asanaError = searchParams.get("asana_error");
 
-    if (driveConnectedParam === "1") {
-      setDriveConnected(true);
-      setDriveStatus("idle");
-      syncDrive();
-      window.history.replaceState({}, "", "/connect");
-    } else if (driveErrorParam) {
-      setDriveError("Drive authorization failed. Try again.");
-      setDriveStatus("error");
-      window.history.replaceState({}, "", "/connect");
-    }
+    if (gmailConnected === "1") { startSync("gmail"); window.history.replaceState({}, "", "/connect"); }
+    if (driveConnected === "1") { startSync("drive"); window.history.replaceState({}, "", "/connect"); }
+    if (asanaConnected === "1") { startSync("asana"); window.history.replaceState({}, "", "/connect"); }
+    if (gmailError) { setToolError(p => ({ ...p, gmail: "Authorization failed" })); setToolStatus(p => ({ ...p, gmail: "error" })); window.history.replaceState({}, "", "/connect"); }
+    if (driveError) { setToolError(p => ({ ...p, drive: "Authorization failed" })); setToolStatus(p => ({ ...p, drive: "error" })); window.history.replaceState({}, "", "/connect"); }
+    if (asanaError) { setToolError(p => ({ ...p, asana: "Authorization failed" })); setToolStatus(p => ({ ...p, asana: "error" })); window.history.replaceState({}, "", "/connect"); }
 
-    const asanaConnectedParam = searchParams.get("asana_connected");
-    const asanaErrorParam = searchParams.get("asana_error");
-    if (asanaConnectedParam === "1") {
-      setAsanaConnected(true);
-      setAsanaStatus("idle");
-      syncAsana();
-      window.history.replaceState({}, "", "/connect");
-    } else if (asanaErrorParam) {
-      setAsanaError("Asana authorization failed. Try again.");
-      setAsanaStatus("error");
-      window.history.replaceState({}, "", "/connect");
-    }
+    // Check existing connections
+    fetch("/api/nango/status").then(r => r.json()).then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
+      const connected_set = new Set<string>();
+      if (connected) connected_set.add("gmail");
+      if (dc) connected_set.add("drive");
+      if (ac) connected_set.add("asana");
+      setConnectedTools(connected_set);
 
-    if (gmailConnectedParam === "1") {
-      setStatus("idle");
-      startSync();
-      window.history.replaceState({}, "", "/connect");
-    } else if (gmailErrorParam) {
-      setError("Gmail authorization failed. Try again.");
-      setStatus("error");
-      window.history.replaceState({}, "", "/connect");
-    }
-  }, []);
-
-  useEffect(() => {
-    fetch("/api/nango/status")
-      .then((r) => r.json())
-      .then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
-        if (dc) setDriveConnected(true);
-        if (ac) setAsanaConnected(true);
-        if (connected) {
-          // Check if there's an active sync job
-          fetch("/api/sync/status")
-            .then((r) => r.json())
-            .then((job) => {
-              if (job.status === "running") {
-                setStatus("syncing");
-                setLabelProgress(job.labelProgress ?? {});
-                setCurrentLabel(job.currentLabel);
-                setTotalSynced(job.totalSynced ?? 0);
-                startPolling();
-              } else if (job.status === "done") {
-                setStatus("done");
-                setLabelProgress(job.labelProgress ?? {});
-                setTotalSynced(job.totalSynced ?? 0);
-              } else {
-                setStatus("idle");
-              }
-            })
-            .catch(() => setStatus("idle"));
-        } else {
-          setStatus("idle");
+      // Check if there's an active sync
+      fetch("/api/sync/status").then(r => r.json()).then(job => {
+        if (job.status === "running") {
+          setToolStatus(p => ({ ...p, gmail: "syncing" }));
+          startGmailPoll();
+        } else if (job.status === "done" && job.totalSynced > 0) {
+          setToolStatus(p => ({ ...p, gmail: "done" }));
+          setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
+          setTotalSynced(job.totalSynced);
+        } else if (connected) {
+          setToolStatus(p => ({ ...p, gmail: "idle" }));
         }
-      })
-      .catch(() => setStatus("idle"));
+      }).catch(() => {});
+    }).catch(() => {});
 
-    return () => stopPolling();
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
-  function stopPolling() {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-  }
-
-  function startPolling() {
-    stopPolling();
+  function startGmailPoll() {
+    if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(async () => {
       try {
-        const res = await fetch("/api/sync/status");
-        const job = await res.json();
-        setLabelProgress(job.labelProgress ?? {});
-        setCurrentLabel(job.currentLabel);
+        const job = await fetch("/api/sync/status").then(r => r.json());
+        if (job.labelProgress) {
+          const syncing = Object.entries(job.labelProgress as Record<string, any>).find(([, v]: any) => v.status === "syncing");
+          if (syncing) setGmailProgress({ current: syncing[0], count: job.totalSynced ?? 0 });
+        }
         setTotalSynced(job.totalSynced ?? 0);
         if (job.status === "done") {
-          setStatus("done");
-          stopPolling();
+          setToolStatus(p => ({ ...p, gmail: "done" }));
+          setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
+          setGmailProgress(null);
+          if (pollRef.current) clearInterval(pollRef.current);
         } else if (job.status === "error") {
-          setError("Sync failed. Try again.");
-          setStatus("error");
-          stopPolling();
+          setToolStatus(p => ({ ...p, gmail: "error" }));
+          setToolError(p => ({ ...p, gmail: "Sync failed" }));
+          if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
     }, 2000);
   }
 
-  async function startSync() {
-    setStatus("syncing");
-    setLabelProgress({});
-    setCurrentLabel(null);
-    setTotalSynced(0);
-    setError("");
+  async function startSync(toolId: string) {
+    setConnectedTools(p => new Set([...p, toolId]));
+    setToolStatus(p => ({ ...p, [toolId]: "syncing" }));
+    setToolError(p => { const n = { ...p }; delete n[toolId]; return n; });
 
     try {
-      const res = await fetch("/api/sync/gmail/stream");
-      const { jobId, error: err } = await res.json();
-      if (err) throw new Error(err);
-      if (!jobId) throw new Error("No job ID returned");
-      startPolling();
+      if (toolId === "gmail") {
+        const res = await fetch("/api/sync/gmail/stream");
+        const { error } = await res.json();
+        if (error) throw new Error(error);
+        startGmailPoll();
+      } else if (toolId === "drive") {
+        const res = await fetch("/api/sync/drive", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setSyncedCounts(p => ({ ...p, drive: data.synced }));
+        setToolStatus(p => ({ ...p, drive: "done" }));
+      } else if (toolId === "asana") {
+        const res = await fetch("/api/sync/asana", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        setSyncedCounts(p => ({ ...p, asana: data.synced }));
+        setToolStatus(p => ({ ...p, asana: "done" }));
+      }
     } catch (err: any) {
-      setError(err.message ?? "Failed to start sync");
-      setStatus("error");
+      setToolStatus(p => ({ ...p, [toolId]: "error" }));
+      setToolError(p => ({ ...p, [toolId]: err.message ?? "Something went wrong" }));
     }
   }
 
-  async function handleConnect() {
-    window.location.href = "/api/auth/gmail";
+  function handleConnect(toolId: string) {
+    const routes: Record<string, string> = {
+      gmail: "/api/auth/gmail",
+      drive: "/api/auth/drive",
+      asana: "/api/auth/asana",
+    };
+    if (routes[toolId]) window.location.href = routes[toolId];
   }
 
-  async function syncAsana() {
-    setAsanaStatus("syncing");
-    setAsanaError("");
-    try {
-      const res = await fetch("/api/sync/asana", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Asana sync failed");
-      setAsanaSynced({ synced: data.synced });
-      setAsanaStatus("done");
-    } catch (err: any) {
-      setAsanaError(err.message ?? "Asana sync failed");
-      setAsanaStatus("error");
+  function handleToolAction(tool: Tool) {
+    if (!tool.available || tool.comingSoon) return;
+    const status = toolStatus[tool.id];
+    if (connectedTools.has(tool.id)) {
+      if (status !== "syncing") startSync(tool.id);
+    } else {
+      handleConnect(tool.id);
     }
   }
 
-  async function handleDriveConnect() {
-    // Redirect to Google OAuth directly
-    window.location.href = "/api/auth/drive";
-  }
+  const categories = ["All", ...Array.from(new Set(ALL_TOOLS.map(t => t.category)))];
+  const filtered = selectedCategory === "All" ? ALL_TOOLS : ALL_TOOLS.filter(t => t.category === selectedCategory);
 
-  async function syncDrive() {
-    setDriveStatus("syncing");
-    setDriveError("");
-    try {
-      const res = await fetch("/api/sync/drive", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Drive sync failed");
-      setDriveSynced({ synced: data.synced, total: data.total });
-      setDriveStatus("done");
-    } catch (err: any) {
-      setDriveError(err.message ?? "Drive sync failed");
-      setDriveStatus("error");
+  function toolStatusLabel(tool: Tool): { text: string; color: string } {
+    if (tool.comingSoon) return { text: "Coming soon", color: "oklch(0.45 0.01 60)" };
+    const s = toolStatus[tool.id];
+    if (s === "done") return { text: `${syncedCounts[tool.id] ?? 0} indexed`, color: "oklch(0.78 0.14 65)" };
+    if (s === "syncing") {
+      if (tool.id === "gmail" && gmailProgress) return { text: `${gmailProgress.count} synced...`, color: "oklch(0.85 0.08 70)" };
+      return { text: "Syncing...", color: "oklch(0.85 0.08 70)" };
     }
+    if (s === "error") return { text: toolError[tool.id] ?? "Error", color: "oklch(0.62 0.22 25)" };
+    if (connectedTools.has(tool.id)) return { text: "Connected", color: "oklch(0.78 0.14 65)" };
+    return { text: "Not connected", color: "oklch(0.45 0.01 60)" };
   }
 
-  const labels = Object.entries(labelProgress);
-  const doneCount = labels.filter(([, v]) => v.status === "done").length;
-  const progressPct = labels.length > 0 ? Math.round((doneCount / labels.length) * 100) : 0;
-  const activeLabel = currentLabel;
+  function toolButtonLabel(tool: Tool): string {
+    if (tool.comingSoon) return "Coming soon";
+    const s = toolStatus[tool.id];
+    if (s === "syncing") return "Syncing...";
+    if (s === "error") return "Try again";
+    if (connectedTools.has(tool.id)) return "Sync now";
+    return "Connect";
+  }
 
   return (
-    <div className="min-h-screen bg-[oklch(0.11_0.008_55)] text-white flex flex-col items-center justify-center gap-8 p-8">
-      <div className="max-w-md w-full flex flex-col gap-6">
+    <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>
+      {/* Header */}
+      <div className="border-b px-6 py-4 flex items-center justify-between" style={{ borderColor: "oklch(1 0 0 / 8%)" }}>
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Connect your tools</h1>
-          <p className="text-[oklch(0.65_0.015_60)] mt-1 text-sm">
-            Connect your tools to start building your agency brain.
+          <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
+          <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Connect your tools</p>
+        </div>
+        <a href="/ask" className="text-xs underline underline-offset-2 transition-colors" style={{ color: "oklch(0.55 0.012 60)" }}>
+          Ask questions
+        </a>
+      </div>
+
+      <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">
+        {/* Summary */}
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight mb-1" style={{ fontFamily: "var(--font-display)" }}>
+            Your workspace
+          </h2>
+          <p className="text-sm" style={{ color: "oklch(0.65 0.015 60)" }}>
+            {totalSynced > 0
+              ? `${totalSynced.toLocaleString()} items indexed across ${connectedTools.size} tool${connectedTools.size !== 1 ? "s" : ""}.`
+              : "Connect your tools to start building your agency brain."}
           </p>
         </div>
 
-        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">G</div>
-              <div>
-                <div className="font-medium text-sm">Gmail</div>
-                <div className="text-[oklch(0.55_0.012_60)] text-xs">Read email threads</div>
-              </div>
-            </div>
-            {(status === "done" || status === "syncing") && (
-              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
-            )}
-          </div>
-
-          {status === "checking" && (
-            <div className="text-[oklch(0.55_0.012_60)] text-sm text-center py-1">Checking connection...</div>
-          )}
-
-          {status === "idle" && (
+        {/* Category filter */}
+        <div className="flex gap-2 flex-wrap">
+          {categories.map(cat => (
             <button
-              onClick={handleConnect}
-              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+              style={{
+                borderColor: selectedCategory === cat ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 8%)",
+                color: selectedCategory === cat ? "oklch(0.78 0.14 65)" : "oklch(0.65 0.015 60)",
+                background: selectedCategory === cat ? "oklch(0.78 0.14 65 / 10%)" : "transparent",
+              }}
             >
-              Connect Gmail
+              {cat}
             </button>
-          )}
+          ))}
+        </div>
 
-          {status === "connecting" && (
-            <button disabled className="w-full bg-[oklch(0.16_0.01_55)] text-[oklch(0.65_0.015_60)] text-sm py-2 rounded-lg cursor-not-allowed">
-              Connecting...
-            </button>
-          )}
+        {/* Tools grid */}
+        <div className="flex flex-col gap-3">
+          {filtered.map(tool => {
+            const { text: statusText, color: statusColor } = toolStatusLabel(tool);
+            const buttonLabel = toolButtonLabel(tool);
+            const isSyncing = toolStatus[tool.id] === "syncing";
 
-          {status === "syncing" && (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between text-xs text-[oklch(0.65_0.015_60)]">
-                <span>{activeLabel ? `Syncing ${activeLabel}...` : "Starting sync..."}</span>
-                <span>{totalSynced} emails</span>
-              </div>
-              <div className="w-full h-1.5 bg-[oklch(0.16_0.01_55)] rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-white rounded-full transition-all duration-500"
-                  style={{ width: `${progressPct}%` }}
-                />
-              </div>
-              <div className="text-[oklch(0.45_0.01_60)] text-xs text-center">
-                {doneCount} of {labels.length} mailboxes done
-              </div>
-              {labels.length > 0 && (
-                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
-                  {labels.map(([label, v]) => (
-                    <div key={label} className="flex items-center justify-between text-xs">
-                      <span className="text-[oklch(0.65_0.015_60)] capitalize">{label}</span>
-                      <span className={
-                        v.status === "done" ? "text-[oklch(0.78_0.14_65)]" :
-                        v.status === "error" ? "text-red-400" :
-                        v.status === "syncing" ? "text-[oklch(0.85_0.08_70)]" :
-                        "text-[oklch(0.45_0.01_60)]"
-                      }>
-                        {v.status === "done"
-                          ? `${v.synced} emails`
-                          : v.status === "error"
-                            ? "error"
-                            : v.status === "syncing"
-                              ? `${v.synced} / ${v.total ?? "..."}`
-                              : "waiting..."}
-                      </span>
-                    </div>
-                  ))}
+            return (
+              <div
+                key={tool.id}
+                className="flex items-center justify-between p-4 rounded-2xl border"
+                style={{
+                  borderColor: connectedTools.has(tool.id) && !tool.comingSoon ? "oklch(0.78 0.14 65 / 20%)" : "oklch(1 0 0 / 8%)",
+                  background: connectedTools.has(tool.id) && !tool.comingSoon ? "oklch(0.78 0.14 65 / 5%)" : "oklch(0.13 0.009 55)",
+                  opacity: tool.comingSoon ? 0.6 : 1,
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold"
+                    style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)" }}>
+                    {tool.name[0]}
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium">{tool.name}</div>
+                    <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
+                  </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {status === "done" && (
-            <div className="flex flex-col gap-2">
-              <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
-                {totalSynced === 0 ? "Already up to date." : `${totalSynced} emails indexed.`}
-              </p>
-              <button
-                onClick={startSync}
-                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
-              >
-                Sync new emails
-              </button>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="flex flex-col gap-2">
-              <p className="text-red-400 text-xs">{error}</p>
-              <button
-                onClick={startSync}
-                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-        </div>
-
-        {/* Google Drive card */}
-        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">D</div>
-              <div>
-                <div className="font-medium text-sm">Google Drive</div>
-                <div className="text-[oklch(0.55_0.012_60)] text-xs">Docs, Sheets, Slides</div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs" style={{ color: statusColor }}>{statusText}</span>
+                  {!tool.comingSoon && (
+                    <button
+                      onClick={() => handleToolAction(tool)}
+                      disabled={isSyncing}
+                      className="text-xs px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
+                      style={{
+                        background: connectedTools.has(tool.id) ? "oklch(0.16 0.01 55)" : "oklch(0.78 0.14 65)",
+                        color: connectedTools.has(tool.id) ? "oklch(0.96 0.012 80)" : "oklch(0.11 0.008 55)",
+                      }}
+                    >
+                      {buttonLabel}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-            {driveStatus === "done" && (
-              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
-            )}
-          </div>
-
-          {driveStatus === "idle" && !driveConnected && (
-            <button
-              onClick={handleDriveConnect}
-              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
-            >
-              Connect Drive
-            </button>
-          )}
-
-          {driveStatus === "idle" && driveConnected && (
-            <button
-              onClick={syncDrive}
-              className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
-            >
-              Sync Drive
-            </button>
-          )}
-
-          {driveStatus === "connecting" && (
-            <button disabled className="w-full bg-[oklch(0.16_0.01_55)] text-[oklch(0.65_0.015_60)] text-sm py-2 rounded-lg cursor-not-allowed">
-              Connecting...
-            </button>
-          )}
-
-          {driveStatus === "syncing" && (
-            <div className="text-[oklch(0.65_0.015_60)] text-sm text-center py-1 animate-pulse">
-              Indexing Drive files...
-            </div>
-          )}
-
-          {driveStatus === "done" && (
-            <div className="flex flex-col gap-2">
-              {driveSynced && (
-                <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
-                  {driveSynced.synced} of {driveSynced.total} files indexed.
-                </p>
-              )}
-              <button
-                onClick={syncDrive}
-                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
-              >
-                Sync Drive
-              </button>
-            </div>
-          )}
-
-          {driveStatus === "error" && (
-            <div className="flex flex-col gap-2">
-              <p className="text-red-400 text-xs">{driveError}</p>
-              <button
-                onClick={handleDriveConnect}
-                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
-              >
-                Try again
-              </button>
-            </div>
-          )}
+            );
+          })}
         </div>
 
-        {/* Asana card */}
-        <div className="border border-[oklch(1_0_0_/_8%)] rounded-xl p-5 flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-[oklch(0.16_0.01_55)] flex items-center justify-center text-sm">A</div>
-              <div>
-                <div className="font-medium text-sm">Asana</div>
-                <div className="text-[oklch(0.55_0.012_60)] text-xs">Tasks, projects, comments</div>
-              </div>
-            </div>
-            {asanaStatus === "done" && (
-              <span className="text-xs text-[oklch(0.78_0.14_65)] font-medium">Connected</span>
-            )}
-          </div>
-
-          {asanaStatus === "idle" && !asanaConnected && (
-            <button
-              onClick={() => { window.location.href = "/api/auth/asana"; }}
-              className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
-            >
-              Connect Asana
-            </button>
-          )}
-
-          {asanaStatus === "idle" && asanaConnected && (
-            <button
-              onClick={syncAsana}
-              className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
-            >
-              Sync Asana
-            </button>
-          )}
-
-          {asanaStatus === "syncing" && (
-            <div className="text-[oklch(0.65_0.015_60)] text-sm text-center py-1 animate-pulse">
-              Indexing Asana tasks...
-            </div>
-          )}
-
-          {asanaStatus === "done" && (
-            <div className="flex flex-col gap-2">
-              {asanaSynced && (
-                <p className="text-[oklch(0.65_0.015_60)] text-xs text-center">
-                  {asanaSynced.synced} tasks indexed.
-                </p>
-              )}
-              <button
-                onClick={syncAsana}
-                className="w-full bg-[oklch(0.16_0.01_55)] text-white text-sm font-medium py-2 rounded-lg hover:bg-[oklch(0.20_0.012_55)] transition-colors"
-              >
-                Sync Asana
-              </button>
-            </div>
-          )}
-
-          {asanaStatus === "error" && (
-            <div className="flex flex-col gap-2">
-              <p className="text-red-400 text-xs">{asanaError}</p>
-              <button
-                onClick={() => { window.location.href = "/api/auth/asana"; }}
-                className="w-full bg-[oklch(0.96_0.012_80)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.92_0.02_75)] transition-colors"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-        </div>
-
-        <a
-          href="/ask"
-          className="w-full text-center block font-semibold text-sm py-3.5 transition-colors hover:opacity-90"
-          style={{
-            background: "oklch(0.78 0.14 65)",
-            color: "oklch(0.11 0.008 55)",
-            borderRadius: "var(--radius-xl)",
-          }}
-        >
-          Ask your agency brain
-        </a>
+        {/* CTA */}
+        {connectedTools.size > 0 && (
+          <a
+            href="/ask"
+            className="w-full text-center block font-semibold text-sm py-3.5 transition-colors hover:opacity-90"
+            style={{
+              background: "oklch(0.78 0.14 65)",
+              color: "oklch(0.11 0.008 55)",
+              borderRadius: "var(--radius-xl)",
+            }}
+          >
+            Ask your agency brain
+          </a>
+        )}
       </div>
     </div>
   );
