@@ -171,9 +171,9 @@ export default function AskPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[oklch(0.11_0.008_55)] text-white flex flex-col">
+    <div className="h-dvh bg-[oklch(0.11_0.008_55)] text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="border-b border-[oklch(1_0_0_/_8%)] px-6 py-4 flex items-center justify-between">
+      <div className="border-b border-[oklch(1_0_0_/_8%)] px-4 py-3 flex items-center justify-between flex-shrink-0">
         <a href="/ask" className="hover:opacity-80 transition-opacity">
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
@@ -218,7 +218,7 @@ export default function AskPage() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full">
+      <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full min-h-0">
         {messages.length === 0 && !loading && setupState === "checking" && (
           <div className="flex items-center justify-center mt-20">
             <div className="w-1 h-1 rounded-full bg-[oklch(0.45_0.01_60)] animate-pulse" />
@@ -296,7 +296,7 @@ export default function AskPage() {
         {messages.map((msg, i) => (
           <div key={i} className={`flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
             {msg.role === "user" ? (
-              <div className="bg-[oklch(0.16_0.01_55)] text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-sm">
+              <div className="bg-[oklch(0.16_0.01_55)] text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-[85%]">
                 {msg.content}
               </div>
             ) : (
@@ -355,27 +355,29 @@ export default function AskPage() {
       </div>
 
       {/* Input - only shown when data is ready */}
-      {(setupState === "ready" || messages.length > 0) && <div className="border-t border-[oklch(1_0_0_/_8%)] px-6 py-4">
-        <form onSubmit={handleSubmit} className="flex gap-3 max-w-2xl mx-auto">
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask anything about your workspace..."
-            className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
-            disabled={loading}
-            autoFocus
-          />
-          <button
-            type="submit"
-            disabled={!query.trim() || loading}
-            className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-semibold px-5 py-3 rounded-2xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-          >
-            {loading ? "..." : "Send"}
-          </button>
-        </form>
-      </div>}
+      {(setupState === "ready" || messages.length > 0) && (
+        <div className="border-t border-[oklch(1_0_0_/_8%)] px-4 py-3 flex-shrink-0 bg-[oklch(0.11_0.008_55)]">
+          <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
+            <input
+              ref={inputRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask anything about your workspace..."
+              className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
+              disabled={loading}
+              autoFocus
+            />
+            <button
+              type="submit"
+              disabled={!query.trim() || loading}
+              className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-semibold px-5 py-3 rounded-2xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+            >
+              {loading ? "..." : "Send"}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
