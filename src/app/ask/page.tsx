@@ -180,11 +180,13 @@ export default function AskPage() {
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
         </a>
-        <div className="flex items-center gap-4">
-          <a href="/connect" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
+        <div className="flex items-center gap-2">
+          <a href="/connect" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
+            style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(1 0 0 / 10%)" }}>
             Connect tools
           </a>
-          <a href="/settings" className="text-[oklch(0.55_0.012_60)] text-xs underline underline-offset-2 hover:text-[oklch(0.78_0.14_65)] transition-colors">
+          <a href="/settings" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
+            style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
             Settings
           </a>
         </div>
