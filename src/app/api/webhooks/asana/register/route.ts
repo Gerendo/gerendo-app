@@ -32,7 +32,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
-  const webhookTarget = `${appUrl}/api/webhooks/asana?workspace_id=${workspaceId}&user_id=${userId}`;
 
   const workspacesRes = await fetch("https://app.asana.com/api/1.0/workspaces", {
     headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
@@ -58,6 +57,10 @@ export async function POST(request: Request): Promise<NextResponse> {
         results.push({ asanaWorkspaceGid: asanaWs.gid, status: "already_registered" });
         continue;
       }
+
+      // Include asana_ws in the target URL so the handshake handler can store
+      // key=asanaWs.gid (enabling per-workspace deduplication on re-registration)
+      const webhookTarget = `${appUrl}/api/webhooks/asana?workspace_id=${workspaceId}&user_id=${userId}&asana_ws=${asanaWs.gid}`;
 
       const res = await fetch("https://app.asana.com/api/1.0/webhooks", {
         method: "POST",

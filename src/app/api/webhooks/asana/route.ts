@@ -12,6 +12,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   const { searchParams } = new URL(request.url);
   const workspaceId = searchParams.get("workspace_id");
   const userId = searchParams.get("user_id");
+  // asana_ws is the Asana workspace GID included in the target URL at registration time
+  const asanaWsKey = searchParams.get("asana_ws") ?? "default";
 
   if (!workspaceId || !userId) {
     return NextResponse.json({ error: "Missing workspace context" }, { status: 400 });
@@ -25,7 +27,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       workspace_id: workspaceId,
       user_id: userId,
       provider: "asana",
-      key: "default",
+      key: asanaWsKey,
       secret: hookSecret,
       meta: { registeredAt: Date.now() },
     }, { onConflict: "workspace_id,user_id,provider,key" });
@@ -52,7 +54,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "asana")
-    .eq("key", "default")
+    .eq("key", asanaWsKey)
     .maybeSingle();
 
   if (!secretRow) {
