@@ -452,7 +452,12 @@ function ConnectPageInner() {
 
         <a
           href="/ask"
-          className="w-full bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] hover:bg-[oklch(0.85_0.08_70)] transition-colors text-center block font-medium"
+          className="w-full text-center block font-semibold text-sm py-3.5 rounded-full transition-all hover:scale-[1.02] hover:shadow-lg"
+          style={{
+            background: "linear-gradient(135deg, oklch(0.78 0.14 65), oklch(0.65 0.22 30))",
+            color: "oklch(0.96 0.012 80)",
+            boxShadow: "0 0 20px oklch(0.78 0.14 65 / 30%)",
+          }}
         >
           Ask your agency brain
         </a>
