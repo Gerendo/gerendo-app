@@ -3,11 +3,25 @@ import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { getGmailToken } from "@/lib/agency-db";
 
-// Labels to always exclude - system noise
-const EXCLUDED_LABELS = new Set([
-  "CHAT", "SPAM", "TRASH", "UNREAD", "STARRED", "IMPORTANT",
-  "CATEGORY_PROMOTIONS", "CATEGORY_SOCIAL", "CATEGORY_UPDATES", "CATEGORY_FORUMS",
-]);
+// Only exclude true system internals that are never useful to index
+const EXCLUDED_LABELS = new Set(["UNREAD", "CHAT"]);
+
+const LABEL_META: Record<string, { displayName: string; icon: string; default: boolean }> = {
+  INBOX:                  { displayName: "Inbox",        icon: "inbox",    default: true },
+  SENT:                   { displayName: "Sent",         icon: "send",     default: true },
+  DRAFT:                  { displayName: "Drafts",       icon: "draft",    default: false },
+  STARRED:                { displayName: "Starred",      icon: "star",     default: false },
+  IMPORTANT:              { displayName: "Important",    icon: "label",    default: false },
+  SPAM:                   { displayName: "Spam",         icon: "report",   default: false },
+  TRASH:                  { displayName: "Trash",        icon: "delete",   default: false },
+  SNOOZED:                { displayName: "Snoozed",      icon: "snooze",   default: false },
+  SCHEDULED:              { displayName: "Scheduled",    icon: "schedule", default: false },
+  CATEGORY_PERSONAL:      { displayName: "Personal",     icon: "person",   default: false },
+  CATEGORY_SOCIAL:        { displayName: "Social",       icon: "people",   default: false },
+  CATEGORY_PROMOTIONS:    { displayName: "Promotions",   icon: "sell",     default: false },
+  CATEGORY_UPDATES:       { displayName: "Updates",      icon: "info",     default: false },
+  CATEGORY_FORUMS:        { displayName: "Forums",       icon: "forum",    default: false },
+};
 
 export async function GET(): Promise<NextResponse> {
   const _ws = await requireWorkspace();
@@ -30,19 +44,24 @@ export async function GET(): Promise<NextResponse> {
 
   const labels = all
     .filter(l => l.id && l.name && !EXCLUDED_LABELS.has(l.id))
-    .map(l => ({
-      id: l.id!,
-      name: l.type === "system"
-        ? l.name!.replace("CATEGORY_", "").toLowerCase()
-        : l.name!,
-      type: l.type ?? "user",
-      // Pre-select inbox and sent by default
-      default: l.id === "INBOX" || l.id === "SENT",
-    }))
+    .map(l => {
+      const meta = LABEL_META[l.id!];
+      return {
+        id: l.id!,
+        name: meta?.displayName ?? l.name!,
+        icon: meta?.icon ?? "label",
+        type: l.type ?? "user",
+        default: meta?.default ?? false,
+      };
+    })
     .sort((a, b) => {
-      // System labels first, then user labels alphabetically
       if (a.type === "system" && b.type !== "system") return -1;
       if (a.type !== "system" && b.type === "system") return 1;
+      // Within system labels, put inbox/sent first
+      if (a.id === "INBOX") return -1;
+      if (b.id === "INBOX") return 1;
+      if (a.id === "SENT") return -1;
+      if (b.id === "SENT") return 1;
       return a.name.localeCompare(b.name);
     });
 

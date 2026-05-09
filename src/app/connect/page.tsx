@@ -44,7 +44,7 @@ function ConnectPageInner() {
 
   // Label picker modal
   const [showLabelPicker, setShowLabelPicker] = useState(false);
-  const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; type: string; default: boolean }>>([]);
+  const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; icon: string; type: string; default: boolean }>>([]);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
@@ -424,35 +424,44 @@ function ConnectPageInner() {
               </div>
             ) : (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
-                {availableLabels.map(label => (
-                  <button
-                    key={label.id}
-                    onClick={() => setSelectedLabels(p => {
-                      const next = new Set(p);
-                      if (next.has(label.id)) next.delete(label.id);
-                      else next.add(label.id);
-                      return next;
-                    })}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
-                    style={{
-                      background: selectedLabels.has(label.id) ? "oklch(0.78 0.14 65 / 12%)" : "oklch(0.11 0.008 55)",
-                      border: `1px solid ${selectedLabels.has(label.id) ? "oklch(0.78 0.14 65 / 30%)" : "oklch(1 0 0 / 8%)"}`,
-                    }}
-                  >
-                    <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
-                      style={{ background: selectedLabels.has(label.id) ? "oklch(0.78 0.14 65)" : "transparent", border: `1.5px solid ${selectedLabels.has(label.id) ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 25%)"}` }}>
-                      {selectedLabels.has(label.id) && (
-                        <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                          <path d="M1 4L3.5 6.5L9 1" stroke="oklch(0.11 0.008 55)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
+                {availableLabels.map(label => {
+                  const selected = selectedLabels.has(label.id);
+                  return (
+                    <button
+                      key={label.id}
+                      onClick={() => setSelectedLabels(p => {
+                        const next = new Set(p);
+                        if (next.has(label.id)) next.delete(label.id);
+                        else next.add(label.id);
+                        return next;
+                      })}
+                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors w-full"
+                      style={{
+                        background: selected ? "oklch(0.78 0.14 65 / 12%)" : "oklch(0.11 0.008 55)",
+                        border: `1px solid ${selected ? "oklch(0.78 0.14 65 / 30%)" : "oklch(1 0 0 / 8%)"}`,
+                      }}
+                    >
+                      {/* Checkbox */}
+                      <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                        style={{ background: selected ? "oklch(0.78 0.14 65)" : "transparent", border: `1.5px solid ${selected ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 25%)"}` }}>
+                        {selected && (
+                          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                            <path d="M1 4L3.5 6.5L9 1" stroke="oklch(0.11 0.008 55)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                      {/* Icon */}
+                      <span className="material-icons text-base flex-shrink-0" style={{ color: selected ? "oklch(0.78 0.14 65)" : "oklch(0.45 0.01 60)", fontSize: "18px" }}>
+                        {label.icon}
+                      </span>
+                      {/* Name */}
+                      <span className="text-sm flex-1 text-left">{label.name}</span>
+                      {label.type === "user" && (
+                        <span className="text-xs" style={{ color: "oklch(0.45 0.01 60)" }}>label</span>
                       )}
-                    </div>
-                    <span className="text-sm capitalize">{label.name}</span>
-                    {label.type === "system" && (
-                      <span className="ml-auto text-xs" style={{ color: "oklch(0.45 0.01 60)" }}>system</span>
-                    )}
-                  </button>
-                ))}
+                    </button>
+                  );
+                })}
               </div>
             )}
 
