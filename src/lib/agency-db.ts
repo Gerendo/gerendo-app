@@ -529,6 +529,78 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
   return data.access_token;
 }
 
+export async function getDriveToken(workspaceId: string, userId: string): Promise<string> {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("oauth_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("provider", "google-drive")
+    .maybeSingle();
+
+  if (!data) throw new Error("Google Drive not connected");
+
+  if (data.expires_at && Date.now() > data.expires_at - 60000 && data.refresh_token) {
+    const res = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.GOOGLE_CLIENT_ID!,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+        refresh_token: data.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    const tokens = await res.json();
+    if (tokens.access_token) {
+      await supabase.from("oauth_tokens").update({
+        access_token: tokens.access_token,
+        expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+      }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-drive");
+      return tokens.access_token;
+    }
+  }
+
+  return data.access_token;
+}
+
+export async function getAsanaToken(workspaceId: string, userId: string): Promise<string> {
+  const supabase = createServiceClient();
+  const { data } = await supabase
+    .from("oauth_tokens")
+    .select("access_token, refresh_token, expires_at")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("provider", "asana")
+    .maybeSingle();
+
+  if (!data) throw new Error("Asana not connected");
+
+  if (data.expires_at && Date.now() > data.expires_at - 60000 && data.refresh_token) {
+    const res = await fetch("https://app.asana.com/-/oauth_token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: process.env.ASANA_CLIENT_ID!,
+        client_secret: process.env.ASANA_CLIENT_SECRET!,
+        refresh_token: data.refresh_token,
+        grant_type: "refresh_token",
+      }),
+    });
+    const tokens = await res.json();
+    if (tokens.access_token) {
+      await supabase.from("oauth_tokens").update({
+        access_token: tokens.access_token,
+        expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
+      }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "asana");
+      return tokens.access_token;
+    }
+  }
+
+  return data.access_token;
+}
+
 export async function getWorkspaceId(userId: string): Promise<string | null> {
   const supabase = createServiceClient();
   const { data } = await supabase

@@ -121,6 +121,7 @@ function ConnectPageInner() {
         const { error } = await res.json();
         if (error) throw new Error(error);
         startGmailPoll();
+        fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
       } else if (toolId === "drive") {
         const res = await fetch("/api/sync/drive", { method: "POST" });
         const data = await res.json();
@@ -133,6 +134,7 @@ function ConnectPageInner() {
         if (!res.ok) throw new Error(data.error);
         setSyncedCounts(p => ({ ...p, asana: data.synced }));
         setToolStatus(p => ({ ...p, asana: "done" }));
+        fetch("/api/webhooks/asana/register", { method: "POST" }).catch(() => {});
       }
     } catch (err: any) {
       setToolStatus(p => ({ ...p, [toolId]: "error" }));

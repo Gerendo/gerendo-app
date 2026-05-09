@@ -1,0 +1,8 @@
+{
+  "crons": [
+    { "path": "/api/cron/sync?source=gmail",             "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/sync?source=drive",             "schedule": "*/10 * * * *" },
+    { "path": "/api/cron/sync?source=asana",             "schedule": "*/30 * * * *" },
+    { "path": "/api/cron/sync?source=gmail-watch-renew", "schedule": "0 6 */6 * *" }
+  ]
+}

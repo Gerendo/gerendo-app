@@ -166,19 +166,8 @@ async function fetchAndStoreMessages(
   return messageRows.length;
 }
 
-export async function POST(): Promise<NextResponse> {
-  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
-
-  const secretKey = process.env.NANGO_SECRET_KEY;
-  if (!secretKey) return NextResponse.json({ error: "NANGO_SECRET_KEY not set" }, { status: 500 });
-
-  let token: string;
-  try {
-    token = await getGmailToken(workspaceId, userId);
-  } catch (err) {
-    return NextResponse.json({ error: "Gmail not connected. Connect via /connect first.", details: String(err) }, { status: 401 });
-  }
-
+export async function runGmailSyncForUser(workspaceId: string, userId: string): Promise<{ synced: number }> {
+  const token = await getGmailToken(workspaceId, userId);
   const auth = new google.auth.OAuth2();
   auth.setCredentials({ access_token: token });
   const gmail = google.gmail({ version: "v1", auth });
@@ -205,5 +194,16 @@ export async function POST(): Promise<NextResponse> {
     totalSynced += count;
   }
 
-  return NextResponse.json({ synced: totalSynced, labels: labelsToSync.map((l) => l.name) });
+  return { synced: totalSynced };
+}
+
+export async function POST(): Promise<NextResponse> {
+  const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
+
+  try {
+    const result = await runGmailSyncForUser(workspaceId, userId);
+    return NextResponse.json(result);
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message ?? "Sync failed" }, { status: 500 });
+  }
 }
