@@ -1,73 +1,201 @@
 "use client";
 
-import { useState } from "react";
-import Nango from "@nangohq/frontend";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 
-type Status = "idle" | "connecting" | "syncing" | "done" | "error";
+type SyncStatus = "checking" | "idle" | "connecting" | "syncing" | "done" | "error";
+type DriveStatus = "idle" | "connecting" | "syncing" | "done" | "error";
 
-export default function ConnectPage() {
-  const [status, setStatus] = useState<Status>("idle");
-  const [message, setMessage] = useState("");
-  const [syncedCount, setSyncedCount] = useState<number | null>(null);
+interface LabelProgress {
+  synced: number;
+  total: number | null;
+  status: "pending" | "syncing" | "done" | "error";
+}
+
+function ConnectPageInner() {
+  const searchParams = useSearchParams();
+  const [status, setStatus] = useState<SyncStatus>("checking");
+  const [driveStatus, setDriveStatus] = useState<DriveStatus>("idle");
+  const [driveSynced, setDriveSynced] = useState<{ synced: number; total: number } | null>(null);
+  const [driveError, setDriveError] = useState("");
+  const [driveConnected, setDriveConnected] = useState(false);
+  const [asanaStatus, setAsanaStatus] = useState<DriveStatus>("idle");
+  const [asanaSynced, setAsanaSynced] = useState<{ synced: number } | null>(null);
+  const [asanaError, setAsanaError] = useState("");
+  const [asanaConnected, setAsanaConnected] = useState(false);
+  const [error, setError] = useState("");
+  const [labelProgress, setLabelProgress] = useState<Record<string, LabelProgress>>({});
+  const [currentLabel, setCurrentLabel] = useState<string | null>(null);
+  const [totalSynced, setTotalSynced] = useState(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    const driveConnectedParam = searchParams.get("drive_connected");
+    const driveErrorParam = searchParams.get("drive_error");
+    const gmailConnectedParam = searchParams.get("gmail_connected");
+    const gmailErrorParam = searchParams.get("gmail_error");
+
+    if (driveConnectedParam === "1") {
+      setDriveConnected(true);
+      setDriveStatus("idle");
+      syncDrive();
+      window.history.replaceState({}, "", "/connect");
+    } else if (driveErrorParam) {
+      setDriveError("Drive authorization failed. Try again.");
+      setDriveStatus("error");
+      window.history.replaceState({}, "", "/connect");
+    }
+
+    const asanaConnectedParam = searchParams.get("asana_connected");
+    const asanaErrorParam = searchParams.get("asana_error");
+    if (asanaConnectedParam === "1") {
+      setAsanaConnected(true);
+      setAsanaStatus("idle");
+      syncAsana();
+      window.history.replaceState({}, "", "/connect");
+    } else if (asanaErrorParam) {
+      setAsanaError("Asana authorization failed. Try again.");
+      setAsanaStatus("error");
+      window.history.replaceState({}, "", "/connect");
+    }
+
+    if (gmailConnectedParam === "1") {
+      setStatus("idle");
+      startSync();
+      window.history.replaceState({}, "", "/connect");
+    } else if (gmailErrorParam) {
+      setError("Gmail authorization failed. Try again.");
+      setStatus("error");
+      window.history.replaceState({}, "", "/connect");
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/nango/status")
+      .then((r) => r.json())
+      .then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
+        if (dc) setDriveConnected(true);
+        if (ac) setAsanaConnected(true);
+        if (connected) {
+          // Check if there's an active sync job
+          fetch("/api/sync/status")
+            .then((r) => r.json())
+            .then((job) => {
+              if (job.status === "running") {
+                setStatus("syncing");
+                setLabelProgress(job.labelProgress ?? {});
+                setCurrentLabel(job.currentLabel);
+                setTotalSynced(job.totalSynced ?? 0);
+                startPolling();
+              } else if (job.status === "done") {
+                setStatus("done");
+                setLabelProgress(job.labelProgress ?? {});
+                setTotalSynced(job.totalSynced ?? 0);
+              } else {
+                setStatus("idle");
+              }
+            })
+            .catch(() => setStatus("idle"));
+        } else {
+          setStatus("idle");
+        }
+      })
+      .catch(() => setStatus("idle"));
+
+    return () => stopPolling();
+  }, []);
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch("/api/sync/status");
+        const job = await res.json();
+        setLabelProgress(job.labelProgress ?? {});
+        setCurrentLabel(job.currentLabel);
+        setTotalSynced(job.totalSynced ?? 0);
+        if (job.status === "done") {
+          setStatus("done");
+          stopPolling();
+        } else if (job.status === "error") {
+          setError("Sync failed. Try again.");
+          setStatus("error");
+          stopPolling();
+        }
+      } catch {}
+    }, 2000);
+  }
+
+  async function startSync() {
+    setStatus("syncing");
+    setLabelProgress({});
+    setCurrentLabel(null);
+    setTotalSynced(0);
+    setError("");
+
+    try {
+      const res = await fetch("/api/sync/gmail/stream");
+      const { jobId, error: err } = await res.json();
+      if (err) throw new Error(err);
+      if (!jobId) throw new Error("No job ID returned");
+      startPolling();
+    } catch (err: any) {
+      setError(err.message ?? "Failed to start sync");
+      setStatus("error");
+    }
+  }
 
   async function handleConnect() {
-    setStatus("connecting");
-    setMessage("");
+    window.location.href = "/api/auth/gmail";
+  }
 
+  async function syncAsana() {
+    setAsanaStatus("syncing");
+    setAsanaError("");
     try {
-      // Get a short-lived session token from our server
-      const sessionRes = await fetch("/api/nango/session", { method: "POST" });
-      if (!sessionRes.ok) {
-        const err = await sessionRes.json();
-        throw new Error(err.error ?? "Failed to create session");
-      }
-      const { token } = await sessionRes.json();
-
-      // Launch Nango's hosted OAuth flow
-      const nango = new Nango({ connectSessionToken: token });
-      await nango.auth("google-mail");
-
-      // OAuth done - now trigger Gmail sync
-      setStatus("syncing");
-      setMessage("Connected! Syncing all your emails - this may take a few minutes...");
-
-      const syncRes = await fetch("/api/sync/gmail", { method: "POST" });
-      if (!syncRes.ok) {
-        const err = await syncRes.json();
-        throw new Error(err.error ?? "Sync failed");
-      }
-
-      const { synced } = await syncRes.json();
-      setSyncedCount(synced);
-      setStatus("done");
-      setMessage(`Done! ${synced} emails indexed.`);
+      const res = await fetch("/api/sync/asana", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Asana sync failed");
+      setAsanaSynced({ synced: data.synced });
+      setAsanaStatus("done");
     } catch (err: any) {
-      setStatus("error");
-      setMessage(err.message ?? "Something went wrong");
+      setAsanaError(err.message ?? "Asana sync failed");
+      setAsanaStatus("error");
     }
   }
 
-  async function handleSync() {
-    setStatus("syncing");
-    setMessage("Syncing new emails...");
-    setSyncedCount(null);
+  async function handleDriveConnect() {
+    // Redirect to Google OAuth directly
+    window.location.href = "/api/auth/drive";
+  }
 
-
+  async function syncDrive() {
+    setDriveStatus("syncing");
+    setDriveError("");
     try {
-      const syncRes = await fetch("/api/sync/gmail", { method: "POST" });
-      if (!syncRes.ok) {
-        const err = await syncRes.json();
-        throw new Error(err.error ?? "Sync failed");
-      }
-      const { synced, message: msg } = await syncRes.json();
-      setSyncedCount(synced);
-      setStatus("done");
-      setMessage(msg ?? `${synced} new emails indexed.`);
+      const res = await fetch("/api/sync/drive", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Drive sync failed");
+      setDriveSynced({ synced: data.synced, total: data.total });
+      setDriveStatus("done");
     } catch (err: any) {
-      setStatus("error");
-      setMessage(err.message ?? "Sync failed");
+      setDriveError(err.message ?? "Drive sync failed");
+      setDriveStatus("error");
     }
   }
+
+  const labels = Object.entries(labelProgress);
+  const doneCount = labels.filter(([, v]) => v.status === "done").length;
+  const progressPct = labels.length > 0 ? Math.round((doneCount / labels.length) * 100) : 0;
+  const activeLabel = currentLabel;
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center gap-8 p-8">
@@ -75,7 +203,7 @@ export default function ConnectPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Connect your tools</h1>
           <p className="text-zinc-400 mt-1 text-sm">
-            Your data stays on this machine. We only read, never send.
+            Connect your Gmail to start building your agency brain.
           </p>
         </div>
 
@@ -88,10 +216,14 @@ export default function ConnectPage() {
                 <div className="text-zinc-500 text-xs">Read email threads</div>
               </div>
             </div>
-            {status === "done" && (
+            {(status === "done" || status === "syncing") && (
               <span className="text-xs text-green-400 font-medium">Connected</span>
             )}
           </div>
+
+          {status === "checking" && (
+            <div className="text-zinc-500 text-sm text-center py-1">Checking connection...</div>
+          )}
 
           {status === "idle" && (
             <button
@@ -109,33 +241,65 @@ export default function ConnectPage() {
           )}
 
           {status === "syncing" && (
-            <button disabled className="w-full bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg cursor-not-allowed">
-              Syncing emails...
-            </button>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between text-xs text-zinc-400">
+                <span>{activeLabel ? `Syncing ${activeLabel}...` : "Starting sync..."}</span>
+                <span>{totalSynced} emails</span>
+              </div>
+              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-white rounded-full transition-all duration-500"
+                  style={{ width: `${progressPct}%` }}
+                />
+              </div>
+              <div className="text-zinc-600 text-xs text-center">
+                {doneCount} of {labels.length} mailboxes done
+              </div>
+              {labels.length > 0 && (
+                <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+                  {labels.map(([label, v]) => (
+                    <div key={label} className="flex items-center justify-between text-xs">
+                      <span className="text-zinc-400 capitalize">{label}</span>
+                      <span className={
+                        v.status === "done" ? "text-green-400" :
+                        v.status === "error" ? "text-red-400" :
+                        v.status === "syncing" ? "text-yellow-400" :
+                        "text-zinc-600"
+                      }>
+                        {v.status === "done"
+                          ? `${v.synced} emails`
+                          : v.status === "error"
+                            ? "error"
+                            : v.status === "syncing"
+                              ? `${v.synced} / ${v.total ?? "..."}`
+                              : "waiting..."}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
 
           {status === "done" && (
             <div className="flex flex-col gap-2">
+              <p className="text-zinc-400 text-xs text-center">
+                {totalSynced === 0 ? "Already up to date." : `${totalSynced} emails indexed.`}
+              </p>
               <button
-                onClick={handleSync}
+                onClick={startSync}
                 className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
               >
                 Sync new emails
               </button>
-              <a
-                href="/ask"
-                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors text-center"
-              >
-                Ask questions
-              </a>
             </div>
           )}
 
           {status === "error" && (
             <div className="flex flex-col gap-2">
-              <p className="text-red-400 text-xs">{message}</p>
+              <p className="text-red-400 text-xs">{error}</p>
               <button
-                onClick={handleConnect}
+                onClick={startSync}
                 className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
               >
                 Try again
@@ -144,18 +308,163 @@ export default function ConnectPage() {
           )}
         </div>
 
-        {message && status !== "error" && (
-          <p className="text-zinc-400 text-sm text-center">{message}</p>
-        )}
+        {/* Google Drive card */}
+        <div className="border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">D</div>
+              <div>
+                <div className="font-medium text-sm">Google Drive</div>
+                <div className="text-zinc-500 text-xs">Docs, Sheets, Slides</div>
+              </div>
+            </div>
+            {driveStatus === "done" && (
+              <span className="text-xs text-green-400 font-medium">Connected</span>
+            )}
+          </div>
 
-        {syncedCount !== null && status === "done" && (
-          <p className="text-zinc-500 text-xs text-center">
-            {syncedCount === 0
-              ? "No new emails since last sync."
-              : `${syncedCount} emails are now searchable.`}
-          </p>
-        )}
+          {driveStatus === "idle" && !driveConnected && (
+            <button
+              onClick={handleDriveConnect}
+              className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+            >
+              Connect Drive
+            </button>
+          )}
+
+          {driveStatus === "idle" && driveConnected && (
+            <button
+              onClick={syncDrive}
+              className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+            >
+              Sync Drive
+            </button>
+          )}
+
+          {driveStatus === "connecting" && (
+            <button disabled className="w-full bg-zinc-800 text-zinc-400 text-sm py-2 rounded-lg cursor-not-allowed">
+              Connecting...
+            </button>
+          )}
+
+          {driveStatus === "syncing" && (
+            <div className="text-zinc-400 text-sm text-center py-1 animate-pulse">
+              Indexing Drive files...
+            </div>
+          )}
+
+          {driveStatus === "done" && (
+            <div className="flex flex-col gap-2">
+              {driveSynced && (
+                <p className="text-zinc-400 text-xs text-center">
+                  {driveSynced.synced} of {driveSynced.total} files indexed.
+                </p>
+              )}
+              <button
+                onClick={syncDrive}
+                className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+              >
+                Sync Drive
+              </button>
+            </div>
+          )}
+
+          {driveStatus === "error" && (
+            <div className="flex flex-col gap-2">
+              <p className="text-red-400 text-xs">{driveError}</p>
+              <button
+                onClick={handleDriveConnect}
+                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Asana card */}
+        <div className="border border-zinc-800 rounded-xl p-5 flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-sm">A</div>
+              <div>
+                <div className="font-medium text-sm">Asana</div>
+                <div className="text-zinc-500 text-xs">Tasks, projects, comments</div>
+              </div>
+            </div>
+            {asanaStatus === "done" && (
+              <span className="text-xs text-green-400 font-medium">Connected</span>
+            )}
+          </div>
+
+          {asanaStatus === "idle" && !asanaConnected && (
+            <button
+              onClick={() => { window.location.href = "/api/auth/asana"; }}
+              className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+            >
+              Connect Asana
+            </button>
+          )}
+
+          {asanaStatus === "idle" && asanaConnected && (
+            <button
+              onClick={syncAsana}
+              className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+            >
+              Sync Asana
+            </button>
+          )}
+
+          {asanaStatus === "syncing" && (
+            <div className="text-zinc-400 text-sm text-center py-1 animate-pulse">
+              Indexing Asana tasks...
+            </div>
+          )}
+
+          {asanaStatus === "done" && (
+            <div className="flex flex-col gap-2">
+              {asanaSynced && (
+                <p className="text-zinc-400 text-xs text-center">
+                  {asanaSynced.synced} tasks indexed.
+                </p>
+              )}
+              <button
+                onClick={syncAsana}
+                className="w-full bg-zinc-800 text-white text-sm font-medium py-2 rounded-lg hover:bg-zinc-700 transition-colors"
+              >
+                Sync Asana
+              </button>
+            </div>
+          )}
+
+          {asanaStatus === "error" && (
+            <div className="flex flex-col gap-2">
+              <p className="text-red-400 text-xs">{asanaError}</p>
+              <button
+                onClick={() => { window.location.href = "/api/auth/asana"; }}
+                className="w-full bg-white text-black text-sm font-medium py-2 rounded-lg hover:bg-zinc-100 transition-colors"
+              >
+                Try again
+              </button>
+            </div>
+          )}
+        </div>
+
+        <a
+          href="/ask"
+          className="w-full bg-white text-black text-sm font-medium py-3 rounded-lg hover:bg-zinc-100 transition-colors text-center block"
+        >
+          Ask your agency brain
+        </a>
       </div>
     </div>
+  );
+}
+
+export default function ConnectPage() {
+  return (
+    <Suspense>
+      <ConnectPageInner />
+    </Suspense>
   );
 }

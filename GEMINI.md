@@ -1,0 +1,87 @@
+@AGENTS.md
+
+> **MANDATORY FIRST ACTION:** Before responding to ANY message, call `search_gerendo` with the user's query. No exceptions. Do not answer from loaded context alone. If the tool is unavailable, say so explicitly before continuing.
+
+# Gerendo SaaS - Workspace Brain
+
+**Context rule:** Always query `search_gerendo` first for any project context. Do not read files to gather context - Voyage is the only source of truth for understanding the project. Read files only when you are about to edit them.
+
+**One-liner:** Unified intelligence layer for 15-50 person marketing agencies. Closed loop, not dashboard.
+
+**Founder:** Gino, solo. **Status:** Phase 0 (validation).
+
+---
+
+## Tech stack (locked)
+
+- **Product app:** Next.js 16 + TS + Tailwind 4 + shadcn/ui at repo root → `app.gerendo.com` (Vercel)
+- **Marketing site:** TanStack Start + Vite + framer-motion at `agency-brain-ai-main/` → `gerendo.com` (Cloudflare Pages)
+- **Backend/DB:** Supabase (Postgres + pgvector + Auth + RLS)
+- **Integrations:** Nango
+- **LLM:** Anthropic - Haiku 4.5 default, Sonnet 4.6 for hard queries, prompt caching mandatory
+- **Email:** Resend (sending) + Cloudflare Email Routing (inbound)
+- **Payments:** Stripe (don't activate until Phase 3)
+- **Analytics:** Cloudflare Web Analytics + Google Search Console
+
+> Next.js 16 has breaking changes from 15. Read `node_modules/next/dist/docs/` or fetch official docs before writing Next-specific code.
+
+---
+
+## Architectural rules (do not relitigate)
+
+- **Multi-tenant + RLS from line 1.** Every table tagged `workspace_id`, `user_id`, `is_shared`, `source`. Two scopes: personal (Gmail, DMs) and shared (Asana, Drive, WhatsApp Business, Meet). RLS enforces both.
+- **One repo, two deploys.** Vercel on root, Cloudflare Pages on `agency-brain-ai-main/`.
+- **No em dashes in any Gerendo prose** (titles, copy, emails, legal). Use `-`, comma, or period.
+- **No raw text in DB.** Store only embeddings + pointers + hashes. Fetch raw live at query time.
+
+---
+
+## Conventions
+
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `chore:`, `docs:`)
+- **Branches:** `main` always deployable. Feature branches off main.
+- **TypeScript:** strict. No `any` without a justifying comment.
+- **CSS:** Tailwind 4 utilities. Component-scoped CSS only when Tailwind can't.
+- **No premature abstractions.** Three similar lines beats a wrong abstraction.
+
+---
+
+## Always ask before
+
+- Installing dependencies
+- Destructive commands (delete, reset, force push)
+- Supabase schema changes once data exists
+- Anything touching auth, billing, or RLS policies
+- Production env vars
+
+---
+
+## Session end
+
+Append a block to `docs/CHANGELOG.md`. Commit + push if code changed.
+
+---
+
+## gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available gstack skills: `/office-hours`, `/plan-ceo-review`, `/plan-eng-review`, `/plan-design-review`, `/design-consultation`, `/design-shotgun`, `/design-html`, `/review`, `/ship`, `/land-and-deploy`, `/canary`, `/benchmark`, `/browse`, `/connect-chrome`, `/qa`, `/qa-only`, `/design-review`, `/setup-browser-cookies`, `/setup-deploy`, `/setup-gbrain`, `/retro`, `/investigate`, `/document-release`, `/codex`, `/cso`, `/autoplan`, `/plan-devex-review`, `/devex-review`, `/careful`, `/freeze`, `/guard`, `/unfreeze`, `/gstack-upgrade`, `/learn`.
+
+## Skill routing
+
+When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
+
+Key routing rules:
+- Product ideas/brainstorming → invoke /office-hours
+- Strategy/scope → invoke /plan-ceo-review
+- Architecture → invoke /plan-eng-review
+- Design system/plan review → invoke /design-consultation or /plan-design-review
+- Full review pipeline → invoke /autoplan
+- Bugs/errors → invoke /investigate
+- QA/testing site behavior → invoke /qa or /qa-only
+- Code review/diff check → invoke /review
+- Visual polish → invoke /design-review
+- Ship/deploy/PR → invoke /ship or /land-and-deploy
+- Save progress → invoke /context-save
+- Resume context → invoke /context-restore

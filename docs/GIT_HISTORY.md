@@ -1,3 +1,86 @@
+## 3e2a68c - feat: full Gmail sync - paginate all messages, no limit
+
+**Author:** Tocki28  
+**Date:** 2026-05-05 06:49
+
+- Remove 100 message cap, paginate through entire mailbox
+- 5 minute timeout for sync route
+- Progress logging per page
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 67e7f15 - feat: multi-mailbox sync (inbox + sent), mailbox tag on messages, regex intent parsing
+
+**Author:** Tocki28  
+**Date:** 2026-05-05 06:30
+
+- Add mailbox column to messages table (schema v3)
+- Sync inbox and sent folders separately
+- Replace Haiku intent parsing with fast regex (cheaper, more reliable)
+- Show mailbox label on source citations in /ask UI
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 4ee75a3 - feat: remove preview storage, fetch full email bodies live at query time
+
+**Author:** Tocki28  
+**Date:** 2026-05-05 05:45
+
+- Drop preview field from messages table (schema v2)
+- Full body used for embedding quality at sync time, then discarded
+- /api/ask fetches full email bodies live from Gmail before calling Anthropic
+- Add facts table to schema for Phase 1 knowledge extraction
+- Export getNangoGmailToken, extractBody, getHeader for reuse
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 00f5d29 - feat: local-first agency brain - Gmail sync, hybrid search, /ask UI
+
+**Author:** Tocki28  
+**Date:** 2026-05-05 05:24
+
+- agency.db schema (messages, embeddings, sync_state)
+- Nango OAuth session + Gmail sync with incremental cursor
+- Voyage voyage-3 1024-dim embeddings
+- Hybrid search (vector cosine + FTS5 BM25 RRF)
+- /api/ask with Anthropic Haiku 4.5 streaming + prompt caching
+- /connect and /ask pages
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## a44428d - chore: add gstack skill routing rules to CLAUDE.md
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 19:17
+
+
+---
+## 65a8cf7 - require gstack for AI-assisted work
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 19:12
+
+
+---
+## 60d59a3 - feat: hybrid BM25+vector search with score threshold in MCP
+
+**Author:** Tocki28  
+**Date:** 2026-05-02 18:34
+
+- Add FTS5 virtual table (chunks_fts) with unicode61 tokenizer to SQLite schema (v2)
+- Store keyword_text per chunk; sync inserts/deletes to FTS index
+- Add ftsSearch() helper returning BM25-ranked results
+- Rewrite mcp.ts search: vector cosine threshold (0.3) + FTS5 keyword recall merged via Reciprocal Rank Fusion (RRF_K=60)
+- All prune functions now sync FTS deletions via shared deleteByIds helper
+- Schema migration auto-clears stale data and logs reindex prompt
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 0703b8f - docs: update HOW_THE_CLI_WORKS and CHANGELOG for pointer-only search
 
 **Author:** Tocki28  

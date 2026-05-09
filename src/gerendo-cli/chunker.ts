@@ -214,10 +214,94 @@ function chunkParagraphFile(absPath: string): Chunk[] {
   return chunks;
 }
 
+function chunkJsonlFile(absPath: string): Chunk[] {
+  const content = fs.readFileSync(absPath, "utf-8");
+  const lines = content.split("\n");
+  const chunks: Chunk[] = [];
+
+  let currentChunkText = "";
+  let chunkByteStart = 0;
+  let charCursor = 0;
+
+  for (const line of lines) {
+    if (!line.trim()) {
+      charCursor += line.length + 1;
+      continue;
+    }
+
+    try {
+      const entry = JSON.parse(line);
+      const isMessage = entry.type === "user" || entry.type === "assistant";
+      const hasContent = entry.message?.content;
+      
+      // Skip meta, system messages, and empty content
+      if (!isMessage || !hasContent || entry.isMeta) {
+        charCursor += line.length + 1;
+        continue;
+      }
+
+      let text = "";
+      if (typeof entry.message.content === "string") {
+        text = entry.message.content;
+      } else if (Array.isArray(entry.message.content)) {
+        text = entry.message.content
+          .filter((c: any) => c.type === "text")
+          .map((c: any) => c.text)
+          .join("\n");
+      }
+
+      if (!text.trim()) {
+        charCursor += line.length + 1;
+        continue;
+      }
+
+      const roleLabel = entry.type === "user" ? "USER" : "ASSISTANT";
+      const formattedEntry = `${roleLabel}: ${text}\n\n`;
+
+      if (currentChunkText.length + formattedEntry.length > TARGET_MAX && currentChunkText.length > 0) {
+        const hash = crypto.createHash("sha256").update(currentChunkText).digest("hex");
+        chunks.push({
+          pointer: { 
+            path: absPath, 
+            byteStart: chunkByteStart, 
+            byteEnd: Buffer.byteLength(content.slice(0, charCursor), "utf-8") 
+          },
+          text: currentChunkText,
+          hash,
+        });
+        currentChunkText = "";
+        chunkByteStart = Buffer.byteLength(content.slice(0, charCursor), "utf-8");
+      }
+
+      currentChunkText += formattedEntry;
+    } catch (e) {
+      // Ignore malformed JSON
+    }
+    charCursor += line.length + 1;
+  }
+
+  if (currentChunkText.length > 0) {
+    const hash = crypto.createHash("sha256").update(currentChunkText).digest("hex");
+    chunks.push({
+      pointer: { 
+        path: absPath, 
+        byteStart: chunkByteStart, 
+        byteEnd: Buffer.byteLength(content, "utf-8") 
+      },
+      text: currentChunkText,
+      hash,
+    });
+  }
+
+  return chunks;
+}
+
 export function chunkFile(absPath: string): Chunk[] {
   // Dispatch based on file type
   if (absPath.endsWith(".ts") || absPath.endsWith(".tsx")) {
     return chunkCodeFile(absPath);
+  } else if (absPath.endsWith(".jsonl")) {
+    return chunkJsonlFile(absPath);
   } else {
     return chunkParagraphFile(absPath);
   }

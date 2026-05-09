@@ -1,16 +1,5 @@
-import { openAgencyDb, allEmbeddings, ftsSearch, getMessagesByEmbeddingIds } from "./agency-db";
+import { ftsSearch, semanticSearch, getMessagesByEmbeddingIds, ftsDriveSearch, semanticDriveSearch, getDriveFilesByEmbeddingIds, ftsAsanaSearch, semanticAsanaSearch, getAsanaItemsByEmbeddingIds, type AgencyDb } from "./agency-db";
 import { embedTexts } from "./embed";
-
-function cosineSimilarity(a: Float32Array, b: Float32Array): number {
-  let dot = 0, normA = 0, normB = 0;
-  for (let i = 0; i < a.length; i++) {
-    dot += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-  if (normA === 0 || normB === 0) return 0;
-  return dot / (Math.sqrt(normA) * Math.sqrt(normB));
-}
 
 export type SearchResult = {
   embeddingId: number;
@@ -20,52 +9,64 @@ export type SearchResult = {
   subject: string;
   receivedAt: number;
   threadId: string | null;
+  mailbox: string;
   gmailUrl: string;
   score: number;
 };
 
-export async function hybridSearch(query: string, limit = 5): Promise<SearchResult[]> {
-  const db = openAgencyDb();
+export type AsanaSearchResult = {
+  embeddingId: number;
+  itemId: number;
+  name: string;
+  projectName: string | null;
+  assignee: string | null;
+  dueDate: string | null;
+  status: string | null;
+  permalinkUrl: string | null;
+  snippet: string;
+  score: number;
+};
 
-  // Embed the query
+export type DriveSearchResult = {
+  embeddingId: number;
+  fileId: number;
+  name: string;
+  mimeType: string;
+  webViewLink: string | null;
+  chunkIndex: number;
+  snippet: string;
+  score: number;
+};
+
+export async function hybridSearch(query: string, limit = 5, db: AgencyDb): Promise<SearchResult[]> {
   const [queryEmbedding] = await embedTexts([query]);
+  const queryVec = Array.from(queryEmbedding);
 
-  // Vector search - score all embeddings
-  const allEmbs = allEmbeddings(db);
-  const vectorScores = allEmbs.map((e) => ({
-    id: e.id,
-    score: cosineSimilarity(queryEmbedding, e.embedding),
-  }));
-  vectorScores.sort((a, b) => b.score - a.score);
-  const topVector = vectorScores.slice(0, 20);
+  const [bm25Results, vectorResults] = await Promise.all([
+    ftsSearch(db, query, 40),
+    semanticSearch(db, queryVec, 20),
+  ]);
 
-  // BM25 keyword search
-  const bm25Results = ftsSearch(db, query, 20);
-
-  // Reciprocal Rank Fusion
   const rrfScores = new Map<number, number>();
   const K = 60;
 
-  topVector.forEach(({ id }, rank) => {
+  vectorResults.forEach(({ id }, rank) => {
     rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
   });
-
   bm25Results.forEach(({ id }, rank) => {
     rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
   });
 
-  // Sort by RRF score, take top N
   const ranked = Array.from(rrfScores.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit);
 
   if (ranked.length === 0) return [];
 
-  const topIds = ranked.map(([id]) => id);
-  const messages = getMessagesByEmbeddingIds(db, topIds);
+  const messages = await getMessagesByEmbeddingIds(db, ranked.map(([id]) => id));
 
   return ranked.map(([id, score]) => {
-    const msg = messages.find((m: any) => m.embedding_id === id);
+    const msg = messages.find((m) => m.embeddingId === id);
     if (!msg) return null;
     return {
       embeddingId: id,
@@ -75,8 +76,88 @@ export async function hybridSearch(query: string, limit = 5): Promise<SearchResu
       subject: msg.subject,
       receivedAt: msg.receivedAt,
       threadId: msg.threadId,
+      mailbox: msg.mailbox ?? "inbox",
       gmailUrl: `https://mail.google.com/mail/u/0/#all/${msg.threadId ?? msg.externalId}`,
       score,
     };
   }).filter(Boolean) as SearchResult[];
+}
+
+export async function hybridAsanaSearch(query: string, limit = 5, db: AgencyDb): Promise<AsanaSearchResult[]> {
+  const [queryEmbedding] = await embedTexts([query]);
+  const queryVec = Array.from(queryEmbedding);
+
+  const [bm25Results, vectorResults] = await Promise.all([
+    ftsAsanaSearch(db, query, 40),
+    semanticAsanaSearch(db, queryVec, 20),
+  ]);
+
+  const rrfScores = new Map<number, number>();
+  const K = 60;
+  vectorResults.forEach(({ id }, rank) => { rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1)); });
+  bm25Results.forEach(({ id }, rank) => { rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1)); });
+
+  const ranked = Array.from(rrfScores.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
+  if (ranked.length === 0) return [];
+
+  const items = await getAsanaItemsByEmbeddingIds(db, ranked.map(([id]) => id));
+  return ranked.map(([id, score]) => {
+    const item = items.find((i) => i.embeddingId === id);
+    if (!item) return null;
+    return {
+      embeddingId: id,
+      itemId: item.itemId,
+      name: item.name,
+      projectName: item.projectName,
+      assignee: item.assignee,
+      dueDate: item.dueDate,
+      status: item.status,
+      permalinkUrl: item.permalinkUrl,
+      snippet: item.keywordText.slice(0, 200),
+      score,
+    };
+  }).filter(Boolean) as AsanaSearchResult[];
+}
+
+export async function hybridDriveSearch(query: string, limit = 5, db: AgencyDb): Promise<DriveSearchResult[]> {
+  const [queryEmbedding] = await embedTexts([query]);
+  const queryVec = Array.from(queryEmbedding);
+
+  const [bm25Results, vectorResults] = await Promise.all([
+    ftsDriveSearch(db, query, 40),
+    semanticDriveSearch(db, queryVec, 20),
+  ]);
+
+  const rrfScores = new Map<number, number>();
+  const K = 60;
+
+  vectorResults.forEach(({ id }, rank) => {
+    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
+  });
+  bm25Results.forEach(({ id }, rank) => {
+    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
+  });
+
+  const ranked = Array.from(rrfScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit);
+
+  if (ranked.length === 0) return [];
+
+  const files = await getDriveFilesByEmbeddingIds(db, ranked.map(([id]) => id));
+
+  return ranked.map(([id, score]) => {
+    const f = files.find((f) => f.embeddingId === id);
+    if (!f) return null;
+    return {
+      embeddingId: id,
+      fileId: f.fileId,
+      name: f.name,
+      mimeType: f.mimeType,
+      webViewLink: f.webViewLink,
+      chunkIndex: f.chunkIndex,
+      snippet: f.keywordText.slice(0, 200),
+      score,
+    };
+  }).filter(Boolean) as DriveSearchResult[];
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ReactMarkdown from "react-markdown";
 
 type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
 type Message = {
@@ -23,9 +24,16 @@ export default function AskPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  // Build history array for API (last 10 turns)
+  // Build history for API — last 4 messages (2 exchanges) only.
+  // Assistant content is truncated to 300 chars so prior verbose answers
+  // don't carry full email dumps back into every subsequent prompt.
   function buildHistory(): Array<{ role: "user" | "assistant"; content: string }> {
-    return messages.slice(-10).map((m) => ({ role: m.role, content: m.content }));
+    return messages.slice(-4).map((m) => ({
+      role: m.role,
+      content: m.role === "assistant" && m.content.length > 300
+        ? m.content.slice(0, 300) + "…"
+        : m.content,
+    }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -66,7 +74,6 @@ export default function AskPage() {
       let buffer = "";
       let fullAnswer = "";
       let sources: Source[] = [];
-      let warning = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -80,10 +87,10 @@ export default function AskPage() {
           if (!line.startsWith("data: ")) continue;
           const data = JSON.parse(line.slice(6));
 
-          if (data.type === "warning") warning = data.text;
-          if (data.type === "sources") {
-            sources = data.sources;
-            setStreamingSources(data.sources);
+          if (data.type === "source") {
+            // Sources arrive one at a time as Claude fetches layers
+            sources = [...sources, data.source];
+            setStreamingSources([...sources]);
           }
           if (data.type === "token") {
             fullAnswer += data.text;
@@ -93,8 +100,7 @@ export default function AskPage() {
             setMessages((prev) => [...prev, {
               role: "assistant",
               content: fullAnswer,
-              sources,
-              warning: warning || undefined,
+              sources: sources.length > 0 ? sources : undefined,
             }]);
             setStreamingText("");
             setStreamingSources([]);
@@ -118,10 +124,10 @@ export default function AskPage() {
       <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
         <div>
           <h1 className="text-sm font-semibold">Agency Brain</h1>
-          <p className="text-zinc-500 text-xs">Ask anything about your emails</p>
+          <p className="text-zinc-500 text-xs">Ask anything across your emails, Drive, and Asana</p>
         </div>
         <a href="/connect" className="text-zinc-500 text-xs underline underline-offset-2 hover:text-white">
-          Sync emails
+          Manage connections
         </a>
       </div>
 
@@ -132,7 +138,7 @@ export default function AskPage() {
             <p className="text-zinc-500 text-sm">Try asking:</p>
             {[
               "What are my last 5 emails?",
-              "What did Jennifer say to me?",
+              "What tasks are overdue in Asana?",
               "Any emails about invoices this week?",
               "Summarize what's happening with the Acme project",
             ].map((suggestion) => (
@@ -158,8 +164,8 @@ export default function AskPage() {
                 {msg.warning && (
                   <p className="text-yellow-500 text-xs">{msg.warning}</p>
                 )}
-                <div className="text-sm text-zinc-100 leading-relaxed whitespace-pre-wrap">
-                  {msg.content}
+                <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
                 </div>
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="flex flex-col gap-1.5 mt-1">
@@ -198,8 +204,8 @@ export default function AskPage() {
                 ))}
               </div>
             )}
-            <div className="text-sm text-zinc-100 leading-relaxed whitespace-pre-wrap">
-              {streamingText}
+            <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+              <ReactMarkdown>{streamingText}</ReactMarkdown>
               <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
             </div>
           </div>
@@ -216,7 +222,7 @@ export default function AskPage() {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Ask anything about your emails..."
+            placeholder="Ask anything about your emails, files, or tasks..."
             className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-zinc-500"
             disabled={loading}
             autoFocus

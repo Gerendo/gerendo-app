@@ -14,7 +14,7 @@ export async function POST(): Promise<NextResponse> {
   try {
     const session = await nango.createConnectSession({
       end_user: { id: "local-user", display_name: "Local User" },
-      allowed_integrations: ["google-mail"],
+      allowed_integrations: ["google-mail", "google-drive"],
     });
 
     return NextResponse.json({ token: session.data.token });
