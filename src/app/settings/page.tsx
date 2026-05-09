@@ -24,6 +24,9 @@ export default function SettingsPage() {
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     fetch("/api/workspace/info")
@@ -51,6 +54,20 @@ export default function SettingsPage() {
     await navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function deleteAllData() {
+    setDeleting(true);
+    setDeleteError("");
+    try {
+      const res = await fetch("/api/workspace/delete-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
+      if (!res.ok) throw new Error("Delete failed");
+      setDeleteConfirm(false);
+    } catch (err: any) {
+      setDeleteError(err.message ?? "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
   }
 
   const borderColor = "oklch(1 0 0 / 8%)";
@@ -178,6 +195,51 @@ export default function SettingsPage() {
             </div>
           )}
           {error && <p className="text-sm" style={{ color: "oklch(0.62 0.22 25)" }}>{error}</p>}
+        </div>
+
+        {/* Danger zone */}
+        <div className="flex flex-col gap-4 pt-4 border-t" style={{ borderColor }}>
+          <div>
+            <h2 className="text-sm font-semibold" style={{ color: "oklch(0.75 0.18 25)" }}>Danger zone</h2>
+            <p className="text-xs mt-1" style={{ color: dimColor }}>
+              Permanently delete all indexed data from this workspace. Connected tools stay active and will re-sync from scratch on the next cycle.
+            </p>
+          </div>
+
+          {!deleteConfirm ? (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              className="self-start text-sm px-4 py-2 rounded-xl font-medium transition-colors hover:opacity-90"
+              style={{ background: "oklch(0.62 0.22 25 / 12%)", color: "oklch(0.75 0.18 25)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}
+            >
+              Delete all indexed data
+            </button>
+          ) : (
+            <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: "oklch(0.62 0.22 25 / 8%)", border: "1px solid oklch(0.62 0.22 25 / 25%)" }}>
+              <p className="text-sm font-medium" style={{ color: "oklch(0.75 0.18 25)" }}>
+                This will delete all emails, Drive files, and Asana tasks from the database. It cannot be undone.
+              </p>
+              {deleteError && <p className="text-xs" style={{ color: "oklch(0.62 0.22 25)" }}>{deleteError}</p>}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={deleteAllData}
+                  disabled={deleting}
+                  className="text-sm px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
+                  style={{ background: "oklch(0.62 0.22 25)", color: "white" }}
+                >
+                  {deleting ? "Deleting..." : "Yes, delete everything"}
+                </button>
+                <button
+                  onClick={() => { setDeleteConfirm(false); setDeleteError(""); }}
+                  disabled={deleting}
+                  className="text-sm px-4 py-2 rounded-xl font-medium transition-colors"
+                  style={{ background: inkSoft, color: mutedColor, border: `1px solid ${borderColor}` }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sign out */}

@@ -1,3 +1,30 @@
+## 27c267a - fix: rename Stop to Disconnect on connected tool card - clarifies data is deleted
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 21:27
+
+
+---
+## df1f76c - fix: mobile UX - hamburger menu, category scroll, tool card layout, sync banner
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 21:12
+
+- Ask + connect pages: hamburger menu on mobile (hidden sm:flex / flex sm:hidden)
+  replaces cramped 3-button header row; dropdown shows full nav links
+- Category chips: overflow-x-auto flex-nowrap on mobile so they scroll
+  horizontally instead of wrapping into 3 rows
+- Tool cards: whitespace-nowrap + flex-shrink-0 on status text so 'Not connected'
+  stays on one line; min-w-0 on left side so icon+name shrinks first
+- Sync progress banner: correct text per tool (emails / Drive files / Asana tasks)
+  instead of always saying 'Importing emails'; progress bar only for Gmail
+  (Drive/Asana have no streaming progress endpoint)
+- Load Drive/Asana indexed counts from /api/workspace/info on page load so
+  'X indexed - auto-syncing' shows correctly after page refresh
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## cfeabf8 - feat: lock in always-helpful behavior for no-tools and partial-tools states
 
 **Author:** Tocki28  
