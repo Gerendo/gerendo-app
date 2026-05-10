@@ -1,3 +1,30 @@
+## 1d656bc - docs: add comprehensive AI query engine edge case tests to QA checklist
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:09
+
+
+---
+## 3d845d2 - docs: overhaul QA checklist - current flows, bug status, debugging SQL
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:07
+
+
+---
+## 2c3e9e5 - fix: delete-data also disconnects tools; add Settings to connect page nav
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 07:48
+
+- /api/workspace/delete-data now removes OAuth tokens alongside indexed data -
+  no more half-connected state where tools auto-re-sync immediately after delete
+- Update Settings description to accurately say tools are disconnected
+- Add Settings link to connect page header (desktop nav + hamburger dropdown)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 3b8491e - fix: separate stop/disconnect/delete-data into distinct operations
 
 **Author:** Tocki28  

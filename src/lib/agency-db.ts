@@ -669,6 +669,20 @@ export async function asanaGet(token: string, path: string): Promise<any> {
   return json.data;
 }
 
+export async function asanaPost(token: string, path: string, body: object): Promise<any> {
+  const res = await fetch(`https://app.asana.com/api/1.0${path}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ data: body }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.errors?.[0]?.message ?? `Asana API error ${res.status}: ${path}`);
+  }
+  const json = await res.json();
+  return json.data;
+}
+
 // Create a new workspace for a user on first login.
 export async function createWorkspaceForUser(
   userId: string,

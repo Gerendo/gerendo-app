@@ -2,7 +2,7 @@ import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
-import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, type AgencyDb } from "@/lib/agency-db";
+import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
 
@@ -221,6 +221,37 @@ const ASANA_TASKS_TOOL: Anthropic.Tool = {
   },
 };
 
+const CREATE_ASANA_TASK_TOOL: Anthropic.Tool = {
+  name: "create_asana_task",
+  description: "Create a new task in Asana. Use when the user explicitly asks to create a task, or when they say something like 'add this to Asana', 'make a task for this', 'turn this email into a task', or 'create a task from this file'. Extract the task name and details from the email or Drive file in context — do not ask the user to repeat information already visible. After creating, show the task URL.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      name: {
+        type: "string",
+        description: "Task name. Be specific and action-oriented — e.g. 'Review Q1 invoice from Acme' not just 'Invoice'.",
+      },
+      notes: {
+        type: "string",
+        description: "Task description. Include relevant context: email sender, key details, what action is needed. Max 2000 chars.",
+      },
+      project_name: {
+        type: "string",
+        description: "Partial name of the Asana project to add the task to (case-insensitive match). Leave empty to create as an unassigned task.",
+      },
+      assignee: {
+        type: "string",
+        description: "Who to assign the task to. Use 'me' to assign to the connected user, or a partial name to search by name.",
+      },
+      due_on: {
+        type: "string",
+        description: "Due date in YYYY-MM-DD format. Extract from email or user request if mentioned (e.g. 'by Friday', 'end of month').",
+      },
+    },
+    required: ["name"],
+  },
+};
+
 const SYSTEM_PROMPT = `You are Gerendo, an AI assistant for agency teams. You have access to the workspace's emails, Google Drive files, and Asana tasks.
 
 ## 4-LEVEL QUERY STRATEGY
@@ -249,7 +280,18 @@ Call get_email_details for stored AI summaries. Use for "summarize thread with X
 4. Exact email quote or full thread → get_email_body (Level 4).
 5. ANY Asana current-state question → get_asana_tasks with filters (Level 4). Always.
 6. Drive question → CONTEXT snippet first, then get_drive_file_content if more detail needed.
-7. If a tool is not listed under CONNECTED TOOLS, do not call it. Just note the source is not connected.
+7. "Create a task", "add to Asana", "make a task from this email/file" → create_asana_task. Extract name and details from context — never ask the user to repeat info already visible.
+8. If a tool is not listed under CONNECTED TOOLS, do not call it. Just note the source is not connected.
+
+## CREATING ASANA TASKS
+
+When the user asks to create a task (from an email, Drive file, or plain request):
+- **Task name**: action-oriented and specific. "Follow up on invoice from Acme Corp" not "Invoice".
+- **Notes**: include the email sender, date, key details, and what action is needed. Pull from email body or file content already fetched.
+- **Due date**: extract if mentioned ("by Friday" → calculate actual YYYY-MM-DD date, today is ${new Date().toISOString().slice(0, 10)}).
+- **Project**: if the user mentions a project or the email/file makes it obvious, include it. Otherwise leave empty.
+- **Assignee**: default to "me" unless the user specifies someone else.
+- After creating, show the task name and clickable URL. Keep it brief — one confirmation line is enough.
 
 ## RESPONSE RULES
 
@@ -322,7 +364,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const tools: Anthropic.Tool[] = [
     ...(gmailConnected ? [EMAIL_DETAIL_TOOL, EMAIL_BODY_TOOL] : []),
     ...(driveConnected ? [DRIVE_CONTENT_TOOL, LIST_DRIVE_TOOL] : []),
-    ...(asanaConnected ? [ASANA_TASKS_TOOL] : []),
+    ...(asanaConnected ? [ASANA_TASKS_TOOL, CREATE_ASANA_TASK_TOOL] : []),
   ];
 
   const isConversational = history.length > 0 && (
@@ -414,11 +456,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       const connectedList = [
         gmailConnected ? "Gmail - email search, summaries (get_email_details), full body fetch (get_email_body)" : null,
         driveConnected ? "Google Drive - file listing (list_drive_files), full content (get_drive_file_content)" : null,
-        asanaConnected ? "Asana - live task queries with filters: project, assignee, due date, status (get_asana_tasks)" : null,
+        asanaConnected ? "Asana - live task queries (get_asana_tasks) AND task creation from emails or Drive files (create_asana_task)" : null,
       ].filter(Boolean);
 
       const connectedToolsText = connectedList.length > 0
-        ? `CONNECTED TOOLS FOR THIS WORKSPACE:\n${connectedList.map(t => `- ${t}`).join("\n")}\n\nFor any Asana question about current state (overdue, assigned, due soon), always call get_asana_tasks.`
+        ? `CONNECTED TOOLS FOR THIS WORKSPACE:\n${connectedList.map(t => `- ${t}`).join("\n")}\n\nFor any Asana question about current state (overdue, assigned, due soon), always call get_asana_tasks.\nTo create tasks, call create_asana_task — extract name and details from emails or Drive files already in context, do not ask the user to repeat them.`
         : `CONNECTED TOOLS FOR THIS WORKSPACE:\nNone connected. Tell the user to visit /connect to set up integrations.`;
 
       const systemBlocks: Anthropic.TextBlockParam[] = [
@@ -606,6 +648,56 @@ export async function POST(req: NextRequest): Promise<Response> {
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
                   result = `(Asana API error: ${err?.message ?? "unknown"})`;
+                }
+              }
+            } else if (toolUse.name === "create_asana_task") {
+              if (!asanaConnected) {
+                result = "(Asana not connected — cannot create tasks.)";
+              } else {
+                try {
+                  const input = toolUse.input as {
+                    name: string;
+                    notes?: string;
+                    project_name?: string;
+                    assignee?: string;
+                    due_on?: string;
+                  };
+                  const token = await getAsanaToken(workspaceId, userId);
+                  const workspaces = await asanaGet(token, "/workspaces");
+                  const wsGid = workspaces?.[0]?.gid;
+                  if (!wsGid) throw new Error("No Asana workspace found");
+
+                  const taskBody: Record<string, any> = {
+                    name: input.name,
+                    workspace: wsGid,
+                  };
+                  if (input.notes) taskBody.notes = input.notes;
+                  if (input.due_on) taskBody.due_on = input.due_on;
+
+                  // Resolve assignee
+                  if (input.assignee) {
+                    if (input.assignee === "me") {
+                      const me = await asanaGet(token, "/users/me");
+                      taskBody.assignee = me.gid;
+                    } else {
+                      const users = await asanaGet(token, `/workspaces/${wsGid}/users?opt_fields=gid,name`);
+                      const match = users?.find((u: any) => u.name?.toLowerCase().includes(input.assignee!.toLowerCase()));
+                      if (match) taskBody.assignee = match.gid;
+                    }
+                  }
+
+                  // Resolve project
+                  if (input.project_name) {
+                    const projects = await asanaGet(token, `/projects?workspace=${wsGid}&limit=100&opt_fields=gid,name`);
+                    const needle = input.project_name.toLowerCase();
+                    const match = projects?.find((p: any) => p.name?.toLowerCase().includes(needle));
+                    if (match) taskBody.projects = [match.gid];
+                  }
+
+                  const task = await asanaPost(token, "/tasks", taskBody);
+                  result = `Task created successfully.\nName: ${task.name}\nURL: ${task.permalink_url ?? "https://app.asana.com"}${input.project_name && taskBody.projects ? `\nProject: ${input.project_name}` : ""}${input.due_on ? `\nDue: ${input.due_on}` : ""}`;
+                } catch (err: any) {
+                  result = `(Failed to create Asana task: ${err?.message ?? "unknown error"})`;
                 }
               }
             }
