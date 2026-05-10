@@ -24,9 +24,31 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const supabase = createServiceClient();
-  const { data: members } = await supabase
-    .from("workspace_members")
-    .select("workspace_id, user_id");
+
+  // For provider-specific sources, only process members who have that provider connected
+  const providerFilter: Record<string, string> = {
+    "gmail": "google-gmail",
+    "gmail-watch-renew": "google-gmail",
+    "drive": "google-drive",
+    "drive-channel-renew": "google-drive",
+    "asana": "asana",
+    "asana-webhook-register": "asana",
+  };
+  const provider = providerFilter[source ?? ""];
+
+  let members: Array<{ workspace_id: string; user_id: string }> | null = null;
+  if (provider) {
+    const { data } = await supabase
+      .from("oauth_tokens")
+      .select("workspace_id, user_id")
+      .eq("provider", provider);
+    members = data;
+  } else {
+    const { data } = await supabase
+      .from("workspace_members")
+      .select("workspace_id, user_id");
+    members = data;
+  }
 
   if (!members?.length) {
     return NextResponse.json({ ok: true, source, synced: 0 });
