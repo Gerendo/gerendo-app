@@ -300,6 +300,7 @@ When the user asks to create a task (from an email, Drive file, or plain request
 
 - Markdown for structure: bold for names/titles, headers for sections, bullets for lists.
 - Direct and specific. No filler like "Based on the context provided" or "I can see that".
+- When listing Asana tasks, always state the TOTAL count first ("You have X overdue tasks"), then show the top 10. Never list more than 10 tasks. If there are more, say "...and X more."
 - When listing Asana tasks or Drive files, make the name a markdown link using the URL from the tool result. Example: [Dev Subdomain Creation](https://app.asana.com/...). Always use the exact permalink_url or web_view_link from the data.
 - For emails, make the subject a markdown link to the Gmail URL.
 - Never introduce yourself or explain your capabilities unless explicitly asked.
@@ -674,8 +675,10 @@ export async function POST(req: NextRequest): Promise<Response> {
                       source: { ref: `A${i + 1}`, label: task.name, sublabel: task.due_on ?? "No due date", url: task.permalink_url, kind: "asana" },
                     })}\n\n`));
                   });
-                  result = allTasks.length > 0
-                    ? `LIVE ASANA TASKS — TOTAL COUNT: ${allTasks.length} tasks returned (this is the exact count, do not guess):\n` + allTasks.join("\n")
+                  const totalCount = allTasks.length;
+                  const displayTasks = allTasks.slice(0, 10);
+                  result = totalCount > 0
+                    ? `LIVE ASANA TASKS — TOTAL: ${totalCount} tasks match (showing top 10 most relevant):\n` + displayTasks.join("\n")
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
                   result = `(Asana API error: ${err?.message ?? "unknown"})`;
