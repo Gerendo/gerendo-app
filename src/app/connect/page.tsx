@@ -118,14 +118,16 @@ function ConnectPageInner() {
         if (info.asanaCount > 0) setSyncedCounts(p => ({ ...p, asana: info.asanaCount }));
       }).catch(() => {});
 
-      fetch("/api/sync/status").then(r => r.json()).then(job => {
-        if (job.totalSynced > 0) setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
-        if (job.status === "running") {
-          setInitialSyncing("gmail");
-          setSyncCount(job.totalSynced ?? 0);
-          startPoll();
-        }
-      }).catch(() => {});
+      if (connected) {
+        fetch("/api/sync/status").then(r => r.json()).then(job => {
+          if (job.totalSynced > 0) setSyncedCounts(p => ({ ...p, gmail: job.totalSynced }));
+          if (job.status === "running") {
+            setInitialSyncing("gmail");
+            setSyncCount(job.totalSynced ?? 0);
+            startPoll();
+          }
+        }).catch(() => {});
+      }
     }).catch(() => {});
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };

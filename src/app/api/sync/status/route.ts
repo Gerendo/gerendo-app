@@ -18,11 +18,14 @@ export async function GET(): Promise<NextResponse> {
 
   if (!data) return NextResponse.json({ status: "idle" });
 
-  // Treat jobs stuck running for more than 30 minutes as done
+  // Treat stuck jobs as done: running for >5min with nothing synced, or >30min regardless
   const startedAtMs = data.started_at ? new Date(data.started_at).getTime() : 0;
-  const status = data.status === "running" && startedAtMs && Date.now() - startedAtMs > 30 * 60 * 1000
-    ? "done"
-    : data.status;
+  const ageMs = startedAtMs ? Date.now() - startedAtMs : 0;
+  const isStuck = data.status === "running" && startedAtMs && (
+    (ageMs > 5 * 60 * 1000 && !data.total_synced) ||
+    ageMs > 30 * 60 * 1000
+  );
+  const status = isStuck ? "done" : data.status;
 
   return NextResponse.json({
     status,
