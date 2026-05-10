@@ -306,7 +306,7 @@ function ConnectPageInner() {
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
-              className="text-xs px-3 py-1.5 rounded-full border transition-colors"
+              className="text-sm px-4 py-2 rounded-lg border transition-colors whitespace-nowrap"
               style={{
                 borderColor: selectedCategory === cat ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 8%)",
                 color: selectedCategory === cat ? "oklch(0.78 0.14 65)" : "oklch(0.65 0.015 60)",
@@ -347,7 +347,7 @@ function ConnectPageInner() {
                       <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 pl-12 sm:pl-0">
+                  <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pl-12 sm:pl-0">
                     <span className="text-xs whitespace-nowrap" style={{ color: statusColor }}>{statusText}</span>
                     {!tool.comingSoon && isConnected && !isConfirming && (
                       <button
