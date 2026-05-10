@@ -52,10 +52,10 @@ Legend: ✅ Pass · ❌ Fail · ⚠️ Partial · ⏭️ Skip
 - [ ] After sync, card shows "X indexed - auto-syncing"
 
 ### Asana connect
-- [ ] OAuth starts without `invalid_redirect_uri` error (**BUG-007 - needs Asana console fix**)
+- [ ] OAuth starts without `invalid_redirect_uri` error
 - [ ] After OAuth, sync starts automatically
 - [ ] Banner shows "Syncing Asana tasks..."
-- [ ] Webhook registered after first sync (check Vercel logs for handshake)
+- [ ] Webhook registered immediately on connect (check `webhook_secrets` table within 10s, see section 8A)
 
 ### Disconnect (tool card button)
 - [ ] Clicking Disconnect shows confirm panel inline (not browser alert)
@@ -355,18 +355,125 @@ Verify that [/privacy](https://app.gerendo.com/privacy) accurately reflects the 
 
 ---
 
-## 8. Real-time sync (webhooks)
+## 8. Real-time sync and automated data fetching
 
-### Gmail webhook
-- [ ] Send yourself an email → appears in chat within ~60 seconds
-- [ ] Vercel logs show 200 on `/api/webhooks/gmail` (no rate limit errors)
-- [ ] Rapid burst of emails does not trigger rate limit storm (30s debounce)
-- [ ] `sync_state` table has row with `source = 'gmail:webhook_lock'` after first webhook
+### 8A. Webhook registration - on connect
 
-### Asana webhook (requires BUG-007 fix first)
-- [ ] Create a task in Asana → appears in query results quickly
-- [ ] Update a task → change reflected in next query
-- [ ] Complete a task → shows as completed in results
+Verify webhooks register immediately when user connects a tool (not waiting for cron).
+
+- [ ] **Drive**: connect Google Drive → check `webhook_secrets` table within 10 seconds:
+  ```sql
+  SELECT provider, key, secret, meta FROM webhook_secrets WHERE provider = 'drive';
+  -- must have a row with key='channel', secret=<uuid>, meta.resourceId present
+  ```
+- [ ] **Asana**: connect Asana → check `webhook_secrets` table within 10 seconds:
+  ```sql
+  SELECT provider, key, meta FROM webhook_secrets WHERE provider = 'asana';
+  -- must have one row per Asana workspace the user belongs to
+  ```
+- [ ] **Gmail**: connect Gmail → check Vercel logs for `[gmail/register] watch registered` within 10 seconds
+- [ ] Disconnecting a tool and reconnecting re-registers webhooks correctly (no duplicate rows in `webhook_secrets`)
+
+### 8B. Gmail real-time sync
+
+- [ ] Send yourself an email from an external account → appears in `/ask` query results within 60 seconds
+- [ ] Verify sync happened via webhook (not cron): check `sync_state` for `source = 'gmail:webhook_lock'` row updated within 60 seconds of sending
+- [ ] Vercel logs show `POST /api/webhooks/gmail` returning **200** (not 4xx/5xx)
+- [ ] Rapid burst: send 5 emails in 10 seconds → only 1-2 sync calls fired (30s debounce working)
+- [ ] Check no rate-limit errors in Vercel logs after burst
+- [ ] Gmail watch channel renews without error: check `sync_state` for `source = 'gmail:watch_expiry'` row exists
+  ```sql
+  SELECT source, cursor, last_synced_at FROM sync_state WHERE source LIKE 'gmail%';
+  ```
+
+### 8C. Google Drive real-time sync
+
+- [ ] Create a new Google Doc in Drive → appears in `/ask` query results within 90 seconds
+- [ ] Edit an existing indexed doc → changes reflected in next query (incremental sync)
+- [ ] Verify push channel is registered:
+  ```sql
+  SELECT key, secret, meta->>'expiration' as expires, meta->>'registeredAt' as registered
+  FROM webhook_secrets WHERE provider = 'drive';
+  -- expiration should be ~6 days from now
+  ```
+- [ ] Vercel logs show `POST /api/webhooks/drive` returning **200** after file change
+- [ ] Check `sync_state` for changes cursor advancing after webhook fires:
+  ```sql
+  SELECT source, cursor FROM sync_state WHERE source = 'drive:changes_page_token';
+  -- cursor should update after each incremental sync
+  ```
+- [ ] Drive channel expiry: `meta.expiration` timestamp is ~6 days from registration (not 7, not expired)
+- [ ] No duplicate Drive webhook channels registered (only one row per workspace/user in `webhook_secrets`)
+
+### 8D. Asana real-time sync
+
+- [ ] Create a task in Asana → appears in `/ask` query results within 30 seconds
+- [ ] Update a task's title → change reflected in next query
+- [ ] Complete a task → shows as "Completed" in query results
+- [ ] Assign a task to a different person → assignee updated in results
+- [ ] Verify webhook handshake succeeded (no handshake = webhook silently inactive):
+  ```sql
+  SELECT provider, key, meta FROM webhook_secrets WHERE provider = 'asana';
+  -- key = asana workspace GID, meta should have webhookGid from Asana
+  ```
+- [ ] Vercel logs show `POST /api/webhooks/asana` returning **200** after task change
+- [ ] Bulk task move (move 10 tasks to a different project) → only 1 sync fires per 15s debounce window (not 10 separate syncs)
+- [ ] Multiple Asana workspaces: each workspace gets its own webhook row, debounce scoped per workspace
+
+### 8E. Cron safety net (daily fallback)
+
+These verify the cron runs correctly as a fallback if webhooks miss anything.
+
+- [ ] Check cron schedule is registered in Vercel dashboard under Settings → Crons:
+  - `0 0 * * *` → `/api/cron/sync?source=drive`
+  - `0 5 * * *` → `/api/cron/sync?source=drive-channel-renew`
+  - `0 6 * * *` → `/api/cron/sync?source=gmail-watch-renew`
+  - `0 7 * * *` → `/api/cron/sync?source=asana-webhook-register`
+- [ ] Trigger cron manually (requires `CRON_SECRET`):
+  ```bash
+  curl -H "Authorization: Bearer $CRON_SECRET" \
+    "https://app.gerendo.com/api/cron/sync?source=drive"
+  # should return { ok: true, results: [...] }
+  ```
+- [ ] `drive-channel-renew` cron stops old channel and registers a new one (check `webhook_secrets.meta.registeredAt` advances)
+- [ ] `asana-webhook-register` cron skips workspaces that already have a registered webhook (`status: already_registered` in response)
+- [ ] `gmail-watch-renew` cron renews Gmail push subscriptions without error
+
+### 8F. Sync data quality
+
+Verify data fetched is correct and complete, not stale or partial.
+
+- [ ] **Gmail**: after initial sync, query "emails from [your own address]" → returns actual emails, correct senders and subjects
+- [ ] **Gmail**: query "emails from last week" → date filtering works, no emails from 6 months ago in results
+- [ ] **Drive**: query "what files do I have?" → lists actual files from Drive, not phantom entries
+- [ ] **Drive**: query about a specific doc → returns content from current version (not a stale cached version)
+- [ ] **Asana**: query "what are my open tasks?" → count matches what you see in Asana UI
+- [ ] **Asana**: query "tasks due this week" → only tasks with due dates in current week
+- [ ] No duplicate entries after incremental sync (same email/task indexed twice):
+  ```sql
+  SELECT external_id, COUNT(*) FROM messages GROUP BY external_id HAVING COUNT(*) > 1;
+  SELECT external_id, COUNT(*) FROM drive_files GROUP BY external_id HAVING COUNT(*) > 1;
+  SELECT external_id, COUNT(*) FROM asana_items GROUP BY external_id HAVING COUNT(*) > 1;
+  -- all three should return 0 rows
+  ```
+- [ ] Orphaned embeddings (no parent row) = 0:
+  ```sql
+  SELECT COUNT(*) FROM embeddings e LEFT JOIN messages m ON e.message_id = m.id WHERE m.id IS NULL;
+  -- must be 0
+  ```
+
+### 8G. Disconnect and reconnect
+
+- [ ] Disconnect Drive → `webhook_secrets` row for `provider=drive` deleted
+- [ ] Reconnect Drive → new webhook channel registered, sync resumes
+- [ ] Disconnect Asana → `webhook_secrets` rows for `provider=asana` deleted
+- [ ] Reconnect Asana → webhooks re-registered for all Asana workspaces
+- [ ] Disconnect Gmail → Gmail watch channel stopped (check Vercel logs for stop call)
+- [ ] After "Delete all data" in Settings → `webhook_secrets` table has 0 rows for that workspace:
+  ```sql
+  SELECT COUNT(*) FROM webhook_secrets WHERE workspace_id = '<your-workspace-id>';
+  -- must be 0
+  ```
 
 ---
 
@@ -407,7 +514,7 @@ Verify that [/privacy](https://app.gerendo.com/privacy) accurately reflects the 
 | BUG-004 AI claims limited Asana data | Chat | ✅ Fixed | Ask overdue tasks, gets live data |
 | BUG-005 No logout from most pages | Navigation | ✅ Fixed | Log out visible everywhere |
 | BUG-006 No cursor pointer | CSS | ✅ Fixed | Hover any button on desktop |
-| BUG-007 Asana OAuth redirect_uri | Connect | ❌ Manual | Add URI in Asana developer console |
+| BUG-007 Asana OAuth redirect_uri | Connect | ✅ Fixed | OAuth completes, webhook registers on connect |
 | BUG-008 Sync progress disappears | Connect | ⚠️ Improved | Messages correct, no fake bar |
 | BUG-009 Mobile header cramped | Mobile | ✅ Fixed | Hamburger on mobile |
 | BUG-010 Mobile connect layout | Mobile | ✅ Fixed | Status one line, chips scroll |

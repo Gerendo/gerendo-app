@@ -48,5 +48,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
   }, { onConflict: "workspace_id,user_id,provider" });
 
+  // Register Asana webhooks immediately on connect (fire-and-forget).
+  // The daily cron also re-runs registration, so non-fatal if this fails.
+  fetch(`${origin}/api/webhooks/asana/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.CRON_SECRET}`,
+    },
+    body: JSON.stringify({ workspaceId, userId }),
+  }).catch(() => {});
+
   return NextResponse.redirect(`${origin}/connect?asana_connected=1`);
 }
