@@ -202,7 +202,7 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-sm font-semibold" style={{ color: "oklch(0.75 0.18 25)" }}>Danger zone</h2>
             <p className="text-xs mt-1" style={{ color: dimColor }}>
-              Permanently delete all indexed data from this workspace. Connected tools stay active and will re-sync from scratch on the next cycle.
+              Permanently delete all indexed data and disconnect all tools. You can reconnect them afterwards and start fresh.
             </p>
           </div>
 

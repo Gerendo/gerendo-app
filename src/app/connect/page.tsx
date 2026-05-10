@@ -252,6 +252,10 @@ function ConnectPageInner() {
             style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}>
             Ask questions
           </a>
+          <a href="/settings" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
+            style={{ color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
+            Settings
+          </a>
           <a href="/api/auth/signout" className="text-sm px-3 py-2 rounded-xl transition-colors hover:opacity-90"
             style={{ color: "oklch(0.55 0.012 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
             Log out
@@ -276,6 +280,10 @@ function ConnectPageInner() {
             <a href="/ask" className="text-sm font-medium py-2.5 transition-colors hover:opacity-80"
               style={{ color: "oklch(0.78 0.14 65)" }}>
               Ask questions
+            </a>
+            <a href="/settings" className="text-sm py-2.5 transition-colors hover:opacity-80"
+              style={{ color: "oklch(0.65 0.015 60)" }}>
+              Settings
             </a>
             <a href="/api/auth/signout" className="text-sm py-2.5 transition-colors hover:opacity-80"
               style={{ color: "oklch(0.55 0.012 60)" }}>

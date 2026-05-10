@@ -1,3 +1,24 @@
+## 3b8491e - fix: separate stop/disconnect/delete-data into distinct operations
+
+**Author:** Tocki28  
+**Date:** 2026-05-09 21:31
+
+- Stop button (sync banner): only cancels the running job, tool stays
+  connected, all indexed data is preserved, cursor intact
+- Disconnect button (tool card): only removes OAuth token, data stays in DB,
+  cursor stays - reconnecting does an incremental sync, not a full re-index
+- New POST /api/workspace/delete-data: actually deletes indexed data per tool
+  or all tools; clears sync cursors so next sync re-indexes from scratch;
+  OAuth tokens are preserved (tools stay connected)
+- Settings page: new Danger Zone section with 'Delete all indexed data' button
+  behind a confirm step
+
+Previously Stop and Disconnect both called /api/sync/disconnect which wiped
+all data and cursors, making every reconnect a full re-index.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 27c267a - fix: rename Stop to Disconnect on connected tool card - clarifies data is deleted
 
 **Author:** Tocki28  
