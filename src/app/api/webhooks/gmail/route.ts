@@ -46,10 +46,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true }); // ack parse errors
   }
 
-  // Find user by email
+  // Find user by email - use single-user lookup instead of listing all users
   const supabase = createServiceClient();
-  const { data: userData } = await supabase.auth.admin.listUsers();
-  const user = userData?.users?.find(u => u.email === emailAddress);
+  const { data: { users } } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  const user = users?.find(u => u.email === emailAddress);
   if (!user) return NextResponse.json({ ok: true });
 
   const { data: member } = await supabase
@@ -62,7 +62,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Debounce: skip if a webhook sync ran for this user in the last 30 seconds.
   // Prevents thundering herd when Pub/Sub delivers multiple notifications rapidly.
-  const DEBOUNCE_MS = 30_000;
+  const DEBOUNCE_MS = 5 * 60_000; // 5 minutes
   const now = Date.now();
   const { data: lockState } = await supabase
     .from("sync_state")
@@ -72,7 +72,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     .eq("source", "gmail:webhook_lock")
     .maybeSingle();
 
-  if (lockState?.last_synced_at && (now - lockState.last_synced_at) < DEBOUNCE_MS) {
+  if (lockState?.last_synced_at && (now - new Date(lockState.last_synced_at).getTime()) < DEBOUNCE_MS) {
     return NextResponse.json({ ok: true });
   }
 
