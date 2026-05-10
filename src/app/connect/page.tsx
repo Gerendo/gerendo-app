@@ -522,17 +522,6 @@ function ConnectPageInner() {
               <div className="flex items-center justify-center py-8">
                 <span className="text-sm" style={{ color: "oklch(0.55 0.012 60)" }}>Loading mailboxes...</span>
               </div>
-            ) : labelError ? (
-              <div className="flex flex-col items-center gap-3 py-8">
-                <span className="text-sm text-center" style={{ color: "oklch(0.75 0.18 25)" }}>{labelError}</span>
-                <button
-                  onClick={() => openLabelPicker(true)}
-                  className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                  style={{ background: "oklch(0.78 0.14 65 / 15%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
-                >
-                  Try again
-                </button>
-              </div>
             ) : (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {availableLabels.map(label => {

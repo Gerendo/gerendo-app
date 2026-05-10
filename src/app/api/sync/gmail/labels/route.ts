@@ -45,7 +45,11 @@ export async function GET(): Promise<NextResponse> {
     all = labelsRes.data.labels ?? [];
   } catch (err: any) {
     console.error("[gmail/labels] Gmail API error:", err?.message);
-    return NextResponse.json({ error: `Gmail API error: ${err?.message ?? "unknown"}` }, { status: 502 });
+    // Rate limited or API error - return hardcoded defaults so the user can still start a sync
+    const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
+      id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
+    }));
+    return NextResponse.json({ labels: defaults });
   }
 
   const labels = all
