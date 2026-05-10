@@ -406,9 +406,8 @@ export default function AskPage() {
                 <div className="flex flex-col gap-3 max-w-full">
                   {msg.warning && <p className="text-yellow-500 text-xs">{msg.warning}</p>}
                   <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</a> }}>{msg.content}</ReactMarkdown>
                   </div>
-                  <SourceChips sources={msg.sources ?? []} />
                 </div>
               )}
             </div>
@@ -417,10 +416,9 @@ export default function AskPage() {
           {loading && (
             <div className="flex flex-col gap-3 items-start">
               <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown>{streamingText}</ReactMarkdown>
+                <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</a> }}>{streamingText}</ReactMarkdown>
                 <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
               </div>
-              <SourceChips sources={streamingSources} />
             </div>
           )}
 
