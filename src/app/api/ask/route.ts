@@ -217,7 +217,15 @@ const ASANA_TASKS_TOOL: Anthropic.Tool = {
       },
       limit: {
         type: "number",
-        description: "Maximum tasks to return. Default 30, max 100.",
+        description: "Maximum tasks to fetch. Default 100, max 200.",
+      },
+      offset: {
+        type: "number",
+        description: "Skip the first N tasks. Use for pagination. E.g. offset=10 to get tasks 11-20. Default 0.",
+      },
+      show_all: {
+        type: "boolean",
+        description: "If true, return ALL matching tasks instead of just the top 10. Use when user explicitly asks for the full list.",
       },
     },
     required: [],
@@ -300,7 +308,7 @@ When the user asks to create a task (from an email, Drive file, or plain request
 
 - Markdown for structure: bold for names/titles, headers for sections, bullets for lists.
 - Direct and specific. No filler like "Based on the context provided" or "I can see that".
-- When listing Asana tasks, always state the TOTAL count first ("You have X overdue tasks"), then show the top 10. Never list more than 10 tasks. If there are more, say "...and X more."
+- When listing Asana tasks, always state the TOTAL count first ("You have X overdue tasks"), then show the top 10. If there are more, say "...and X more — ask me to show the next 10 or the full list." When the user asks for more, call get_asana_tasks again with the appropriate offset or show_all=true.
 - When listing Asana tasks or Drive files, make the name a markdown link using the URL from the tool result. Example: [Dev Subdomain Creation](https://app.asana.com/...). Always use the exact permalink_url or web_view_link from the data.
 - For emails, make the subject a markdown link to the Gmail URL.
 - Never introduce yourself or explain your capabilities unless explicitly asked.
@@ -440,7 +448,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     db.supabase.from("drive_files").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId),
     db.supabase.from("asana_items").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId),
   ]);
-  const inventory = `INDEXED: ${emailCount.count ?? 0} emails | ${driveCount.count ?? 0} Drive files | ${asanaCount.count ?? 0} Asana tasks`;
+  const inventory = `INDEXED SNAPSHOTS (stale — use tools for live counts): ${emailCount.count ?? 0} emails | ${driveCount.count ?? 0} Drive files | ${asanaCount.count ?? 0} Asana task snapshots. For live Asana counts always call get_asana_tasks.`;
 
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -610,9 +618,12 @@ export async function POST(req: NextRequest): Promise<Response> {
                     due_before?: string;
                     status?: string;
                     limit?: number;
+                    offset?: number;
+                    show_all?: boolean;
                   };
                   const token = await getAsanaToken(workspaceId, userId);
-                  const maxTasks = Math.min(input.limit ?? 100, 200);
+                  const maxTasks = Math.min(input.limit ?? 200, 200);
+                  const offset = input.offset ?? 0;
                   const statusFilter = input.status ?? "open";
                   const workspaces = await asanaGet(token, "/workspaces");
                   const allTasks: string[] = [];
@@ -676,9 +687,11 @@ export async function POST(req: NextRequest): Promise<Response> {
                     })}\n\n`));
                   });
                   const totalCount = allTasks.length;
-                  const displayTasks = allTasks.slice(0, 10);
+                  const pageSize = input.show_all ? totalCount : 10;
+                  const displayTasks = allTasks.slice(offset, offset + pageSize);
+                  const remaining = totalCount - offset - displayTasks.length;
                   result = totalCount > 0
-                    ? `LIVE ASANA TASKS — TOTAL: ${totalCount} tasks match (showing top 10 most relevant):\n` + displayTasks.join("\n")
+                    ? `LIVE ASANA TASKS — TOTAL: ${totalCount} tasks match. Showing ${displayTasks.length} (offset ${offset})${remaining > 0 ? `, ${remaining} more available (call again with offset=${offset + pageSize} to get next page)` : ", no more"}:\n` + displayTasks.join("\n")
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
                   result = `(Asana API error: ${err?.message ?? "unknown"})`;
