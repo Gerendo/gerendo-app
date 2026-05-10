@@ -8,30 +8,9 @@ import { createClient } from "@/lib/supabase";
 
 type Source = { ref: string; label: string; sublabel: string; url: string; kind: "gmail" | "drive" | "asana" };
 
-function toAppUrl(webUrl: string): string | null {
-  // Asana: https://app.asana.com/0/123/456 → asana://0/123/456
-  const asana = webUrl.match(/https:\/\/app\.asana\.com(\/.*)/);
-  if (asana) return `asana://${asana[1]}`;
-  // Gmail: https://mail.google.com/mail/u/0/#all/abc → googlegmail:///co?message_id=abc (iOS only)
-  // Drive: no reliable native scheme on desktop
-  return null;
-}
-
 function SmartLink({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
-  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-    const appUrl = toAppUrl(href);
-    if (!appUrl) return; // let default behavior handle it (opens in new tab)
-    e.preventDefault();
-    // Try app scheme - browser/OS will open native app if installed
-    // Fall back to web after 1.5s if app didn't open (page still visible)
-    window.location.href = appUrl;
-    setTimeout(() => {
-      if (!document.hidden) window.open(href, "_blank");
-    }, 1500);
-  };
-
   return (
-    <a href={href} target="_blank" rel="noopener noreferrer" className={className} onClick={handleClick}>
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
       {children}
     </a>
   );

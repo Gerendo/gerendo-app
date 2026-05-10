@@ -622,7 +622,6 @@ export async function POST(req: NextRequest): Promise<Response> {
                     show_all?: boolean;
                   };
                   const token = await getAsanaToken(workspaceId, userId);
-                  const maxTasks = Math.min(input.limit ?? 200, 200);
                   const offset = input.offset ?? 0;
                   const statusFilter = input.status ?? "open";
                   const workspaces = await asanaGet(token, "/workspaces");
@@ -630,58 +629,47 @@ export async function POST(req: NextRequest): Promise<Response> {
                   const allTaskMeta: Array<{ name: string; due_on: string | null; permalink_url: string }> = [];
 
                   for (const ws of workspaces) {
-                    if (allTasks.length >= maxTasks) break;
-                    let projects: any[] = [];
-                    try {
-                      projects = await asanaGet(token, `/projects?workspace=${ws.gid}&limit=100&opt_fields=gid,name`);
-                    } catch { continue; }
+                    // Use Asana search API for consistent server-side filtering
+                    let searchCursor: string | null = null;
+                    do {
+                      const params = new URLSearchParams({
+                        "opt_fields": "name,completed,assignee.name,due_on,permalink_url,memberships.project.name",
+                        "limit": "100",
+                      });
+                      if (statusFilter === "open") params.set("completed", "false");
+                      if (statusFilter === "completed") params.set("completed", "true");
+                      if (input.due_before) params.set("due_on.before", input.due_before);
+                      if (input.assignee_name) params.set("assignee.any", input.assignee_name);
+                      if (searchCursor) params.set("offset", searchCursor);
 
-                    if (input.project_name) {
-                      const needle = input.project_name.toLowerCase();
-                      projects = projects.filter((p: any) => p.name?.toLowerCase().includes(needle));
-                    }
-
-                    for (const project of projects) {
-                      if (allTasks.length >= maxTasks) break;
-
-                      // Paginate through ALL tasks in the project for an accurate total count
-                      let cursor: string | null = null;
-                      do {
-                        const params = new URLSearchParams({
-                          project: project.gid,
-                          limit: "100",
-                          "opt_fields": "gid,name,completed,assignee.name,due_on,permalink_url",
+                      let page: any;
+                      try {
+                        const res = await fetch(`https://app.asana.com/api/1.0/workspaces/${ws.gid}/tasks/search?${params}`, {
+                          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
                         });
-                        if (statusFilter !== "all") params.set("completed", statusFilter === "completed" ? "true" : "false");
-                        if (cursor) params.set("offset", cursor);
+                        page = await res.json();
+                      } catch { break; }
 
-                        let page: any;
-                        try {
-                          const res = await fetch(`https://app.asana.com/api/1.0/tasks?${params}`, {
-                            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-                          });
-                          page = await res.json();
-                        } catch { break; }
-
-                        for (const task of page.data ?? []) {
-                          if (input.assignee_name && !task.assignee?.name?.toLowerCase().includes(input.assignee_name.toLowerCase())) continue;
-                          if (input.due_before && task.due_on && task.due_on > input.due_before) continue;
-
-                          const overdue = task.due_on && task.due_on < todayIso && !task.completed;
-                          if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
-                          allTasks.push([
-                            `#${allTasks.length + 1} Task: ${task.name}`,
-                            `Project: ${project.name}`,
-                            task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
-                            task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
-                            `Status: ${task.completed ? "Completed" : "Open"}`,
-                            task.permalink_url ? `URL: ${task.permalink_url}` : null,
-                          ].filter(Boolean).join(" | "));
+                      for (const task of page.data ?? []) {
+                        if (input.project_name) {
+                          const projects = task.memberships?.map((m: any) => m.project?.name?.toLowerCase()) ?? [];
+                          if (!projects.some((p: string) => p?.includes(input.project_name!.toLowerCase()))) continue;
                         }
+                        const projectName = task.memberships?.[0]?.project?.name ?? "No project";
+                        const overdue = task.due_on && task.due_on < todayIso && !task.completed;
+                        if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
+                        allTasks.push([
+                          `#${allTasks.length + 1} Task: ${task.name}`,
+                          `Project: ${projectName}`,
+                          task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
+                          task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
+                          `Status: ${task.completed ? "Completed" : "Open"}`,
+                          task.permalink_url ? `URL: ${task.permalink_url}` : null,
+                        ].filter(Boolean).join(" | "));
+                      }
 
-                        cursor = page.next_page?.offset ?? null;
-                      } while (cursor && allTasks.length < maxTasks);
-                    }
+                      searchCursor = page.next_page?.offset ?? null;
+                    } while (searchCursor);
                   }
 
                   allTaskMeta.forEach((task, i) => {
