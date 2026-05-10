@@ -73,6 +73,7 @@ function ConnectPageInner() {
   const [availableLabels, setAvailableLabels] = useState<Array<{ id: string; name: string; icon: string; type: string; default: boolean }>>([]);
   const [selectedLabels, setSelectedLabels] = useState<Set<string>>(new Set());
   const [loadingLabels, setLoadingLabels] = useState(false);
+  const [labelError, setLabelError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
 
@@ -146,6 +147,7 @@ function ConnectPageInner() {
   async function openLabelPicker() {
     setShowLabelPicker(true);
     setLoadingLabels(true);
+    setLabelError(null);
     try {
       const res = await fetch("/api/sync/gmail/labels");
       const body = await res.json();
@@ -154,11 +156,8 @@ function ConnectPageInner() {
       setAvailableLabels(body.labels);
       setSelectedLabels(new Set(body.labels.filter((l: any) => l.default).map((l: any) => l.id)));
     } catch (err: any) {
-      setLoadingLabels(false);
-      // Keep modal open and show error inside it instead of closing silently
       setAvailableLabels([]);
-      setToolError(p => ({ ...p, gmail: `Could not load labels: ${err.message}` }));
-      setShowLabelPicker(false);
+      setLabelError(err.message ?? "Could not load Gmail mailboxes");
     } finally {
       setLoadingLabels(false);
     }
@@ -472,6 +471,17 @@ function ConnectPageInner() {
             {loadingLabels ? (
               <div className="flex items-center justify-center py-8">
                 <span className="text-sm" style={{ color: "oklch(0.55 0.012 60)" }}>Loading mailboxes...</span>
+              </div>
+            ) : labelError ? (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <span className="text-sm text-center" style={{ color: "oklch(0.75 0.18 25)" }}>{labelError}</span>
+                <button
+                  onClick={openLabelPicker}
+                  className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                  style={{ background: "oklch(0.78 0.14 65 / 15%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
+                >
+                  Try again
+                </button>
               </div>
             ) : (
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
