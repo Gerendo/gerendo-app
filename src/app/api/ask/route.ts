@@ -644,39 +644,43 @@ export async function POST(req: NextRequest): Promise<Response> {
                     for (const project of projects) {
                       if (allTasks.length >= maxTasks) break;
 
-                      const params = new URLSearchParams({
-                        project: project.gid,
-                        limit: String(Math.min(maxTasks - allTasks.length + 5, 100)),
-                        "opt_fields": "gid,name,completed,assignee.name,due_on,permalink_url",
-                      });
-                      if (statusFilter !== "all") {
-                        params.set("completed", statusFilter === "completed" ? "true" : "false");
-                      }
+                      // Paginate through ALL tasks in the project for an accurate total count
+                      let cursor: string | null = null;
+                      do {
+                        const params = new URLSearchParams({
+                          project: project.gid,
+                          limit: "100",
+                          "opt_fields": "gid,name,completed,assignee.name,due_on,permalink_url",
+                        });
+                        if (statusFilter !== "all") params.set("completed", statusFilter === "completed" ? "true" : "false");
+                        if (cursor) params.set("offset", cursor);
 
-                      let tasks: any[] = [];
-                      try {
-                        tasks = await asanaGet(token, `/tasks?${params}`);
-                      } catch { continue; }
+                        let page: any;
+                        try {
+                          const res = await fetch(`https://app.asana.com/api/1.0/tasks?${params}`, {
+                            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                          });
+                          page = await res.json();
+                        } catch { break; }
 
-                      for (const task of tasks) {
-                        if (allTasks.length >= maxTasks) break;
+                        for (const task of page.data ?? []) {
+                          if (input.assignee_name && !task.assignee?.name?.toLowerCase().includes(input.assignee_name.toLowerCase())) continue;
+                          if (input.due_before && task.due_on && task.due_on > input.due_before) continue;
 
-                        if (input.assignee_name) {
-                          if (!task.assignee?.name?.toLowerCase().includes(input.assignee_name.toLowerCase())) continue;
+                          const overdue = task.due_on && task.due_on < todayIso && !task.completed;
+                          if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
+                          allTasks.push([
+                            `#${allTasks.length + 1} Task: ${task.name}`,
+                            `Project: ${project.name}`,
+                            task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
+                            task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
+                            `Status: ${task.completed ? "Completed" : "Open"}`,
+                            task.permalink_url ? `URL: ${task.permalink_url}` : null,
+                          ].filter(Boolean).join(" | "));
                         }
-                        if (input.due_before && task.due_on && task.due_on > input.due_before) continue;
 
-                        const overdue = task.due_on && task.due_on < todayIso && !task.completed;
-                        if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
-                        allTasks.push([
-                          `#${allTasks.length + 1} Task: ${task.name}`,
-                          `Project: ${project.name}`,
-                          task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
-                          task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
-                          `Status: ${task.completed ? "Completed" : "Open"}`,
-                          task.permalink_url ? `URL: ${task.permalink_url}` : null,
-                        ].filter(Boolean).join(" | "));
-                      }
+                        cursor = page.next_page?.offset ?? null;
+                      } while (cursor && allTasks.length < maxTasks);
                     }
                   }
 
@@ -691,7 +695,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                   const displayTasks = allTasks.slice(offset, offset + pageSize);
                   const remaining = totalCount - offset - displayTasks.length;
                   result = totalCount > 0
-                    ? `LIVE ASANA TASKS — TOTAL: ${totalCount} tasks match. Showing ${displayTasks.length} (offset ${offset})${remaining > 0 ? `, ${remaining} more available (call again with offset=${offset + pageSize} to get next page)` : ", no more"}:\n` + displayTasks.join("\n")
+                    ? `LIVE ASANA TASKS — EXACT TOTAL: ${totalCount}. Showing tasks ${offset + 1}–${offset + displayTasks.length}${remaining > 0 ? `. ${remaining} more — call again with offset=${offset + pageSize} for next page, or show_all=true for everything` : " (end of list)"}:\n` + displayTasks.join("\n")
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
                   result = `(Asana API error: ${err?.message ?? "unknown"})`;
