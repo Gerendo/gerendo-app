@@ -326,12 +326,14 @@ export default function AskPage() {
           {messages.length === 0 && !loading && (setupState === "ready" || setupState === "no-data") && (
             <div className="flex flex-col gap-3 mt-8">
               <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {["What are my last 5 emails?", "What tasks are overdue in Asana?", "Any emails about invoices this week?", "Summarize what's happening with the Acme project"].map((s) => (
                 <button key={s} onClick={() => { setQuery(s); inputRef.current?.focus(); }}
-                  className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors">
+                  className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors line-clamp-2">
                   {s}
                 </button>
               ))}
+              </div>
             </div>
           )}
 
