@@ -1,3 +1,95 @@
+## 285564a - feat: register Asana webhooks on connect, expand QA sync checklist
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:58
+
+- Register Asana push webhooks immediately when user connects Asana
+  (fire-and-forget, same pattern as Drive)
+- Expand QA checklist section 8 with comprehensive automated sync tests:
+  webhook registration on connect, Gmail/Drive/Asana real-time sync,
+  cron safety net verification, data quality checks, and disconnect/reconnect flows
+- Update BUG-007 status to resolved in checklist
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 0db0649 - feat: register Drive webhook on connect, add missing cron entries
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:55
+
+- Register Drive push webhook immediately when user connects Google Drive
+  from the Connect page (fire-and-forget, cron handles renewal)
+- Add drive-channel-renew cron (daily 05:00) to vercel.json
+- Add asana-webhook-register cron (daily 07:00) to vercel.json
+- Mark BUG-007 (Asana OAuth redirect_uri) as resolved
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 4a6cba2 - feat: real-time webhooks for Google Drive and Asana sync
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:43
+
+- Drive: add changes.list cursor for incremental sync (first run full scan, subsequent runs use stored page token)
+- Drive: new /api/webhooks/drive receiver with 30s debounce and channel ID verification
+- Drive: new /api/webhooks/drive/register with 6-day channel TTL and stop-before-renew logic
+- Drive: add webhook_secrets cleanup to delete-data route
+- Asana: add 15s debounce per Asana workspace to webhook receiver
+- Cron: wire drive-channel-renew and asana-webhook-register sources
+- ARCHITECTURE.md: add full sync/webhook architecture section with latency table
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## b461ecc - fix: correct privacy policy inaccuracies
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:19
+
+- Account deletion: accurate 3-step flow (Danger Zone + revoke Google
+  OAuth access + email for workspace removal) - users sign in via Google,
+  there is no separate Gerendo password account to delete
+- Voyage AI: corrected - text IS sent to Voyage as input to generate
+  embeddings; previous wording implied Voyage never received the text
+- Chat history: added to 'What data do you store?' - questions and AI
+  answers are now stored in conversation_messages table
+- Supabase region: removed unverified 'EU Ireland' claim, left as AWS
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 20aca36 - fix: remove arrow from collapsed sidebar toggle icon in top bar
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:11
+
+
+---
+## cdc9c13 - fix: remove arrow from sidebar toggle icon - panel outline only
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:08
+
+
+---
+## 685efb0 - fix: sidebar user avatar at bottom, better toggle icon, fix text contrast
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 09:05
+
+- Sidebar bottom: user initials circle (amber), name + email, log out icon button
+- Nav links (Connect tools, Settings, Privacy) sit above the user row with a divider
+- Toggle icon: custom sidebar panel icon with arrow direction (open/close)
+- Collapsed toggle moved from absolute position into top bar - now properly
+  vertically aligned with 'New chat' text
+- Bump dim text from oklch(0.55) to oklch(0.72) in Settings header nav links
+  and Sidebar bottom nav - was near-invisible on dark background
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## a745210 - feat: collapsible sidebar with persistent chat history
 
 **Author:** Tocki28  
