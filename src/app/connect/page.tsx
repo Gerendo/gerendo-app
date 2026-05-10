@@ -148,14 +148,17 @@ function ConnectPageInner() {
     setLoadingLabels(true);
     try {
       const res = await fetch("/api/sync/gmail/labels");
-      if (!res.ok) throw new Error("Gmail not connected");
-      const { labels } = await res.json();
-      if (!labels?.length) throw new Error("No labels found");
-      setAvailableLabels(labels);
-      setSelectedLabels(new Set(labels.filter((l: any) => l.default).map((l: any) => l.id)));
-    } catch {
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      if (!body.labels?.length) throw new Error("No labels returned from Gmail");
+      setAvailableLabels(body.labels);
+      setSelectedLabels(new Set(body.labels.filter((l: any) => l.default).map((l: any) => l.id)));
+    } catch (err: any) {
+      setLoadingLabels(false);
+      // Keep modal open and show error inside it instead of closing silently
+      setAvailableLabels([]);
+      setToolError(p => ({ ...p, gmail: `Could not load labels: ${err.message}` }));
       setShowLabelPicker(false);
-      setToolError(p => ({ ...p, gmail: "Could not load Gmail mailboxes. Please try connecting again." }));
     } finally {
       setLoadingLabels(false);
     }
