@@ -7,6 +7,35 @@ import Sidebar from "@/components/Sidebar";
 import { createClient } from "@/lib/supabase";
 
 type Source = { ref: string; label: string; sublabel: string; url: string; kind: "gmail" | "drive" | "asana" };
+
+function toAppUrl(webUrl: string): string | null {
+  // Asana: https://app.asana.com/0/123/456 → asana://0/123/456
+  const asana = webUrl.match(/https:\/\/app\.asana\.com(\/.*)/);
+  if (asana) return `asana://${asana[1]}`;
+  // Gmail: https://mail.google.com/mail/u/0/#all/abc → googlegmail:///co?message_id=abc (iOS only)
+  // Drive: no reliable native scheme on desktop
+  return null;
+}
+
+function SmartLink({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) {
+  const handleClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    const appUrl = toAppUrl(href);
+    if (!appUrl) return; // let default behavior handle it (opens in new tab)
+    e.preventDefault();
+    // Try app scheme - browser/OS will open native app if installed
+    // Fall back to web after 1.5s if app didn't open (page still visible)
+    window.location.href = appUrl;
+    setTimeout(() => {
+      if (!document.hidden) window.open(href, "_blank");
+    }, 1500);
+  };
+
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className} onClick={handleClick}>
+      {children}
+    </a>
+  );
+}
 type Message = {
   role: "user" | "assistant";
   content: string;
@@ -406,7 +435,7 @@ export default function AskPage() {
                 <div className="flex flex-col gap-3 max-w-full">
                   {msg.warning && <p className="text-yellow-500 text-xs">{msg.warning}</p>}
                   <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</a> }}>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown components={{ a: ({ href, children }) => <SmartLink href={href ?? "#"} className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</SmartLink> }}>{msg.content}</ReactMarkdown>
                   </div>
                 </div>
               )}
@@ -416,7 +445,7 @@ export default function AskPage() {
           {loading && (
             <div className="flex flex-col gap-3 items-start">
               <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown components={{ a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</a> }}>{streamingText}</ReactMarkdown>
+                <ReactMarkdown components={{ a: ({ href, children }) => <SmartLink href={href ?? "#"} className="text-[oklch(0.7_0.12_250)] hover:underline">{children}</SmartLink> }}>{streamingText}</ReactMarkdown>
                 <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
               </div>
             </div>
