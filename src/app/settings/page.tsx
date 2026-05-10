@@ -26,13 +26,23 @@ export default function SettingsPage() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.replace("/login");
-      } else {
-        setAuthChecked(true);
-      }
-    });
+    const checkAuth = () => {
+      createClient().auth.getUser().then(({ data }) => {
+        if (!data.user) {
+          router.replace("/login");
+        } else {
+          setAuthChecked(true);
+        }
+      });
+    };
+
+    checkAuth();
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) checkAuth();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, [router]);
 
   const [info, setInfo] = useState<WorkspaceInfo | null>(null);

@@ -19,15 +19,26 @@ export default function AskPage() {
 
   const [authChecked, setAuthChecked] = useState(false);
 
-  // Guard: verify session is live on the server (catches back button after logout)
+  // Guard: verify session on mount AND on bfcache restore (back button on mobile Safari)
   useEffect(() => {
-    createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) {
-        router.replace("/login");
-      } else {
-        setAuthChecked(true);
-      }
-    });
+    const checkAuth = () => {
+      createClient().auth.getUser().then(({ data }) => {
+        if (!data.user) {
+          router.replace("/login");
+        } else {
+          setAuthChecked(true);
+        }
+      });
+    };
+
+    checkAuth();
+
+    // pageshow fires when page is restored from bfcache (persisted = true)
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) checkAuth();
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
   }, [router]);
 
   const [query, setQuery] = useState("");
