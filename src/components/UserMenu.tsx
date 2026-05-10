@@ -40,9 +40,7 @@ export default function UserMenu() {
         style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
         aria-label="Account menu"
       >
-        {user?.avatar
-          ? <img src={user.avatar} alt={initials} className="w-full h-full object-cover" />
-          : initials}
+        {initials}
       </button>
 
       {open && (
