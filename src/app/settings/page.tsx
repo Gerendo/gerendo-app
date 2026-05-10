@@ -245,9 +245,42 @@ export default function SettingsPage() {
                 <p className="text-sm" style={{ color: mutedColor }}>Push notifications are not supported in this browser.</p>
               )}
               {push.state === "denied" && (
-                <p className="text-sm" style={{ color: "oklch(0.75 0.18 25)" }}>
-                  Notifications blocked. Enable them in your browser settings, then reload.
-                </p>
+                <div className="flex flex-col gap-2">
+                  <p className="text-sm font-medium" style={{ color: "oklch(0.75 0.18 25)" }}>
+                    Notifications are blocked by your browser.
+                  </p>
+                  <ol className="flex flex-col gap-1" style={{ color: mutedColor }}>
+                    {/Chrome|Chromium/.test(navigator.userAgent) && !(/Edg/.test(navigator.userAgent)) && (<>
+                      <li className="text-xs">1. Click the <strong style={{ color: "oklch(0.88 0.012 80)" }}>lock icon</strong> in the address bar</li>
+                      <li className="text-xs">2. Find <strong style={{ color: "oklch(0.88 0.012 80)" }}>Notifications</strong> and set it to <strong style={{ color: "oklch(0.88 0.012 80)" }}>Allow</strong></li>
+                      <li className="text-xs">3. Reload this page</li>
+                    </>)}
+                    {/Edg/.test(navigator.userAgent) && (<>
+                      <li className="text-xs">1. Click the <strong style={{ color: "oklch(0.88 0.012 80)" }}>lock icon</strong> in the address bar</li>
+                      <li className="text-xs">2. Click <strong style={{ color: "oklch(0.88 0.012 80)" }}>Permissions for this site</strong></li>
+                      <li className="text-xs">3. Set <strong style={{ color: "oklch(0.88 0.012 80)" }}>Notifications</strong> to <strong style={{ color: "oklch(0.88 0.012 80)" }}>Allow</strong></li>
+                      <li className="text-xs">4. Reload this page</li>
+                    </>)}
+                    {/Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent) && (<>
+                      <li className="text-xs">1. Open <strong style={{ color: "oklch(0.88 0.012 80)" }}>Safari → Settings → Websites</strong></li>
+                      <li className="text-xs">2. Click <strong style={{ color: "oklch(0.88 0.012 80)" }}>Notifications</strong> in the sidebar</li>
+                      <li className="text-xs">3. Find <strong style={{ color: "oklch(0.88 0.012 80)" }}>app.gerendo.com</strong> and set to <strong style={{ color: "oklch(0.88 0.012 80)" }}>Allow</strong></li>
+                      <li className="text-xs">4. Reload this page</li>
+                    </>)}
+                    {!/Chrome|Chromium|Edg|Safari/.test(navigator.userAgent) && (<>
+                      <li className="text-xs">1. Click the <strong style={{ color: "oklch(0.88 0.012 80)" }}>lock icon</strong> in the address bar</li>
+                      <li className="text-xs">2. Find <strong style={{ color: "oklch(0.88 0.012 80)" }}>Notifications</strong> and set to <strong style={{ color: "oklch(0.88 0.012 80)" }}>Allow</strong></li>
+                      <li className="text-xs">3. Reload this page</li>
+                    </>)}
+                  </ol>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="self-start text-xs px-3 py-1.5 rounded-lg font-medium mt-1 transition-colors"
+                    style={{ background: inkSoft, color: mutedColor, border: `1px solid ${borderColor}` }}
+                  >
+                    Reload page
+                  </button>
+                </div>
               )}
               {push.state === "granted" && (
                 <p className="text-sm">Notifications enabled on this device.</p>
