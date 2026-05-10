@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
+import UserMenu from "@/components/UserMenu";
 
 type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
 type Message = {
@@ -21,7 +22,6 @@ export default function AskPage() {
   const [syncingInBackground, setSyncingInBackground] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -184,51 +184,7 @@ export default function AskPage() {
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
         </a>
-        {/* Desktop nav */}
-        <div className="hidden sm:flex items-center gap-2">
-          <a href="/connect" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(1 0 0 / 10%)" }}>
-            Connect tools
-          </a>
-          <a href="/settings" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
-            Settings
-          </a>
-          <a href="/api/auth/signout" className="text-sm px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ color: "oklch(0.55 0.012 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
-            Log out
-          </a>
-        </div>
-        {/* Mobile hamburger */}
-        <button
-          className="sm:hidden p-2 rounded-xl transition-colors"
-          style={{ color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
-          onClick={() => setMenuOpen(v => !v)}
-          aria-label="Menu"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect y="3" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect y="8.25" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect y="13.5" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-          </svg>
-        </button>
-        {menuOpen && (
-          <div className="absolute top-full left-0 right-0 z-50 flex flex-col gap-1 px-4 py-3 sm:hidden"
-            style={{ background: "oklch(0.13 0.009 55)", borderBottom: "1px solid oklch(1 0 0 / 8%)" }}>
-            <a href="/connect" className="text-sm font-medium py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.78 0.14 65)" }}>
-              Connect tools
-            </a>
-            <a href="/settings" className="text-sm py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.65 0.015 60)" }}>
-              Settings
-            </a>
-            <a href="/api/auth/signout" className="text-sm py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.55 0.012 60)" }}>
-              Log out
-            </a>
-          </div>
-        )}
+        <UserMenu />
       </div>
 
       {/* Sync banner with progress bar */}

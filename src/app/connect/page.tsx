@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import UserMenu from "@/components/UserMenu";
 
 type ToolStatus = "idle" | "connecting" | "syncing" | "active" | "error";
 
@@ -49,7 +50,6 @@ function ConnectPageInner() {
   const [loadingLabels, setLoadingLabels] = useState(false);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     const gmailConnected = searchParams.get("gmail_connected");
@@ -246,51 +246,7 @@ function ConnectPageInner() {
           <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
           <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>Connect your tools</p>
         </a>
-        {/* Desktop nav */}
-        <div className="hidden sm:flex items-center gap-2">
-          <a href="/ask" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}>
-            Ask questions
-          </a>
-          <a href="/settings" className="text-sm font-medium px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
-            Settings
-          </a>
-          <a href="/api/auth/signout" className="text-sm px-3 py-2 rounded-xl transition-colors hover:opacity-90"
-            style={{ color: "oklch(0.55 0.012 60)", border: "1px solid oklch(1 0 0 / 10%)" }}>
-            Log out
-          </a>
-        </div>
-        {/* Mobile hamburger */}
-        <button
-          className="sm:hidden p-2 rounded-xl transition-colors"
-          style={{ color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
-          onClick={() => setMenuOpen(v => !v)}
-          aria-label="Menu"
-        >
-          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-            <rect y="3" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect y="8.25" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect y="13.5" width="18" height="1.5" rx="0.75" fill="currentColor"/>
-          </svg>
-        </button>
-        {menuOpen && (
-          <div className="absolute top-full left-0 right-0 z-50 flex flex-col gap-1 px-6 py-3 sm:hidden"
-            style={{ background: "oklch(0.13 0.009 55)", borderBottom: "1px solid oklch(1 0 0 / 8%)" }}>
-            <a href="/ask" className="text-sm font-medium py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.78 0.14 65)" }}>
-              Ask questions
-            </a>
-            <a href="/settings" className="text-sm py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.65 0.015 60)" }}>
-              Settings
-            </a>
-            <a href="/api/auth/signout" className="text-sm py-2.5 transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.55 0.012 60)" }}>
-              Log out
-            </a>
-          </div>
-        )}
+        <UserMenu />
       </div>
 
       <div className="flex-1 px-6 py-8 max-w-2xl mx-auto w-full flex flex-col gap-6">

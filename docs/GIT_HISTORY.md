@@ -1,3 +1,39 @@
+## dc21fb7 - feat: per-user monthly question quota with clear limit-reached message
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:34
+
+- checkAndIncrementQuota() in agency-db: reads/increments quota:ask:YYYY-MM
+  key in sync_state, returns allowed/used/limit; resets automatically each month
+- /api/ask: checks quota before doing any AI work, returns 429 with
+  { error: 'monthly_limit_reached', used, limit } when exhausted
+- Ask page: handles 429 with human-readable message showing the limit and
+  reset date, instead of a generic error
+- Limit configurable via USER_MONTHLY_QUESTION_LIMIT env var (default: 500)
+- No schema changes - uses existing sync_state table
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 726b7cd - feat: create Asana tasks from emails and Drive files via chat
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:14
+
+- Add asanaPost() helper to agency-db.ts
+- Add create_asana_task tool: name, notes, project_name, assignee, due_on
+  - Resolves project name to GID by fuzzy-matching against user's projects
+  - Resolves assignee by name or 'me' keyword
+  - Returns task name + permalink URL on success
+- Tool is only offered when Asana is connected
+- System prompt teaches Claude to extract task details from email/Drive context
+  already in scope without asking the user to repeat information
+- Today's date injected into prompt for relative date resolution ("by Friday")
+- Connected tools description updated to mention task creation capability
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 1d656bc - docs: add comprehensive AI query engine edge case tests to QA checklist
 
 **Author:** Tocki28  

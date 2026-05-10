@@ -258,7 +258,104 @@ These test graceful degradation.
 
 ---
 
-## 6. Real-time sync (webhooks)
+## 6. Security and data audit
+
+Run these checks in Supabase SQL editor and the browser. This section verifies that the privacy policy accurately describes what the product actually does.
+
+### 6A. Row-Level Security (RLS)
+
+These are the most important checks. A failure here means data leakage.
+
+- [ ] **Anon role reads 0 rows on every table** - run in Supabase SQL editor as anon role:
+  ```sql
+  SELECT COUNT(*) FROM messages;        -- must be 0
+  SELECT COUNT(*) FROM embeddings;      -- must be 0
+  SELECT COUNT(*) FROM drive_files;     -- must be 0
+  SELECT COUNT(*) FROM asana_items;     -- must be 0
+  SELECT COUNT(*) FROM oauth_tokens;    -- must be 0
+  SELECT COUNT(*) FROM webhook_secrets; -- must be 0
+  SELECT COUNT(*) FROM sync_state;      -- must be 0
+  ```
+- [ ] **User A cannot read User B's data** - log in as two different users in the same workspace, verify neither can see the other's emails/tasks via the app
+- [ ] **`oauth_tokens` has no user SELECT policy** - tokens only readable by service_role (server-side), not from the browser
+- [ ] **`webhook_secrets` has no user SELECT policy** - same as above
+- [ ] **Direct API call without session returns 401** - `curl -X POST https://app.gerendo.com/api/ask -d '{"query":"test"}'` must return 401
+
+### 6B. What is actually stored (verify against privacy policy)
+
+Run in Supabase SQL editor to confirm what data exists:
+
+```sql
+-- Check messages table: should have subject, sender, mailbox - NO body
+SELECT subject, sender, mailbox, synced_at FROM messages LIMIT 5;
+
+-- Check embeddings: keyword_text contains subject + sender + body start (~1500 chars)
+SELECT LEFT(keyword_text, 200) FROM embeddings LIMIT 3;
+
+-- Check drive_embeddings: contains file text chunks
+SELECT LEFT(keyword_text, 200) FROM drive_embeddings LIMIT 3;
+
+-- Check asana_items: task metadata only (no full description beyond notes field)
+SELECT name, project_name, assignee, status, due_date FROM asana_items LIMIT 5;
+
+-- Check oauth_tokens: access_token is plaintext (known risk - protected by RLS + service_role only)
+SELECT provider, expires_at FROM oauth_tokens LIMIT 5; -- do NOT expose access_token in audit log
+```
+
+- [ ] `messages` table has NO column called `body` - only `subject`, `sender`, `mailbox`, `received_at`
+- [ ] `keyword_text` in `embeddings` contains only subject + sender + first ~1500 chars of body (not full body)
+- [ ] `oauth_tokens` access_token is plaintext but NOT readable via anon or authenticated browser role
+- [ ] No table stores full email body, full Drive file content, or passwords
+
+### 6C. Encryption
+
+- [ ] **In transit** - app only accessible over HTTPS (`https://app.gerendo.com`, HTTP redirects to HTTPS)
+- [ ] **At rest** - Supabase AES-256 by default. Verify in Supabase dashboard: Settings → Infrastructure → Encryption at rest is enabled
+- [ ] **OAuth tokens** - stored as plaintext in `oauth_tokens` table (known accepted risk; protected by RLS + service_role-only access). Not application-level encrypted.
+- [ ] **Webhook secrets** - stored as plaintext in `webhook_secrets` table (same risk profile as OAuth tokens)
+
+### 6D. OAuth scope audit
+
+Verify we only request the minimum permissions needed:
+
+- [ ] **Gmail scope** - app requests `https://mail.google.com/` (read) only, not modify/send/delete. Confirm in Google Cloud Console → OAuth consent screen → Scopes.
+- [ ] **Drive scope** - app requests `https://www.googleapis.com/auth/drive.readonly` only
+- [ ] **Asana scope** - app requests `default` scope (read tasks/projects). Creating tasks requires write scope - verify this is included if task creation is enabled.
+- [ ] No scope grants access to Google Calendar, Contacts, or other Google services
+
+### 6E. Webhook security
+
+- [ ] **Gmail webhook** - verifies JWT from Google Pub/Sub before processing. Token audience must match `PUBSUB_AUDIENCE` env var (service account email). Invalid JWTs return 401.
+- [ ] **Asana webhook** - verifies HMAC-SHA256 signature using stored secret. Invalid signatures return 401. Handshake phase echoes `X-Hook-Secret` header back correctly.
+- [ ] **Cron routes** - require `CRON_SECRET` bearer token. Unauthenticated cron calls return 401.
+
+### 6F. Privacy page accuracy
+
+Verify that [/privacy](https://app.gerendo.com/privacy) accurately reflects the product:
+
+- [ ] "Full email body is never stored" - confirmed by 6B (no `body` column in `messages`)
+- [ ] "First ~1500 chars of body" - confirmed by checking `keyword_text` in 6B
+- [ ] "OAuth tokens stored in database" - confirmed by 6C (honest about the risk)
+- [ ] "Data encrypted at rest (AES-256)" - confirmed by Supabase dashboard check
+- [ ] "Delete all data" button in Settings works as described
+- [ ] Privacy page accessible without login at `/privacy`
+- [ ] Privacy link appears in user menu dropdown on all app pages
+
+### 6G. Per-user quota
+
+- [ ] Monthly question limit enforced (default 500/month)
+- [ ] Hitting the limit shows a clear message with the reset date (not a generic error)
+- [ ] Quota resets on the 1st of each month (new `quota:ask:YYYY-MM` key in sync_state)
+- [ ] Check current usage:
+  ```sql
+  SELECT user_id, source, cursor::int as questions_used
+  FROM sync_state WHERE source LIKE 'quota:ask:%'
+  ORDER BY cursor::int DESC;
+  ```
+
+---
+
+## 8. Real-time sync (webhooks)
 
 ### Gmail webhook
 - [ ] Send yourself an email → appears in chat within ~60 seconds
@@ -273,7 +370,7 @@ These test graceful degradation.
 
 ---
 
-## 6. Mobile UX (test on real iPhone + Android)
+## 9. Mobile UX (test on real iPhone + Android)
 
 - [ ] No horizontal overflow on any page
 - [ ] All buttons have pointer cursor on hover (**was BUG-006**)
@@ -288,7 +385,7 @@ These test graceful degradation.
 
 ---
 
-## 7. Security
+## 10. Security (legacy - superseded by section 6)
 
 - [ ] User A cannot read User B's data (even in same workspace)
 - [ ] Supabase Table Editor with `anon` role → 0 rows on all tables
@@ -300,7 +397,7 @@ These test graceful degradation.
 
 ---
 
-## 8. Known bugs status
+## 11. Known bugs status
 
 | Bug | Area | Fixed? | How to verify |
 |-----|------|--------|---------------|
@@ -317,7 +414,7 @@ These test graceful degradation.
 
 ---
 
-## 9. Debugging reference
+## 12. Debugging reference
 
 ### Sync stuck or not running
 ```sql
