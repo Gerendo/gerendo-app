@@ -517,12 +517,12 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             Full product. All integrations. Direct line to the team building it. In
             return: candid feedback and the willingness to help us get this right.
           </p>
-          <button
-            onClick={onWaitlistOpen}
+          <a
+            href="https://app.gerendo.com"
             className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-ember px-6 py-3.5 text-sm font-medium text-primary-foreground ember-glow transition hover:scale-[1.01]"
           >
-            Apply to be a founding partner →
-          </button>
+            Access the beta →
+          </a>
         </div>
 
         <div className="rounded-2xl border border-border bg-card/40 p-8 backdrop-blur-sm">
