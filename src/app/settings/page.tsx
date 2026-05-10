@@ -53,6 +53,7 @@ export default function SettingsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState("");
+  const [deleteSuccess, setDeleteSuccess] = useState(false);
 
   useEffect(() => {
     fetch("/api/workspace/info")
@@ -89,6 +90,8 @@ export default function SettingsPage() {
       const res = await fetch("/api/workspace/delete-data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       if (!res.ok) throw new Error("Delete failed");
       setDeleteConfirm(false);
+      setDeleteSuccess(true);
+      setTimeout(() => setDeleteSuccess(false), 4000);
     } catch (err: any) {
       setDeleteError(err.message ?? "Delete failed");
     } finally {
@@ -234,6 +237,10 @@ export default function SettingsPage() {
             </p>
           </div>
 
+          {deleteSuccess && (
+            <p className="text-sm" style={{ color: "oklch(0.75 0.18 150)" }}>All indexed data deleted. Your tools have been disconnected.</p>
+          )}
+
           {!deleteConfirm ? (
             <button
               onClick={() => setDeleteConfirm(true)}
@@ -245,7 +252,7 @@ export default function SettingsPage() {
           ) : (
             <div className="flex flex-col gap-3 p-4 rounded-2xl" style={{ background: "oklch(0.62 0.22 25 / 8%)", border: "1px solid oklch(0.62 0.22 25 / 25%)" }}>
               <p className="text-sm font-medium" style={{ color: "oklch(0.75 0.18 25)" }}>
-                This will delete all emails, Drive files, and Asana tasks from the database. It cannot be undone.
+                This will delete all indexed data (embeddings and metadata) and disconnect all connected tools. It cannot be undone.
               </p>
               {deleteError && <p className="text-xs" style={{ color: "oklch(0.62 0.22 25)" }}>{deleteError}</p>}
               <div className="flex items-center gap-3">
