@@ -41,6 +41,22 @@ export async function POST(request: Request): Promise<NextResponse> {
   auth.setCredentials({ access_token: token });
   const gmail = google.gmail({ version: "v1", auth });
 
+  // Skip re-registration if there's already an active watch (expires > 1 hour from now)
+  const supabase = createServiceClient();
+  const { data: existing } = await supabase.from("webhook_secrets")
+    .select("meta")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .eq("key", "watch")
+    .maybeSingle();
+  if (existing?.meta?.expiration) {
+    const expiresAt = Number(existing.meta.expiration);
+    if (!isNaN(expiresAt) && expiresAt > Date.now() + 60 * 60 * 1000) {
+      return NextResponse.json({ ok: true, skipped: true, expiration: expiresAt });
+    }
+  }
+
   let watchRes;
   try {
     watchRes = await gmail.users.watch({
@@ -54,7 +70,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const { historyId, expiration } = watchRes.data;
 
-  const supabase = createServiceClient();
   const { error: upsertError } = await supabase.from("webhook_secrets").upsert({
     workspace_id: workspaceId,
     user_id: userId,
