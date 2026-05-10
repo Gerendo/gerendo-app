@@ -39,8 +39,14 @@ export async function GET(): Promise<NextResponse> {
   auth.setCredentials({ access_token: token });
   const gmail = google.gmail({ version: "v1", auth });
 
-  const labelsRes = await gmail.users.labels.list({ userId: "me" });
-  const all = labelsRes.data.labels ?? [];
+  let all;
+  try {
+    const labelsRes = await gmail.users.labels.list({ userId: "me" });
+    all = labelsRes.data.labels ?? [];
+  } catch (err: any) {
+    console.error("[gmail/labels] Gmail API error:", err?.message);
+    return NextResponse.json({ error: `Gmail API error: ${err?.message ?? "unknown"}` }, { status: 502 });
+  }
 
   const labels = all
     .filter(l => l.id && l.name && !EXCLUDED_LABELS.has(l.id))
