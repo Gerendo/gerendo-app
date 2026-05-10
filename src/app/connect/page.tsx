@@ -96,11 +96,13 @@ function ConnectPageInner() {
 
     // Load current state
     fetch("/api/nango/status").then(r => r.json()).then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
-      const connected_set = new Set<string>();
-      if (connected) connected_set.add("gmail");
-      if (dc) connected_set.add("drive");
-      if (ac) connected_set.add("asana");
-      setConnectedTools(connected_set);
+      setConnectedTools(prev => {
+        const next = new Set(prev);
+        if (connected) next.add("gmail"); else if (!gmailConnected) next.delete("gmail");
+        if (dc) next.add("drive"); else if (!driveConnected) next.delete("drive");
+        if (ac) next.add("asana"); else if (!asanaConnected) next.delete("asana");
+        return next;
+      });
 
       // Set active status for already-connected tools
       const statuses: Record<string, ToolStatus> = {};
@@ -338,7 +340,8 @@ function ConnectPageInner() {
                       if (pollRef.current) clearInterval(pollRef.current);
                       setInitialSyncing(null);
                       setSyncCount(0);
-                      setToolStatus(p => ({ ...p, gmail: "active" }));
+                      setToolStatus(p => { const n = { ...p }; delete n.gmail; return n; });
+                      setConnectedTools(p => { const n = new Set(p); n.delete("gmail"); return n; });
                     }}
                     className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
                     style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
