@@ -14,7 +14,7 @@
 ## Non-goals (v1)
 
 - Real-time collaboration / chat between users
-- Editing source-of-truth (read-only on Gmail/Asana/Drive — we don't write back yet)
+- Editing source-of-truth (read-only on Gmail/Drive — Asana write-back is scoped to drift resolution only)
 - SOC 2 / SSO / enterprise compliance
 - Mobile app (web-first)
 - Custom embedding models (use off-the-shelf — Voyage / OpenAI / Cohere)
@@ -408,21 +408,135 @@ UNIQUE constraint: `(workspace_id, user_id, provider, key)`.
 
 ---
 
-## Drift detection (v1, simple)
+## Drift detection and closed-loop resolution
 
-Per the conversation: don't build a custom comparison engine yet. Instead:
+The core problem is not that PMs can't find drift - it's that reconciliation has friction, so it doesn't happen. Gerendo's job is to remove that friction entirely: detect a decision, propose the Asana update, let the PM confirm in one tap. No tab-switching, no dashboard to check.
 
-1. **Scheduled job** (e.g. every 6 hours per active workspace)
-2. Group recent docs by topic key — `(client, project, fact_type)` extracted from metadata
-3. For each topic key with ≥2 sources contributing in the last N days:
-   - Pull all variants (the actual chunks, with timestamp + source)
-   - Send to Claude Sonnet with a prompt: *"These N statements all relate to {topic}. Are any of them contradictory? If yes, return a structured finding."*
-4. Write findings to `drift_findings` table
-5. Surface in UI as a feed; user can dismiss / mark resolved
+---
 
-**Limitations:** depends on Claude's judgment, not deterministic, will have false positives. Acceptable for v1 — design partners can tune the prompt with us. Upgrade to a structured comparison engine when volume / accuracy demands it.
+### Decision detection pipeline
 
-> [GINO: which topic keys to extract first? Suggestion: client name + project name + one of {deadline, scope, deliverable_status, payment_amount}. Start narrow.]
+Three layers, cheapest first. Only messages that pass all three trigger a notification.
+
+**Layer 1 - Rules-based pre-filter (free)**
+
+Drop messages that are obviously not decisions, without any API call:
+- Under 8 words with no date or deliverable mention
+- Pure questions (starts with interrogative, ends with `?`)
+- Standalone acknowledgements (`ok`, `thanks`, `got it`, `multumesc`, `super`, `perfect` alone)
+
+Everything else passes to Layer 2. The filter is an exclusion list, not an inclusion list - this way novel phrasings never get dropped silently.
+
+**Layer 2 - Haiku classification (~$0.0002/call)**
+
+Send the message to Haiku 4.5 with a tight prompt: *"Is this a confirmed decision that changes a project deliverable, date, or scope? Answer YES or NO."*
+
+The system prompt includes the workspace context (project names, client names, active Asana tasks) as a **cached prefix** - this block is paid once per 5-minute cache window, not per call.
+
+To boost accuracy, the prompt notes signal words in both languages:
+
+- **English:** `confirmed, agreed, decided, let's go with, we're going with, moving to, pushing to, pushed to, changing, will be, going ahead, approved, locked in, final, we'll go with, scheduled for, set for, moved to, postponed, delayed, cancelled, dropping, we chose, deadline is, due date is, launch is`
+- **Romanian:** `am decis, am hotărât, mergem cu, mergem pe, am stabilit, confirmat, mutat, schimbat, amânăm, mutăm, schimbăm, de acord, în regulă, am ales, rămâne, termenul este, data este, lansăm, împingem, vom merge, ne-am hotărât, aprobat, stabilit, bun mergem, ok mergem`
+
+Haiku returns YES → pass to Layer 3. NO → drop silently.
+
+**Layer 3 - Sonnet extraction (only on YES)**
+
+One Sonnet 4.6 call to extract structured output:
+- What changed (deliverable, date, scope item)
+- Which project/client it belongs to
+- Best-match Asana task (from the cached task list)
+- Draft Asana update text
+
+This is the only expensive call, and it fires only on real decisions - estimated 3-5 times/day per active workspace.
+
+---
+
+### Cost model for this feature
+
+| Layer | Calls/day (per workspace) | Cost/month |
+|---|---|---|
+| Layer 1 pre-filter | ~200 webhooks, all free | $0 |
+| Layer 2 Haiku (after pre-filter) | ~30 | ~$0.18 |
+| Layer 3 Sonnet (confirmed decisions) | ~4 | ~$0.60 |
+| **Total** | | **~$0.80/workspace/month** |
+
+Negligible at any pricing tier.
+
+---
+
+### Closed-loop resolution - the notification
+
+When Layer 3 completes, Gerendo fires a push notification to the PM:
+
+> **Acme confirmed the launch is moving to May 20. Update the Asana task from May 12?**
+> `[Yes]` `[Edit]` `[No]`
+
+Delivery surface:
+- **Desktop:** browser push notification with action buttons (Chrome/Edge native - no tab required)
+- **Mobile:** standard push notification with the same three actions
+- **Future (v2):** WhatsApp bot message in the same thread where the decision came from
+
+**Three resolution states:**
+
+| Action | What happens |
+|---|---|
+| Yes | Asana task updated immediately, source comment added ("Updated via Gerendo - decision from Gmail, May 10") |
+| Edit | PM rewrites the draft update text, then confirms - Gerendo writes the edited version |
+| No | Alert dismissed, nothing written, logged as a false positive for future tuning |
+
+Every Edit and No is a training signal. Task mismatches and wrong phrasings feed back into better entity resolution per workspace over time.
+
+---
+
+### Decision sources
+
+Any ingest source can feed the decision pipeline. Priority order:
+
+1. **Gmail** - already webhooking in real-time, highest volume
+2. **Meet transcripts** - highest signal quality (decisions are explicit, speaker-attributed). Drive sync picks these up automatically since Meet saves transcripts to Drive. Same Layer 1-2-3 pipeline applies to the full transcript after a meeting ends.
+3. **Google Drive** - email threads forwarded as docs, shared briefs with scope changes
+4. **WhatsApp Business (v2)** - the ideal channel since the decision arrives and the confirmation returns in the same app
+
+---
+
+### Asana write-back
+
+This is the only place Gerendo writes to an external source. Scoped narrowly:
+- Only writes when the PM explicitly confirms (Yes or Edit path)
+- Only updates `due_date` or appends to the task description/comments - never creates or deletes tasks
+- Uses the user's own OAuth token (not a service account), so Asana audit log shows the PM's name
+- Write is logged in a `drift_resolutions` table for workspace audit history
+
+---
+
+### Data model additions
+
+```
+drift_findings           — detected decision-class events awaiting PM review
+  id
+  workspace_id
+  user_id
+  source               ('gmail' | 'drive' | 'asana' | 'meet_transcript')
+  source_external_id   (message/file ID in the source system)
+  detected_at
+  decision_summary     (text — what changed, as extracted by Sonnet)
+  asana_item_id        (FK asana_items — best-match task)
+  draft_update         (text — proposed Asana update text)
+  status               ('pending' | 'confirmed' | 'edited' | 'dismissed')
+  resolved_at
+  resolution_note      (text — final text written to Asana, or dismiss reason)
+
+push_subscriptions       — browser/mobile push endpoints per user
+  id
+  workspace_id
+  user_id
+  endpoint             (text — push service URL)
+  p256dh               (text — encryption key)
+  auth                 (text — auth secret)
+  device_type          ('browser' | 'mobile')
+  created_at
+```
 
 ---
 
@@ -437,6 +551,46 @@ Three controls, in order of impact:
 Embeddings cost is negligible (~$0.02–$0.10 / 1M tokens with Voyage). Retrieval is essentially free. The LLM call dominates — that's where caps matter.
 
 > [GINO: query quota per plan? PLAN.md mentions €299 / €699 / €1,499 tiers — pick query caps now (e.g. 1,000 / 5,000 / 25,000 monthly) so the math is concrete when designing the UI.]
+
+---
+
+## Playbook notifications (Type 2)
+
+Separate from task suggestions. When Gerendo detects that a client has expressed interest in a specific service or made a request that commonly requires expectation-setting, it fires a reminder to the PM with what they should communicate to the client.
+
+**Example:** Client mentions they want SEO in an email.
+
+> "Acme mentioned SEO. Remind them: SEO takes 3-6 months and site visits may temporarily drop before improving."
+> `[Got it]` `[Dismiss]`
+
+This is not a task. It's a communication nudge - Gerendo telling the PM what to say, at the exact moment it's relevant.
+
+### Why this matters
+
+Agencies repeat the same client education moments on every engagement. A new hire doesn't know to set these expectations. A senior PM under pressure forgets. Gerendo fires the reminder automatically when the trigger appears in any channel.
+
+### How it works
+
+Same detection pipeline as task notifications (Layers 1-2-3), but Layer 3 classifies the output as `playbook_trigger` instead of `decision`. Sonnet matches the message against a list of known trigger patterns and returns the associated reminder text.
+
+### Playbook entries (v1 - hardcoded, editable in v2)
+
+| Trigger | Reminder fired to PM |
+|---|---|
+| Client mentions SEO | "SEO takes 3-6 months. Warn client that visits may temporarily drop before improving." |
+| Client asks for paid ads / PPC | "Remind client to set up conversion tracking before launch or results will be unmeasurable." |
+| Client requests a full redesign | "Remind client to prepare all content and assets before dev starts, or the timeline will slip." |
+| Client mentions a tight deadline | "Flag to client that a compressed timeline means reduced revision rounds. Get this in writing." |
+| Client asks about social media growth | "Set expectation: organic growth is slow. Agree on a 90-day baseline before evaluating results." |
+
+More entries added over time based on what agencies actually encounter. In v2, the agency can add and edit their own playbook entries via the settings UI.
+
+### Resolution
+
+- **Got it** - PM has seen the reminder, logged as acknowledged, no further action
+- **Dismiss** - PM disagrees it's relevant, logged as a false positive
+
+Both feed back into tuning the trigger matching accuracy.
 
 ---
 

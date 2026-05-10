@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 import { createClient } from "@/lib/supabase";
 
 interface Member {
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   const router = useRouter();
 
   const [authChecked, setAuthChecked] = useState(false);
+  const push = usePushNotifications();
 
   useEffect(() => {
     const checkAuth = () => {
@@ -226,6 +228,57 @@ export default function SettingsPage() {
             </div>
           )}
           {error && <p className="text-sm" style={{ color: "oklch(0.62 0.22 25)" }}>{error}</p>}
+        </div>
+
+        {/* Notifications */}
+        <div className="flex flex-col gap-3">
+          <div>
+            <h2 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>Notifications</h2>
+            <p className="text-sm mt-1" style={{ color: mutedColor }}>
+              Get push notifications when Gerendo detects a decision or drift that needs your attention.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl border flex items-center justify-between gap-4" style={{ borderColor, background: "oklch(0.13 0.009 55)" }}>
+            <div>
+              {push.state === "unsupported" && (
+                <p className="text-sm" style={{ color: mutedColor }}>Push notifications are not supported in this browser.</p>
+              )}
+              {push.state === "denied" && (
+                <p className="text-sm" style={{ color: "oklch(0.75 0.18 25)" }}>
+                  Notifications blocked. Enable them in your browser settings, then reload.
+                </p>
+              )}
+              {push.state === "granted" && (
+                <p className="text-sm">Notifications enabled on this device.</p>
+              )}
+              {(push.state === "prompt" || push.state === "loading") && (
+                <p className="text-sm" style={{ color: mutedColor }}>Enable to receive decision alerts on this device.</p>
+              )}
+            </div>
+
+            {push.state === "granted" && (
+              <button
+                onClick={push.disable}
+                className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                style={{ background: inkSoft, color: mutedColor, border: `1px solid ${borderColor}` }}
+              >
+                Disable
+              </button>
+            )}
+            {(push.state === "prompt") && (
+              <button
+                onClick={push.enable}
+                className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
+                style={{ background: emberColor, color: "oklch(0.11 0.008 55)" }}
+              >
+                Enable
+              </button>
+            )}
+            {push.state === "loading" && (
+              <span className="shrink-0 text-xs" style={{ color: mutedColor }}>...</span>
+            )}
+          </div>
         </div>
 
         {/* Danger zone */}
