@@ -96,7 +96,20 @@ async function fetchAndStoreMessages(
       if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
     }
   } catch (err: any) {
-    console.error(`[sync] ${labelName} list error:`, err?.message);
+    const msg: string = err?.message ?? "";
+    const retryMatch = msg.match(/Retry after (\S+)/);
+    if (retryMatch) {
+      // Rate limited - wait until Google says we can retry, then try once more
+      const retryAt = new Date(retryMatch[1]).getTime();
+      const waitMs = Math.max(0, retryAt - Date.now());
+      if (waitMs > 0 && waitMs < 60_000) {
+        await new Promise(r => setTimeout(r, waitMs + 500));
+        try {
+          return await fetchAndStoreMessages(gmail, db, labelId, labelName);
+        } catch { return 0; }
+      }
+    }
+    console.error(`[sync] ${labelName} list error:`, msg);
     return 0;
   }
 

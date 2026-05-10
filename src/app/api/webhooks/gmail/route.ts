@@ -75,10 +75,12 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  await supabase.from("sync_state").upsert(
+  // Set lock BEFORE running sync to prevent race condition with concurrent webhooks
+  const { error: lockError } = await supabase.from("sync_state").upsert(
     { workspace_id: member.workspace_id, user_id: user.id, source: "gmail:webhook_lock", last_synced_at: now, cursor: null },
     { onConflict: "workspace_id,user_id,source" }
   );
+  if (lockError) return NextResponse.json({ ok: true }); // another request won the race
 
   // Webhook syncs only process INBOX + SENT - the daily cron handles remaining labels.
   try {
