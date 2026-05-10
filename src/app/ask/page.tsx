@@ -375,11 +375,17 @@ export default function AskPage() {
             </div>
           )}
           {messages.length === 0 && !loading && setupState === "no-tools" && (
-            <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
-              style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
-              No tools connected yet.{" "}
-              <a href="/connect" className="underline underline-offset-2 hover:opacity-80">Connect Gmail, Drive, or Asana</a>{" "}
-              for full search — or ask a general question.
+            <div className="mx-auto max-w-sm mt-10 flex flex-col items-center gap-3 text-center">
+              <p className="text-sm" style={{ color: "oklch(0.65 0.015 60)" }}>
+                No tools connected yet - or ask a general question.
+              </p>
+              <a
+                href="/connect"
+                className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
+                style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+              >
+                Connect Gmail, Drive, or Asana
+              </a>
             </div>
           )}
           {messages.length === 0 && !loading && setupState === "no-data" && (
