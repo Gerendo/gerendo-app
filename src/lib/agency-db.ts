@@ -702,10 +702,14 @@ export async function getWorkspaceFromSession(
   userId: string
 ): Promise<{ workspaceId: string; userId: string } | null> {
   const supabase = createServiceClient();
+  // Users can be in multiple workspaces (their own + invited ones).
+  // Return the one they joined most recently - for invited users this is the host workspace.
   const { data } = await supabase
     .from("workspace_members")
     .select("workspace_id")
     .eq("user_id", userId)
+    .order("joined_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (!data) return null;
   return { workspaceId: data.workspace_id, userId };
