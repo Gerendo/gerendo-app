@@ -24,8 +24,8 @@ export default function SettingsPage() {
   const router = useRouter();
 
   useEffect(() => {
-    createClient().auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace("/login");
+    createClient().auth.getUser().then(({ data }) => {
+      if (!data.user) router.replace("/login");
     });
   }, [router]);
 

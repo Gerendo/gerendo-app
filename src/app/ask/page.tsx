@@ -17,10 +17,10 @@ type Message = {
 export default function AskPage() {
   const router = useRouter();
 
-  // Guard: if session is gone (e.g. after logout + back button), redirect immediately
+  // Guard: verify session is live on the server (catches back button after logout)
   useEffect(() => {
-    createClient().auth.getSession().then(({ data }) => {
-      if (!data.session) router.replace("/login");
+    createClient().auth.getUser().then(({ data }) => {
+      if (!data.user) router.replace("/login");
     });
   }, [router]);
 
