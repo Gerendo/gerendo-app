@@ -157,33 +157,35 @@ function ConnectPageInner() {
     { id: "TRASH", name: "Trash", icon: "delete", type: "system", default: false },
   ];
 
-  async function openLabelPicker() {
+  async function openLabelPicker(fetchFresh = false) {
     setShowLabelPicker(true);
     setLabelError(null);
 
-    // Show defaults immediately - no API call needed to open the picker
+    // Always show defaults immediately so the modal is usable without any API call
     if (availableLabels.length === 0) {
       setAvailableLabels(DEFAULT_LABELS);
       setSelectedLabels(new Set(DEFAULT_LABELS.filter(l => l.default).map(l => l.id)));
     }
 
-    // Load full label list (including custom labels) in background
-    if (!loadingLabels) {
+    // Only fetch full label list (including custom labels) when explicitly requested
+    // e.g. via "Manage labels" button after initial connect, not on first open
+    if (fetchFresh) {
       setLoadingLabels(true);
       fetch("/api/sync/gmail/labels")
         .then(r => r.json())
         .then(body => {
           if (body.labels?.length) {
             setAvailableLabels(body.labels);
-            // Keep current selections, just add any new defaults not yet selected
             setSelectedLabels(p => {
               const next = new Set(p);
               body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
               return next;
             });
+          } else if (body.error) {
+            setLabelError(body.error);
           }
         })
-        .catch(() => {}) // defaults already shown, background load failure is non-fatal
+        .catch(() => {})
         .finally(() => setLoadingLabels(false));
     }
   }
@@ -425,7 +427,7 @@ function ConnectPageInner() {
                     <span className="text-xs whitespace-nowrap" style={{ color: statusColor }}>{statusText}</span>
                     {!tool.comingSoon && isConnected && !isConfirming && tool.id === "gmail" && (
                       <button
-                        onClick={() => openLabelPicker()}
+                        onClick={() => openLabelPicker(true)}
                         className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors"
                         style={{ background: "oklch(0.78 0.14 65 / 10%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
                       >
@@ -517,7 +519,7 @@ function ConnectPageInner() {
               <div className="flex flex-col items-center gap-3 py-8">
                 <span className="text-sm text-center" style={{ color: "oklch(0.75 0.18 25)" }}>{labelError}</span>
                 <button
-                  onClick={() => openLabelPicker()}
+                  onClick={() => openLabelPicker(true)}
                   className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: "oklch(0.78 0.14 65 / 15%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
                 >
