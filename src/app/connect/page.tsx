@@ -335,7 +335,9 @@ function ConnectPageInner() {
                   <button
                     onClick={async () => {
                       await fetch("/api/sync/stop", { method: "POST" });
+                      if (pollRef.current) clearInterval(pollRef.current);
                       setInitialSyncing(null);
+                      setSyncCount(0);
                       setToolStatus(p => ({ ...p, gmail: "active" }));
                     }}
                     className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
