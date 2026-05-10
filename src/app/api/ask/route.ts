@@ -754,6 +754,6 @@ export async function POST(req: NextRequest): Promise<Response> {
   run();
 
   return new Response(stream.readable, {
-    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive" },
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no" },
   });
 }

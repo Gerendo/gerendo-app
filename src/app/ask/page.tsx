@@ -21,37 +21,24 @@ const KIND_COLOR: Record<string, string> = {
   asana: "oklch(0.6 0.16 25)",
 };
 
-function SourcePill({ source }: { source: Source }) {
+function SourceChips({ sources }: { sources: Source[] }) {
+  if (!sources.length) return null;
   return (
-    <a
-      href={source.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      title={source.sublabel}
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium no-underline mx-0.5 align-middle hover:opacity-80 transition-opacity"
-      style={{ background: "oklch(0.18 0.01 55)", border: `1px solid ${KIND_COLOR[source.kind]}44`, color: KIND_COLOR[source.kind] }}
-    >
-      <span>{KIND_ICON[source.kind]}</span>
-      <span className="max-w-[120px] truncate">{source.label}</span>
-    </a>
-  );
-}
-
-function TextWithPills({ text, sources }: { text: string; sources: Source[] }) {
-  if (!sources.length) return <ReactMarkdown>{text}</ReactMarkdown>;
-  const sourceMap = new Map(sources.map(s => [s.ref, s]));
-  // Split on [E1], [D1], [A1] etc. and replace with pills
-  const parts = text.split(/(\[[EDA]\d+\])/g);
-  return (
-    <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-      {parts.map((part, i) => {
-        const match = part.match(/^\[([EDA]\d+)\]$/);
-        if (match) {
-          const source = sourceMap.get(match[1]);
-          if (source) return <SourcePill key={i} source={source} />;
-        }
-        return <ReactMarkdown key={i}>{part}</ReactMarkdown>;
-      })}
+    <div className="flex flex-wrap gap-1.5 mt-2">
+      {sources.map((s, i) => (
+        <a
+          key={i}
+          href={s.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={s.sublabel}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium no-underline hover:opacity-80 transition-opacity"
+          style={{ background: "oklch(0.18 0.01 55)", border: `1px solid ${KIND_COLOR[s.kind]}55`, color: KIND_COLOR[s.kind] }}
+        >
+          <span>{KIND_ICON[s.kind]}</span>
+          <span className="max-w-[160px] truncate">{s.label}</span>
+        </a>
+      ))}
     </div>
   );
 }
@@ -418,7 +405,10 @@ export default function AskPage() {
               ) : (
                 <div className="flex flex-col gap-3 max-w-full">
                   {msg.warning && <p className="text-yellow-500 text-xs">{msg.warning}</p>}
-                  <TextWithPills text={msg.content} sources={msg.sources ?? []} />
+                  <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                  <SourceChips sources={msg.sources ?? []} />
                 </div>
               )}
             </div>
@@ -427,9 +417,10 @@ export default function AskPage() {
           {loading && (
             <div className="flex flex-col gap-3 items-start">
               <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                <TextWithPills text={streamingText} sources={streamingSources} />
+                <ReactMarkdown>{streamingText}</ReactMarkdown>
                 <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
               </div>
+              <SourceChips sources={streamingSources} />
             </div>
           )}
 
