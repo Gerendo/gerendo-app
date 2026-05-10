@@ -1,5 +1,8 @@
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextRequest } from "next/server";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
 import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, checkAndIncrementQuota, type AgencyDb } from "@/lib/agency-db";
