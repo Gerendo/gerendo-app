@@ -69,12 +69,20 @@ function Nav({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
         <a href="#security" className="hover:text-foreground">Security</a>
         <a href="#pricing" className="hover:text-foreground">Pricing</a>
       </nav>
-      <button
-        onClick={onWaitlistOpen}
-        className="rounded-full border border-border bg-background/40 px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition hover:border-ember/60 hover:text-ember"
-      >
-        Get early access
-      </button>
+      <div className="flex items-center gap-3">
+        <a
+          href="https://app.gerendo.com"
+          className="font-mono text-[11px] uppercase tracking-wider text-muted-foreground transition hover:text-foreground"
+        >
+          Sign in
+        </a>
+        <button
+          onClick={onWaitlistOpen}
+          className="rounded-full border border-border bg-background/40 px-4 py-2 font-mono text-[11px] uppercase tracking-wider text-foreground backdrop-blur transition hover:border-ember/60 hover:text-ember"
+        >
+          Get early access
+        </button>
+      </div>
     </header>
   );
 }
@@ -695,6 +703,7 @@ function Footer() {
             <li><a href="#meetings" className="hover:text-foreground">Meetings</a></li>
             <li><a href="#ai" className="hover:text-foreground">Your AI</a></li>
             <li><a href="#pricing" className="hover:text-foreground">Pricing</a></li>
+            <li><a href="https://app.gerendo.com" className="hover:text-foreground">Open app</a></li>
           </ul>
         </div>
 
