@@ -26,6 +26,21 @@ export default function SettingsPage() {
 
   const [authChecked, setAuthChecked] = useState(false);
   const push = usePushNotifications();
+  const [testSent, setTestSent] = useState(false);
+  const [testError, setTestError] = useState("");
+
+  async function sendTestNotification() {
+    setTestSent(false);
+    setTestError("");
+    const res = await fetch("/api/push/test", { method: "POST" });
+    if (res.ok) {
+      setTestSent(true);
+      setTimeout(() => setTestSent(false), 4000);
+    } else {
+      const d = await res.json();
+      setTestError(d.error ?? "Failed to send test");
+    }
+  }
 
   useEffect(() => {
     const checkAuth = () => {
@@ -291,13 +306,25 @@ export default function SettingsPage() {
             </div>
 
             {push.state === "granted" && (
-              <button
-                onClick={push.disable}
-                className="shrink-0 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
-                style={{ background: inkSoft, color: mutedColor, border: `1px solid ${borderColor}` }}
-              >
-                Disable
-              </button>
+              <div className="flex flex-col items-end gap-2 shrink-0">
+                <div className="flex gap-2">
+                  <button
+                    onClick={sendTestNotification}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                    style={{ background: inkSoft, color: emberColor, border: `1px solid ${borderColor}` }}
+                  >
+                    {testSent ? "Sent!" : "Test"}
+                  </button>
+                  <button
+                    onClick={push.disable}
+                    className="text-xs px-3 py-1.5 rounded-lg font-medium transition-colors"
+                    style={{ background: inkSoft, color: mutedColor, border: `1px solid ${borderColor}` }}
+                  >
+                    Disable
+                  </button>
+                </div>
+                {testError && <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>{testError}</p>}
+              </div>
             )}
             {(push.state === "prompt") && (
               <button
