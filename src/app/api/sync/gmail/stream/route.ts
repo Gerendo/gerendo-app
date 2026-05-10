@@ -89,6 +89,8 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     for (const label of labelsToSync) {
       if (await isCancelled()) break;
       await updateJob({ current_label: label.name });
+      // Brief pause between labels to avoid exhausting Gmail quota on large mailboxes
+      await new Promise(r => setTimeout(r, 200));
 
       const stateKey = `gmail:${label.id}`;
       const { cursor } = await getSyncState(db, stateKey);
@@ -113,6 +115,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
             });
             messageIds.push(...(listRes.data.messages ?? []).map((m: any) => m.id!).filter(Boolean));
             pageToken = listRes.data.nextPageToken ?? undefined;
+            if (pageToken) await new Promise(r => setTimeout(r, 100));
           } while (pageToken);
           const profileRes = await gmail.users.getProfile({ userId: "me" });
           if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
