@@ -1,7 +1,7 @@
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
-import { getGmailToken } from "@/lib/agency-db";
+import { getGmailToken, openAgencyDb, getSyncState } from "@/lib/agency-db";
 
 // Only exclude true system internals that are never useful to index
 const EXCLUDED_LABELS = new Set(["UNREAD", "CHAT"]);
@@ -33,6 +33,16 @@ export async function GET(): Promise<NextResponse> {
     token = await getGmailToken(workspaceId, userId);
   } catch {
     return NextResponse.json({ error: "Gmail not connected" }, { status: 401 });
+  }
+
+  // Skip API call if we're inside a known rate limit window
+  const db = openAgencyDb(workspaceId, userId);
+  const { cursor: rateLimitUntil } = await getSyncState(db, "gmail:rate_limit_until");
+  if (rateLimitUntil && Number(rateLimitUntil) > Date.now()) {
+    const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
+      id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
+    }));
+    return NextResponse.json({ labels: defaults, rateLimited: true });
   }
 
   const auth = new google.auth.OAuth2();
