@@ -36,14 +36,15 @@ export default function PrivacyPage() {
             q: "What data do you store?",
             a: (
               <>
-                <p>We store the minimum needed to make search work. For each tool you connect:</p>
+                <p>We store the minimum needed to make search and chat work. Here is exactly what is kept in our database:</p>
                 <ul className="flex flex-col gap-1.5 mt-3 ml-4">
-                  <li><strong>Gmail</strong> - email subject, sender address, date, and the first ~1,500 characters of each email body. The full body is never stored - it is fetched live from Gmail only when you ask a question that needs it.</li>
-                  <li><strong>Google Drive</strong> - file name, file type, and text chunks extracted from the content of your documents, sheets, and slides.</li>
-                  <li><strong>Asana</strong> - task name, project name, assignee name, due date, status, and task description/comments.</li>
+                  <li><strong>Gmail</strong> - email subject line, sender address and name, date, mailbox label, and the first ~1,500 characters of the email body as plain text. The full body beyond 1,500 characters is never stored - it is fetched live from Gmail only when a question needs it.</li>
+                  <li><strong>Google Drive</strong> - file name, file type, and text chunks extracted from document content (plain text export of Docs, CSV of Sheets, text of Slides). Full file content is fetched live at query time, not stored.</li>
+                  <li><strong>Asana</strong> - task name, project name, assignee display name, due date, completion status, notes, and comments. Stored as plain text and as search embeddings.</li>
+                  <li><strong>Chat history</strong> - every question you ask and every answer the AI gives is stored in our database so you can return to past conversations. This includes the full text of both sides of the exchange.</li>
+                  <li><strong>AI-generated summaries</strong> - when the AI summarises an email thread, that summary is stored to avoid re-generating it on repeat questions.</li>
                 </ul>
-                <p className="mt-3">All of this is stored as searchable text and as vector embeddings (mathematical representations used for semantic search).</p>
-                <p className="mt-2">We also store AI-generated summaries of emails once you request them, and workspace context used to make answers faster.</p>
+                <p className="mt-3">For search to work, text from your emails, Drive files, and Asana tasks is also sent to Voyage AI to generate vector embeddings - mathematical representations stored alongside the text for semantic search. See the third-party section below.</p>
               </>
             ),
           },
@@ -63,7 +64,7 @@ export default function PrivacyPage() {
             q: "Where is data stored?",
             a: (
               <>
-                <p>Your data is stored in <strong>Supabase</strong>, a managed Postgres database hosted on AWS infrastructure in the EU (Ireland) region. All data is encrypted at rest using AES-256 and in transit over TLS 1.3.</p>
+                <p>Your data is stored in <strong>Supabase</strong>, a managed Postgres database hosted on AWS infrastructure. All data is encrypted at rest using AES-256 and in transit over TLS.</p>
                 <p className="mt-2">Your OAuth access tokens (which grant us read access to Gmail, Drive, and Asana) are stored in this same database. They are protected by row-level security - no other user, even in the same workspace, can read your tokens.</p>
               </>
             ),
@@ -89,7 +90,7 @@ export default function PrivacyPage() {
                 <p>When you use Gerendo, your data passes through these services:</p>
                 <ul className="flex flex-col gap-1.5 mt-3 ml-4">
                   <li><strong>Anthropic (Claude)</strong> - your questions and relevant search results are sent to Anthropic's API to generate answers. Anthropic does not train models on API data by default.</li>
-                  <li><strong>Voyage AI</strong> - text from your emails, files, and tasks is sent to Voyage's API to generate search embeddings. These embeddings are numerical vectors; Voyage does not receive your raw text after embedding.</li>
+                  <li><strong>Voyage AI</strong> - text from your emails, files, and Asana tasks is sent to Voyage's API, which converts it into vector embeddings (numerical representations used for semantic search). Voyage receives the text as input to produce these vectors.</li>
                   <li><strong>Google</strong> - OAuth authentication and live data fetches (email bodies, Drive file content) go through Google's APIs.</li>
                   <li><strong>Asana</strong> - task data is read from Asana's API. Creating tasks from chat also writes through this API.</li>
                   <li><strong>Vercel</strong> - the application runs on Vercel's infrastructure. Request logs may include your user ID and query metadata.</li>
@@ -107,7 +108,12 @@ export default function PrivacyPage() {
                   <li><strong>Disconnect a tool</strong> - removes your OAuth token for that tool. Your indexed data is kept so reconnecting is fast and does not re-index everything.</li>
                   <li><strong>Delete all indexed data</strong> - available in Settings under Danger Zone. Permanently deletes all emails, files, and task data from our database and disconnects all tools. This cannot be undone.</li>
                 </ul>
-                <p className="mt-3">To permanently delete your account and all associated data, contact us at <a href="mailto:privacy@gerendo.com" style={{ color: accent }}>privacy@gerendo.com</a>. We will process account deletion within 7 days.</p>
+                <p className="mt-3">To fully remove your presence from Gerendo:</p>
+                <ol className="flex flex-col gap-1.5 mt-2 ml-4 list-decimal">
+                  <li>Use Settings → Danger Zone to delete all indexed data and disconnect all tools.</li>
+                  <li>Revoke Gerendo's access in your Google account at <a href="https://myaccount.google.com/permissions" target="_blank" style={{ color: accent }}>myaccount.google.com/permissions</a>.</li>
+                  <li>Email <a href="mailto:privacy@gerendo.com" style={{ color: accent }}>privacy@gerendo.com</a> to request removal of your workspace record. We will complete this within 7 days.</li>
+                </ol>
               </>
             ),
           },
