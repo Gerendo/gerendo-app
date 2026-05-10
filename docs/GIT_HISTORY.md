@@ -1,3 +1,523 @@
+## bb7d0bd - fix: add 200ms delay between labels and 100ms between pagination pages to stay within Gmail quota
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:58
+
+
+---
+## 1f24e30 - fix: labels API returns defaults on rate limit instead of error, remove error modal from label picker
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:57
+
+
+---
+## 55b980c - fix: retry after rate limit in gmail sync, set webhook lock before sync to prevent concurrent race
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:55
+
+
+---
+## adfb7b2 - fix: cache tool results in-request so identical tool calls return cached data, not a live re-fetch
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:50
+
+
+---
+## 99bbc78 - fix: hard client-side completed status check, clearer meta-question rule to prevent unnecessary re-fetches
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:46
+
+
+---
+## e5fad46 - fix: AI must preserve tool result order, never re-call tools when asked about data source
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:43
+
+
+---
+## e0106e2 - fix: revert to project-based fetch (search API is premium-only), fix due_on filter to exclude null, sort by due date for stable ordering
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:37
+
+
+---
+## 3118861 - fix: use Asana search API for consistent server-side filtering, remove broken custom URL scheme
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:33
+
+
+---
+## ee99df9 - fix: paginate through all Asana tasks for accurate count, hard-enforce 10 per page in tool result
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:28
+
+
+---
+## 38c029d - fix: add offset+show_all to get_asana_tasks for pagination, fix count confusion between indexed vs live, clearer pagination prompt
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:22
+
+
+---
+## b7bdf40 - feat: smart links open native app if installed (Asana), fall back to web after 1.5s
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:17
+
+
+---
+## 83d5fd4 - fix: fetch all tasks for accurate count but show only top 10, AI told to always state total then list top 10
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:12
+
+
+---
+## 11e957a - fix: increase Asana default limit to 100, number tasks so AI counts correctly, make total count explicit
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:10
+
+
+---
+## 7e3da42 - fix: use SDK streaming for real token-by-token output, make task/file names clickable markdown links
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:07
+
+
+---
+## 86f89fe - fix: add X-Accel-Buffering header for Vercel streaming, replace inline pill parsing with source chips below response
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 15:02
+
+
+---
+## c78c559 - feat: inline source pills replace [D1]/[A1]/[E1] markers with clickable chips linking to Drive/Asana/Gmail
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:56
+
+
+---
+## 384ffb4 - fix: add force-dynamic and maxDuration to ask route to enable streaming on Vercel
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:50
+
+
+---
+## 169f0e7 - fix: OAuth callback handled only once - searchParams identity changes were re-triggering doFirstSync on every render
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:40
+
+
+---
+## cceb281 - revert: restore gmail webhook register call on connect
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:17
+
+
+---
+## 39937fe - fix: remove gmail webhook register call from connect page, cron handles registration daily
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:15
+
+
+---
+## e54355c - fix: never show syncing banner if Gmail not connected, mark stuck jobs done after 5min with 0 synced
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:10
+
+
+---
+## 27b02dd - chore: log caller context on gmail register to trace quota exhaustion
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 14:00
+
+
+---
+## 0a8b3c6 - fix: cache rate limit retry-after in DB so subsequent register calls are skipped until quota resets
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:59
+
+
+---
+## 69da151 - fix: cron only processes members who have the relevant provider connected
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:56
+
+
+---
+## 619b264 - fix: getWorkspaceFromSession picks most recently joined workspace, handles multi-workspace users
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:46
+
+
+---
+## 9653194 - fix: skip auto-workspace creation when signing in via invite link
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:38
+
+
+---
+## 20395d3 - fix: skip gmail watch re-registration if an active watch already exists
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:18
+
+
+---
+## a0fc44d - fix: status route timestamp bug causes infinite poll, remove spurious Drive sync from Gmail webhook
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:15
+
+
+---
+## d4db9f6 - chore: sync GEMINI.md with CLAUDE.md (deploy config section)
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 13:06
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 6b02acf - fix: fix broken debounce in Gmail webhook, increase to 5 minutes
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 12:02
+
+The debounce comparison was broken - comparing ms timestamp to Postgres
+date string always evaluated false, meaning every webhook push triggered
+a full Gmail sync. Fixed by parsing the date string properly.
+Increased debounce from 30s to 5 minutes to reduce API hammering.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 88402c9 - fix: never call Gmail labels API on initial connect, only on explicit refresh
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 12:00
+
+On first connect, modal shows hardcoded defaults (Inbox, Sent, Drafts etc)
+with no API call. Gmail labels API only called when user clicks Manage labels
+or the retry button inside the modal. Eliminates rate limit issues entirely.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 739028d - fix: global stop button disconnects all tools, not just syncing one
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:54
+
+Stop now calls disconnect for all tools (gmail, drive, asana) and
+clears all connected state so every card shows Not connected.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## fd3738d - fix: Stop button works for all tools, not just Gmail
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:52
+
+Stop button was gated on initialSyncing === 'gmail' so Drive and Asana
+syncs could never be stopped. Now shows for any syncing tool.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 875f188 - fix: stop button also deletes OAuth token so disconnect persists on reload
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:48
+
+Previously Stop only cleared UI state - on next page load nango status
+fetch would find the token still in DB and show the tool as connected again.
+Now Stop calls /api/sync/disconnect to remove the token from the DB.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 8dd7ea3 - fix: stop disconnects tool, fix connectedTools race condition
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:45
+
+- Stop button now removes tool from connectedTools so card shows Not connected
+- Nango status fetch merges instead of replacing connectedTools to prevent
+  race condition where a just-connected tool gets wiped out by stale status
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 3cec7de - fix: stop button clears poll and syncCount
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:42
+
+Stop button now clears the poll interval and resets syncCount to 0
+so the progress bar disappears cleanly.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## b815929 - fix: clear progress bar and stop button when syncing tool is disconnected
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:39
+
+Disconnecting a tool that is currently syncing now clears initialSyncing
+and stops the poll, so the progress bar and stop button disappear.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 7882935 - fix: catch Gmail watch API errors in webhook register route
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:34
+
+Unhandled exception from gmail.users.watch was causing 500 with empty body.
+Now returns 502 with actual error. Client already ignores this error (fire-and-forget).
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 72889fd - fix: show default labels immediately, load full list in background
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:31
+
+Modal opens instantly with Inbox/Sent/Drafts/etc pre-populated.
+Full label list (including custom Gmail labels) loads in background.
+No API call blocks the modal from opening - eliminates rate limit UX issues.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## d9a5f0e - fix: cache Gmail labels in state, only fetch once per session
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:28
+
+Reopening the label picker reuses cached labels instead of hitting
+the Gmail API again. Try again button forces a fresh fetch.
+Prevents rate limit errors from repeated calls.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## f809eb6 - fix: show error inside label picker modal instead of closing silently
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:26
+
+When Gmail API returns an error (rate limit, token issue, etc.) the modal
+stays open and shows the error message with a retry button.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 9a5b61a - fix: catch Gmail API errors in labels route, return proper error message
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:23
+
+Unhandled exception from gmail.users.labels.list was causing a 500 with
+empty body. Now returns a 502 with the actual error message.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 20e9a12 - fix: show actual error message when label picker fails to load
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:17
+
+Instead of closing silently, surfaces the real error from the API
+so we can diagnose why labels aren't loading.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## b2c8404 - fix: gate OAuth redirect handler on authChecked, add Manage labels button
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:14
+
+- URL param handler (gmail_connected=1 etc) now waits for auth to be
+  confirmed before fetching, fixing empty label picker on reconnect
+- Add 'Manage labels' button on connected Gmail card so users can
+  change which mailboxes are synced without disconnecting
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## b2ed6ee - fix: close label picker and show error if Gmail labels fail to load
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:05
+
+Instead of opening an empty modal when the labels API returns 401/error,
+close the picker and show an inline error message on the Gmail card.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 84f4547 - fix: handle bfcache restore on back button (mobile Safari)
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 11:00
+
+Mobile Safari's back-forward cache freezes pages in memory and restores
+them without re-running useEffect. The pageshow event with e.persisted=true
+fires on bfcache restores - we check auth there and redirect if session is gone.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 1310fd4 - fix: render nothing until auth confirmed, preventing back button flash
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:57
+
+Pages return null until getUser() confirms a valid session. If no session,
+redirects to login. Prevents cached page content from showing to logged-out users.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 0d33a81 - fix: explicitly delete auth cookies on signout response
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:52
+
+Forces browser to drop sb-* cookies immediately on logout so cached
+pages cannot restore an authenticated session via the back button.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 08bc983 - fix: use getUser() instead of getSession() for auth guard
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:50
+
+getSession() reads from local cache and can return stale data after logout.
+getUser() makes a live server request so it correctly detects invalid sessions.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 84f8110 - fix: redirect to login if session gone on back button
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:47
+
+Each protected page checks auth on mount and redirects to /login if
+no session exists. Catches the case where browser restores a cached
+page after logout.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 5744abf - fix: add Cache-Control no-store to authenticated pages
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:39
+
+Prevents browser back button from restoring a cached authenticated page
+after logout. Middleware sets no-store on /ask, /connect, /settings.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 9118b98 - fix: category chips are rectangles, connect/disconnect button pushed right
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:29
+
+- Category filter: rounded-lg instead of rounded-full, larger text and padding
+- Tool card: status + button row uses justify-between on mobile so button sits at far right
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 5ea8d29 - fix: tool cards stack vertically on mobile to prevent text overlap
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:25
+
+Status text and action button now appear on a second row on mobile,
+indented to align with the text. No more overlap with description.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## de4dd9f - fix: suggestion chips use 2-column grid on mobile, clamp to 2 lines
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:22
+
+Prevents chips from becoming unreadably tall in narrow viewports.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## d917ace - fix: always show Google account picker on login
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:19
+
+Adds prompt=select_account so users can switch accounts instead of
+being silently signed into their last Google session.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 22817f1 - fix(qa): sidebar defaults collapsed on mobile, category filter no-wrap on mobile
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:13
+
+- ISSUE-002: sidebar now defaults to collapsed on mobile (< 768px) unless
+  the user has an explicit localStorage preference
+- ISSUE-003: category filter chips now only wrap at md breakpoint (768px+),
+  staying in a single scrollable row on mobile
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## bd37573 - docs: update git history log
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 10:00
+
+
+---
 ## 285564a - feat: register Asana webhooks on connect, expand QA sync checklist
 
 **Author:** Tocki28  
