@@ -25,7 +25,9 @@ export default function AskPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
-    return localStorage.getItem("sidebar_collapsed") === "true";
+    const saved = localStorage.getItem("sidebar_collapsed");
+    if (saved !== null) return saved === "true";
+    return window.innerWidth < 768;
   });
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);

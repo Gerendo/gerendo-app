@@ -301,7 +301,7 @@ function ConnectPageInner() {
         </div>
 
         {/* Category filter - horizontal scroll on mobile, wraps on desktop */}
-        <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-nowrap sm:flex-wrap">
+        <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-nowrap md:flex-wrap">
           {categories.map(cat => (
             <button
               key={cat}
