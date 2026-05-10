@@ -144,25 +144,45 @@ function ConnectPageInner() {
     }, 2000);
   }
 
-  async function openLabelPicker(forceRefresh = false) {
+  // Default labels shown before API loads - user can start sync immediately with these
+  const DEFAULT_LABELS = [
+    { id: "INBOX", name: "Inbox", icon: "inbox", type: "system", default: true },
+    { id: "SENT", name: "Sent", icon: "send", type: "system", default: true },
+    { id: "DRAFT", name: "Drafts", icon: "drafts", type: "system", default: false },
+    { id: "STARRED", name: "Starred", icon: "star", type: "system", default: false },
+    { id: "IMPORTANT", name: "Important", icon: "label_important", type: "system", default: false },
+    { id: "SPAM", name: "Spam", icon: "report", type: "system", default: false },
+    { id: "TRASH", name: "Trash", icon: "delete", type: "system", default: false },
+  ];
+
+  async function openLabelPicker() {
     setShowLabelPicker(true);
     setLabelError(null);
 
-    // Use cached labels if available and not forcing a refresh
-    if (availableLabels.length > 0 && !forceRefresh) return;
+    // Show defaults immediately - no API call needed to open the picker
+    if (availableLabels.length === 0) {
+      setAvailableLabels(DEFAULT_LABELS);
+      setSelectedLabels(new Set(DEFAULT_LABELS.filter(l => l.default).map(l => l.id)));
+    }
 
-    setLoadingLabels(true);
-    try {
-      const res = await fetch("/api/sync/gmail/labels");
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
-      if (!body.labels?.length) throw new Error("No labels returned from Gmail");
-      setAvailableLabels(body.labels);
-      setSelectedLabels(new Set(body.labels.filter((l: any) => l.default).map((l: any) => l.id)));
-    } catch (err: any) {
-      setLabelError(err.message ?? "Could not load Gmail mailboxes");
-    } finally {
-      setLoadingLabels(false);
+    // Load full label list (including custom labels) in background
+    if (!loadingLabels) {
+      setLoadingLabels(true);
+      fetch("/api/sync/gmail/labels")
+        .then(r => r.json())
+        .then(body => {
+          if (body.labels?.length) {
+            setAvailableLabels(body.labels);
+            // Keep current selections, just add any new defaults not yet selected
+            setSelectedLabels(p => {
+              const next = new Set(p);
+              body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
+              return next;
+            });
+          }
+        })
+        .catch(() => {}) // defaults already shown, background load failure is non-fatal
+        .finally(() => setLoadingLabels(false));
     }
   }
 
@@ -479,7 +499,7 @@ function ConnectPageInner() {
               <div className="flex flex-col items-center gap-3 py-8">
                 <span className="text-sm text-center" style={{ color: "oklch(0.75 0.18 25)" }}>{labelError}</span>
                 <button
-                  onClick={() => openLabelPicker(true)}
+                  onClick={() => openLabelPicker()}
                   className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: "oklch(0.78 0.14 65 / 15%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
                 >
