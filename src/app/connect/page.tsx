@@ -67,6 +67,7 @@ function ConnectPageInner() {
   const [initialSyncing, setInitialSyncing] = useState<string | null>(null);
   const [syncCount, setSyncCount] = useState(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const oauthHandledRef = useRef(false);
 
   // Label picker modal
   const [showLabelPicker, setShowLabelPicker] = useState(false);
@@ -87,12 +88,16 @@ function ConnectPageInner() {
     const driveError = searchParams.get("drive_error");
     const asanaError = searchParams.get("asana_error");
 
-    if (gmailConnected === "1") { doFirstSync("gmail"); window.history.replaceState({}, "", "/connect"); }
-    if (driveConnected === "1") { doFirstSync("drive"); window.history.replaceState({}, "", "/connect"); }
-    if (asanaConnected === "1") { doFirstSync("asana"); window.history.replaceState({}, "", "/connect"); }
-    if (gmailError) { setToolError(p => ({ ...p, gmail: "Authorization failed" })); setToolStatus(p => ({ ...p, gmail: "error" })); window.history.replaceState({}, "", "/connect"); }
-    if (driveError) { setToolError(p => ({ ...p, drive: "Authorization failed" })); setToolStatus(p => ({ ...p, drive: "error" })); window.history.replaceState({}, "", "/connect"); }
-    if (asanaError) { setToolError(p => ({ ...p, asana: "Authorization failed" })); setToolStatus(p => ({ ...p, asana: "error" })); window.history.replaceState({}, "", "/connect"); }
+    if (!oauthHandledRef.current && (gmailConnected || driveConnected || asanaConnected || gmailError || driveError || asanaError)) {
+      oauthHandledRef.current = true;
+      if (gmailConnected === "1") doFirstSync("gmail");
+      if (driveConnected === "1") doFirstSync("drive");
+      if (asanaConnected === "1") doFirstSync("asana");
+      if (gmailError) { setToolError(p => ({ ...p, gmail: "Authorization failed" })); setToolStatus(p => ({ ...p, gmail: "error" })); }
+      if (driveError) { setToolError(p => ({ ...p, drive: "Authorization failed" })); setToolStatus(p => ({ ...p, drive: "error" })); }
+      if (asanaError) { setToolError(p => ({ ...p, asana: "Authorization failed" })); setToolStatus(p => ({ ...p, asana: "error" })); }
+      window.history.replaceState({}, "", "/connect");
+    }
 
     // Load current state
     fetch("/api/nango/status").then(r => r.json()).then(({ connected, driveConnected: dc, asanaConnected: ac }) => {
