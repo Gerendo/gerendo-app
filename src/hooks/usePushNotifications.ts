@@ -17,7 +17,8 @@ export function usePushNotifications() {
     navigator.serviceWorker.register("/sw.js").then((reg) => {
       return reg.pushManager.getSubscription().then((sub) => {
         setSubscription(sub);
-        setState(sub ? "granted" : (Notification.permission as PushState));
+        const perm = Notification.permission;
+        setState(sub ? "granted" : perm === "default" ? "prompt" : perm as PushState);
       });
     }).catch(() => setState("unsupported"));
   }, []);
