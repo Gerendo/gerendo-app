@@ -462,6 +462,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       ];
 
       const sourcesEmitted = new Set<string>();
+      let emailRefIdx = 0;
 
       const workspaceCtx = await getWorkspaceContext(db);
 
@@ -532,9 +533,10 @@ export async function POST(req: NextRequest): Promise<Response> {
               for (const row of rows) {
                 if (!sourcesEmitted.has(row.externalId)) {
                   sourcesEmitted.add(row.externalId);
+                  const ref = `E${++emailRefIdx}`;
                   writer.write(encoder.encode(`data: ${JSON.stringify({
                     type: "source",
-                    source: { subject: row.subject, sender: row.sender, date: formatDate(row.receivedAt), mailbox: row.mailbox, url: `https://mail.google.com/mail/u/0/#all/${row.threadId ?? row.externalId}` },
+                    source: { ref, label: row.subject, sublabel: `${row.sender} · ${formatDate(row.receivedAt)}`, url: `https://mail.google.com/mail/u/0/#all/${row.threadId ?? row.externalId}`, kind: "gmail" },
                   })}\n\n`));
                 }
               }
@@ -560,11 +562,18 @@ export async function POST(req: NextRequest): Promise<Response> {
                 result = "No Drive files indexed yet. Sync Google Drive from /connect first.";
               } else {
                 result = driveFiles.map((f, i) => {
+                  const ref = `D${i + 1}`;
                   const type = f.mime_type.includes("spreadsheet") ? "Sheet"
                     : f.mime_type.includes("document") ? "Doc"
                     : f.mime_type.includes("presentation") ? "Slides"
                     : "File";
-                  return `[D${i + 1}] id:${f.id} | ${f.name} (${type}) | ${f.web_view_link ?? "no link"} | Modified: ${new Date(f.modified_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+                  if (f.web_view_link) {
+                    writer.write(encoder.encode(`data: ${JSON.stringify({
+                      type: "source",
+                      source: { ref, label: f.name, sublabel: type, url: f.web_view_link, kind: "drive" },
+                    })}\n\n`));
+                  }
+                  return `[${ref}] id:${f.id} | ${f.name} (${type}) | ${f.web_view_link ?? "no link"} | Modified: ${new Date(f.modified_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
                 }).join("\n");
               }
 
@@ -605,6 +614,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                   const statusFilter = input.status ?? "open";
                   const workspaces = await asanaGet(token, "/workspaces");
                   const allTasks: string[] = [];
+                  const allTaskMeta: Array<{ name: string; due_on: string | null; permalink_url: string }> = [];
 
                   for (const ws of workspaces) {
                     if (allTasks.length >= maxTasks) break;
@@ -644,6 +654,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                         if (input.due_before && task.due_on && task.due_on > input.due_before) continue;
 
                         const overdue = task.due_on && task.due_on < todayIso && !task.completed;
+                        if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
                         allTasks.push([
                           `Task: ${task.name}`,
                           `Project: ${project.name}`,
@@ -656,6 +667,12 @@ export async function POST(req: NextRequest): Promise<Response> {
                     }
                   }
 
+                  allTaskMeta.forEach((task, i) => {
+                    writer.write(encoder.encode(`data: ${JSON.stringify({
+                      type: "source",
+                      source: { ref: `A${i + 1}`, label: task.name, sublabel: task.due_on ?? "No due date", url: task.permalink_url, kind: "asana" },
+                    })}\n\n`));
+                  });
                   result = allTasks.length > 0
                     ? `LIVE ASANA TASKS (${allTasks.length} returned):\n` + allTasks.join("\n")
                     : "(No tasks found matching the given filters.)";

@@ -6,13 +6,55 @@ import ReactMarkdown from "react-markdown";
 import Sidebar from "@/components/Sidebar";
 import { createClient } from "@/lib/supabase";
 
-type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
+type Source = { ref: string; label: string; sublabel: string; url: string; kind: "gmail" | "drive" | "asana" };
 type Message = {
   role: "user" | "assistant";
   content: string;
   sources?: Source[];
   warning?: string;
 };
+
+const KIND_ICON: Record<string, string> = { gmail: "✉", drive: "📄", asana: "✓" };
+const KIND_COLOR: Record<string, string> = {
+  gmail: "oklch(0.55 0.12 250)",
+  drive: "oklch(0.55 0.14 145)",
+  asana: "oklch(0.6 0.16 25)",
+};
+
+function SourcePill({ source }: { source: Source }) {
+  return (
+    <a
+      href={source.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={source.sublabel}
+      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium no-underline mx-0.5 align-middle hover:opacity-80 transition-opacity"
+      style={{ background: "oklch(0.18 0.01 55)", border: `1px solid ${KIND_COLOR[source.kind]}44`, color: KIND_COLOR[source.kind] }}
+    >
+      <span>{KIND_ICON[source.kind]}</span>
+      <span className="max-w-[120px] truncate">{source.label}</span>
+    </a>
+  );
+}
+
+function TextWithPills({ text, sources }: { text: string; sources: Source[] }) {
+  if (!sources.length) return <ReactMarkdown>{text}</ReactMarkdown>;
+  const sourceMap = new Map(sources.map(s => [s.ref, s]));
+  // Split on [E1], [D1], [A1] etc. and replace with pills
+  const parts = text.split(/(\[[EDA]\d+\])/g);
+  return (
+    <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+      {parts.map((part, i) => {
+        const match = part.match(/^\[([EDA]\d+)\]$/);
+        if (match) {
+          const source = sourceMap.get(match[1]);
+          if (source) return <SourcePill key={i} source={source} />;
+        }
+        return <ReactMarkdown key={i}>{part}</ReactMarkdown>;
+      })}
+    </div>
+  );
+}
 
 export default function AskPage() {
   const router = useRouter();
@@ -376,21 +418,7 @@ export default function AskPage() {
               ) : (
                 <div className="flex flex-col gap-3 max-w-full">
                   {msg.warning && <p className="text-yellow-500 text-xs">{msg.warning}</p>}
-                  <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  </div>
-                  {msg.sources && msg.sources.length > 0 && (
-                    <div className="flex flex-col gap-1.5 mt-1">
-                      <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
-                      {msg.sources.map((s, j) => (
-                        <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
-                          className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] transition-colors">
-                          <span className="text-xs text-white font-medium">{s.subject}</span>
-                          <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date} · <span className="text-[oklch(0.45_0.01_60)]">{s.mailbox ?? "inbox"}</span></span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
+                  <TextWithPills text={msg.content} sources={msg.sources ?? []} />
                 </div>
               )}
             </div>
@@ -398,20 +426,8 @@ export default function AskPage() {
 
           {loading && (
             <div className="flex flex-col gap-3 items-start">
-              {streamingSources.length > 0 && (
-                <div className="flex flex-col gap-1.5">
-                  <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
-                  {streamingSources.map((s, j) => (
-                    <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
-                      className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
-                      <span className="text-xs text-white font-medium">{s.subject}</span>
-                      <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date}</span>
-                    </a>
-                  ))}
-                </div>
-              )}
               <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                <ReactMarkdown>{streamingText}</ReactMarkdown>
+                <TextWithPills text={streamingText} sources={streamingSources} />
                 <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
               </div>
             </div>
