@@ -136,7 +136,129 @@ Legend: ✅ Pass · ❌ Fail · ⚠️ Partial · ⏭️ Skip
 
 ---
 
-## 5. Real-time sync (webhooks)
+## 5. AI Query Engine - Edge Cases
+
+This section tests the 4-level query strategy and tool-awareness system end to end.
+Run each test and note the AI's actual behavior in the findings log.
+
+### 5A. Tool detection (Step 1)
+
+These verify the AI knows exactly what it has access to before answering.
+
+| Setup | Question | Expected behavior |
+|-------|----------|-------------------|
+| No tools connected | "What are my emails?" | Explains Gmail not connected, offers to be useful anyway, gives /connect link |
+| No tools connected | "Any overdue tasks?" | Explains Asana not connected, describes what it could do once connected |
+| No tools connected | "Who am I meeting tomorrow?" | Helpful general response, notes no calendar connected |
+| Only Gmail | "What tasks are overdue?" | "Asana isn't connected — once connected I can check live. Here's what I found in your emails..." |
+| Only Asana | "What are my last 5 emails?" | "Gmail isn't connected — I can't search emails yet. Here's what I can tell you from Asana..." |
+| Only Drive | "Summarize my emails from John" | Explains Gmail not connected, does not attempt a Gmail search |
+| Gmail + Asana, no Drive | "What's in my project brief doc?" | "Drive isn't connected — I can't read files yet..." |
+| All connected | Any question | Answers from correct source, no "not connected" apology |
+
+**Key failure modes to catch:**
+- [ ] AI attempts to search Gmail when Gmail is not connected (hallucination)
+- [ ] AI says "I don't have access to anything" when at least one tool IS connected
+- [ ] AI ignores connected tools and only answers generically
+
+### 5B. Level 1 - Metadata only (no tool call needed)
+
+These should be answered from the pre-loaded CONTEXT block. The AI must NOT call any tool.
+
+- [ ] "How many emails do I have?" → answers from COUNT RESULT, no tool call
+- [ ] "Who sent me the most emails?" → answers from sender metadata
+- [ ] "List my last 5 emails" → subject + sender + date from DB, no tool call
+- [ ] "Did I get any emails today?" → filters by date, answers directly
+- [ ] "How many Asana tasks do I have?" → count from indexed data
+- [ ] "What Drive files have been synced?" → list from DB metadata
+
+**Pass criteria:** Response arrives quickly, no `[calling tool...]` indicator, answer is specific with names/dates.
+
+### 5C. Level 2 - Hybrid search snippets (no tool call needed)
+
+Semantic questions answered from the search results already in context.
+
+- [ ] "Any emails about invoices?" → returns relevant snippets, no tool call
+- [ ] "What's the status of the Acme project?" → searches across emails + Asana
+- [ ] "Did anyone mention the deadline?" → semantic match, not exact keyword
+- [ ] "Emails where someone asked me for something" → intent-based retrieval
+
+**Pass criteria:** Answer cites specific emails/tasks by reference ([E1], [A2]). No tool call made unless snippets genuinely insufficient.
+
+### 5D. Level 3 - Pre-computed summaries (get_email_details tool)
+
+Should trigger when snippets exist but aren't enough to answer the full question.
+
+- [ ] "Summarize my thread with [person you emailed]" → calls `get_email_details`, returns summary
+- [ ] "What was decided in the conversation about [topic]?" → escalates to summaries
+- [ ] Email with `(no summary yet)` in summary → AI notes this and either fetches body (Level 4) or explains
+
+**Pass criteria:** AI calls `get_email_details`, response includes substantive summary not just subject line.
+
+### 5E. Level 4a - Raw email body (get_email_body tool)
+
+Should only trigger when the user needs exact text or summary is "(no summary yet)".
+
+- [ ] "Quote exactly what John said about the deadline" → fetches raw body, quotes it
+- [ ] "What was the exact wording of the contract clause?" → raw body fetch
+- [ ] "Summarize this email" when summary is "(no summary yet)" → falls back to body fetch
+- [ ] Simple "summarize" question with existing summary → does NOT call get_email_body (Level 3 is enough)
+
+**Pass criteria:** AI calls `get_email_body` only when necessary. Never calls it for questions a summary would answer.
+
+### 5F. Level 4b - Live Asana API (get_asana_tasks tool)
+
+This is the most important level to verify - was completely broken before.
+
+- [ ] "What are my overdue tasks?" → calls `get_asana_tasks`, returns real live list
+- [ ] "Tasks assigned to [name]?" → filters by assignee in live API call
+- [ ] "What's due this week?" → filters by due date
+- [ ] "Show me all open tasks in [project name]" → filters by project
+- [ ] "How many tasks do I have total?" → live count, not "I only have X indexed"
+- [ ] AI never says "I only have X of your Y tasks" when Asana is connected
+- [ ] AI never says "you need to index more data" when Asana is connected
+- [ ] No Asana tasks exist (empty workspace) → "No tasks found" not a crash
+
+**Pass criteria:** Live data, not indexed snippets. Task count matches what you see in Asana.
+
+### 5F. Level 4c - Drive file content (get_drive_file_content tool)
+
+- [ ] "What are the exact numbers in the [spreadsheet name]?" → fetches file content
+- [ ] "Full text of the [doc name] brief" → fetches and returns content
+- [ ] Drive snippet already answers the question → does NOT call get_drive_file_content
+
+### 5G. Multi-source questions
+
+- [ ] "Any emails about the Acme project AND what tasks are open for it?" → uses Gmail search + Asana live query in same response
+- [ ] "Summarize what's happening with [client]" → pulls from all connected sources
+- [ ] "Did we discuss [topic] in email or in Asana?" → checks both, synthesizes answer
+
+### 5H. Failure and empty result cases
+
+These test graceful degradation.
+
+- [ ] Ask about emails from someone who doesn't exist → "No emails found from [name]" not a hallucination
+- [ ] Ask for exact quote from email that has no body (deleted or inaccessible) → graceful error, not crash
+- [ ] Ask Asana question when token is expired → error message, not crash or silent failure
+- [ ] Ask Drive question when token expired → same
+- [ ] Very long Asana task list (100+ tasks) → response handles it, doesn't time out
+- [ ] Question that genuinely has no answer → AI says so clearly, doesn't make something up
+
+### 5I. Conversation continuity
+
+- [ ] Ask "What are my emails from John?" → follow up "And what tasks mention him?" → second answer uses correct context
+- [ ] Ask about an email → follow up "Summarize that thread" → AI fetches summary of the right thread
+- [ ] Refer to "that project" from a previous message → AI resolves the reference correctly
+- [ ] 4+ turns of conversation → history doesn't degrade answer quality
+
+### 5J. iPhone-specific
+- [ ] Input does not zoom on focus (16px fix)
+- [ ] Long response (50+ lines) scrolls without layout breaking
+- [ ] Tapping a source citation opens correctly on mobile
+
+---
+
+## 6. Real-time sync (webhooks)
 
 ### Gmail webhook
 - [ ] Send yourself an email → appears in chat within ~60 seconds
