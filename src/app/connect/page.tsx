@@ -144,10 +144,14 @@ function ConnectPageInner() {
     }, 2000);
   }
 
-  async function openLabelPicker() {
+  async function openLabelPicker(forceRefresh = false) {
     setShowLabelPicker(true);
-    setLoadingLabels(true);
     setLabelError(null);
+
+    // Use cached labels if available and not forcing a refresh
+    if (availableLabels.length > 0 && !forceRefresh) return;
+
+    setLoadingLabels(true);
     try {
       const res = await fetch("/api/sync/gmail/labels");
       const body = await res.json();
@@ -156,7 +160,6 @@ function ConnectPageInner() {
       setAvailableLabels(body.labels);
       setSelectedLabels(new Set(body.labels.filter((l: any) => l.default).map((l: any) => l.id)));
     } catch (err: any) {
-      setAvailableLabels([]);
       setLabelError(err.message ?? "Could not load Gmail mailboxes");
     } finally {
       setLoadingLabels(false);
@@ -476,7 +479,7 @@ function ConnectPageInner() {
               <div className="flex flex-col items-center gap-3 py-8">
                 <span className="text-sm text-center" style={{ color: "oklch(0.75 0.18 25)" }}>{labelError}</span>
                 <button
-                  onClick={openLabelPicker}
+                  onClick={() => openLabelPicker(true)}
                   className="text-xs px-3 py-1.5 rounded-lg font-medium"
                   style={{ background: "oklch(0.78 0.14 65 / 15%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
                 >
