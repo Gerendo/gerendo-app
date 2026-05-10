@@ -1,3 +1,29 @@
+## 6766a9c - fix: user menu always shows branded amber initials, ignores Google avatar
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:48
+
+
+---
+## 896a779 - feat: UserMenu avatar dropdown, /privacy page, security audit QA section
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:42
+
+- UserMenu component: avatar/initials circle in header, dropdown shows user
+  email, nav links (Ask, Connect, Settings), Privacy policy (external link),
+  Log out. Closes on outside click. Replaces the cramped button row + hamburger.
+- /privacy page: accurate Q&A covering what data is stored, where, encryption,
+  OAuth scopes, third-party processors, deletion rights, incident response.
+  Content matches actual DB schema (acknowledges keyword_text, plaintext tokens).
+  Publicly accessible without login.
+- QA checklist section 6: security and data audit with Supabase SQL queries,
+  RLS verification, encryption checks, OAuth scope audit, webhook security,
+  privacy page accuracy check, per-user quota verification.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## dc21fb7 - feat: per-user monthly question quota with clear limit-reached message
 
 **Author:** Tocki28  

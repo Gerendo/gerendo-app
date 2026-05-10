@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
-import UserMenu from "@/components/UserMenu";
+import Sidebar from "@/components/Sidebar";
 
 type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
 type Message = {
@@ -22,6 +22,12 @@ export default function AskPage() {
   const [syncingInBackground, setSyncingInBackground] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("sidebar_collapsed") === "true";
+  });
+
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -30,6 +36,27 @@ export default function AskPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
+  // Load conversation from URL on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const cid = params.get("c");
+    if (cid) {
+      setConversationId(cid);
+      fetch(`/api/conversations/${cid}/messages`)
+        .then(r => r.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            setMessages(data.map((m: { role: string; content: string }) => ({
+              role: m.role as "user" | "assistant",
+              content: m.content,
+            })));
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
+
+  // Setup state check
   useEffect(() => {
     Promise.all([
       fetch("/api/nango/status").then(r => r.json()).catch(() => ({ connected: false, driveConnected: false, asanaConnected: false })),
@@ -38,22 +65,13 @@ export default function AskPage() {
     ]).then(([status, syncStatus, info]) => {
       const anyConnected = status.connected || status.driveConnected || status.asanaConnected;
       const totalIndexed = (info.emailCount ?? 0) + (info.driveCount ?? 0) + (info.asanaCount ?? 0);
-
-      if (!anyConnected) {
-        setSetupState("no-tools");
-      } else if (totalIndexed === 0) {
+      if (!anyConnected) setSetupState("no-tools");
+      else if (totalIndexed === 0) {
         setSetupState("no-data");
-        if (syncStatus.status === "running") {
-          setSyncingInBackground(true);
-          startSyncPoll();
-        }
+        if (syncStatus.status === "running") { setSyncingInBackground(true); startSyncPoll(); }
       } else {
         setSetupState("ready");
-        if (syncStatus.status === "running") {
-          setSyncingInBackground(true);
-          setSyncCount(syncStatus.totalSynced);
-          startSyncPoll();
-        }
+        if (syncStatus.status === "running") { setSyncingInBackground(true); setSyncCount(syncStatus.totalSynced); startSyncPoll(); }
       }
     });
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
@@ -79,16 +97,45 @@ export default function AskPage() {
     }, 3000);
   }
 
-  // Build history for API — last 4 messages (2 exchanges) only.
-  // Assistant content is truncated to 300 chars so prior verbose answers
-  // don't carry full email dumps back into every subsequent prompt.
   function buildHistory(): Array<{ role: "user" | "assistant"; content: string }> {
     return messages.slice(-4).map((m) => ({
       role: m.role,
-      content: m.role === "assistant" && m.content.length > 300
-        ? m.content.slice(0, 300) + "…"
-        : m.content,
+      content: m.role === "assistant" && m.content.length > 300 ? m.content.slice(0, 300) + "…" : m.content,
     }));
+  }
+
+  function handleNewChat() {
+    setMessages([]);
+    setConversationId(null);
+    setQuery("");
+    window.history.pushState({}, "", "/ask");
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function handleSelectConversation(id: string) {
+    setMessages([]);
+    setConversationId(id);
+    window.history.pushState({}, "", `/ask?c=${id}`);
+    fetch(`/api/conversations/${id}/messages`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setMessages(data.map((m: { role: string; content: string }) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })));
+        }
+      })
+      .catch(() => {});
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function toggleSidebar() {
+    setSidebarCollapsed(v => {
+      const next = !v;
+      localStorage.setItem("sidebar_collapsed", String(next));
+      return next;
+    });
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -100,9 +147,26 @@ export default function AskPage() {
     setLoading(true);
     setStreamingText("");
     setStreamingSources([]);
-
-    // Add user message immediately
     setMessages((prev) => [...prev, { role: "user", content: userQuery }]);
+
+    // Create conversation on first message
+    let cid = conversationId;
+    if (!cid) {
+      try {
+        const res = await fetch("/api/conversations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: userQuery.slice(0, 50) + (userQuery.length > 50 ? "..." : "") }),
+        });
+        const conv = await res.json();
+        cid = conv.id;
+        setConversationId(cid);
+        window.history.pushState({}, "", `/ask?c=${cid}`);
+      } catch {}
+    }
+
+    let fullAnswer = "";
+    let sources: Source[] = [];
 
     try {
       const res = await fetch("/api/ask", {
@@ -130,8 +194,6 @@ export default function AskPage() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let fullAnswer = "";
-      let sources: Source[] = [];
 
       while (true) {
         const { done, value } = await reader.read();
@@ -145,31 +207,27 @@ export default function AskPage() {
           if (!line.startsWith("data: ")) continue;
           const data = JSON.parse(line.slice(6));
 
-          if (data.type === "source") {
-            // Sources arrive one at a time as Claude fetches layers
-            sources = [...sources, data.source];
-            setStreamingSources([...sources]);
-          }
-          if (data.type === "token") {
-            fullAnswer += data.text;
-            setStreamingText(fullAnswer);
-          }
+          if (data.type === "source") { sources = [...sources, data.source]; setStreamingSources([...sources]); }
+          if (data.type === "token") { fullAnswer += data.text; setStreamingText(fullAnswer); }
           if (data.type === "done") {
-            setMessages((prev) => [...prev, {
-              role: "assistant",
-              content: fullAnswer,
-              sources: sources.length > 0 ? sources : undefined,
-            }]);
+            setMessages((prev) => [...prev, { role: "assistant", content: fullAnswer, sources: sources.length > 0 ? sources : undefined }]);
             setStreamingText("");
             setStreamingSources([]);
           }
         }
       }
     } catch (err: any) {
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: err.message ?? "Something went wrong.",
-      }]);
+      fullAnswer = err.message ?? "Something went wrong.";
+      setMessages((prev) => [...prev, { role: "assistant", content: fullAnswer }]);
+    }
+
+    // Persist messages to DB
+    if (cid && fullAnswer) {
+      fetch(`/api/conversations/${cid}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: [{ role: "user", content: userQuery }, { role: "assistant", content: fullAnswer }] }),
+      }).catch(() => {});
     }
 
     setLoading(false);
@@ -177,184 +235,173 @@ export default function AskPage() {
   }
 
   return (
-    <div className="h-dvh bg-[oklch(0.11_0.008_55)] text-white flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="relative border-b border-[oklch(1_0_0_/_8%)] px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <a href="/ask" className="hover:opacity-80 transition-opacity">
-          <h1 className="text-xl font-semibold tracking-tight" style={{ fontFamily: "var(--font-display)" }}>Gerendo</h1>
-          <p className="text-[oklch(0.55_0.012_60)] text-xs mt-0.5">Ask anything about your workspace</p>
-        </a>
-        <UserMenu />
-      </div>
+    <div className="h-dvh flex relative overflow-hidden" style={{ background: "oklch(0.11 0.008 55)", color: "white" }}>
 
-      {/* Sync banner with progress bar */}
-      {syncingInBackground && (
-        <div className="flex flex-col gap-1.5 px-6 py-2.5" style={{ background: "oklch(0.78 0.14 65 / 8%)", borderBottom: "1px solid oklch(0.78 0.14 65 / 15%)" }}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-xs" style={{ color: "oklch(0.85 0.08 70)" }}>
-              <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
-              Syncing your workspace in the background
-            </div>
-            <span className="text-xs font-medium" style={{ color: "oklch(0.78 0.14 65)" }}>
-              {syncCount > 0 ? `${Math.min(Math.round((syncCount / 2000) * 100), 99)}%` : "0%"}
-            </span>
-          </div>
-          <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
-            <div className="h-full rounded-full" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 99)}%` : "3%", background: "oklch(0.78 0.14 65)", transition: "width 0.8s ease" }} />
-          </div>
-          {syncCount > 0 && (
-            <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{syncCount.toLocaleString()} items indexed so far</p>
+      {/* Sidebar */}
+      <Sidebar
+        currentConversationId={conversationId}
+        onSelectConversation={handleSelectConversation}
+        onNewChat={handleNewChat}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebar}
+      />
+
+      {/* Main chat area */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+        {/* Thin top bar - just the collapse toggle when sidebar is open, or page context */}
+        <div className="border-b border-[oklch(1_0_0_/_8%)] px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+          {sidebarCollapsed && (
+            <div className="w-6" /> /* spacer for toggle button which is absolutely positioned */
           )}
+          <span className="text-sm font-medium text-[oklch(0.55_0.012_60)]">
+            {conversationId ? "" : "New chat"}
+          </span>
         </div>
-      )}
 
-      {/* Toast */}
-      {toast && (
-        <div
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-medium shadow-lg z-50 cursor-pointer"
-          style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-          onClick={() => setToast(null)}
-        >
-          {toast}
-        </div>
-      )}
-
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full min-h-0">
-        {messages.length === 0 && !loading && setupState === "checking" && (
-          <div className="flex items-center justify-center mt-20">
-            <div className="w-1 h-1 rounded-full bg-[oklch(0.45_0.01_60)] animate-pulse" />
-          </div>
-        )}
-
-        {messages.length === 0 && !loading && setupState === "no-tools" && (
-          <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
-               style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
-            No tools connected yet.{" "}
-            <a href="/connect" className="underline underline-offset-2 hover:opacity-80">
-              Connect Gmail, Drive, or Asana
-            </a>{" "}
-            for full search — or ask a general question.
-          </div>
-        )}
-
-        {messages.length === 0 && !loading && setupState === "no-data" && (
-          <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
-               style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
-            Tools connected but not synced yet.{" "}
-            <a href="/connect" className="underline underline-offset-2 hover:opacity-80">
-              Sync your data
-            </a>{" "}
-            for full answers — or ask anyway.
-          </div>
-        )}
-
-        {messages.length === 0 && !loading && (setupState === "ready" || setupState === "no-data") && (
-          <div className="flex flex-col gap-3 mt-8">
-            <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
-            {[
-              "What are my last 5 emails?",
-              "What tasks are overdue in Asana?",
-              "Any emails about invoices this week?",
-              "Summarize what's happening with the Acme project",
-            ].map((suggestion) => (
-              <button
-                key={suggestion}
-                onClick={() => { setQuery(suggestion); inputRef.current?.focus(); }}
-                className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors"
-              >
-                {suggestion}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {messages.map((msg, i) => (
-          <div key={i} className={`flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
-            {msg.role === "user" ? (
-              <div className="bg-[oklch(0.16_0.01_55)] text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-[85%]">
-                {msg.content}
+        {/* Sync banner */}
+        {syncingInBackground && (
+          <div className="flex flex-col gap-1.5 px-6 py-2.5" style={{ background: "oklch(0.78 0.14 65 / 8%)", borderBottom: "1px solid oklch(0.78 0.14 65 / 15%)" }}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs" style={{ color: "oklch(0.85 0.08 70)" }}>
+                <span className="inline-block w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: "oklch(0.78 0.14 65)" }} />
+                Syncing your workspace in the background
               </div>
-            ) : (
-              <div className="flex flex-col gap-3 max-w-full">
-                {msg.warning && (
-                  <p className="text-yellow-500 text-xs">{msg.warning}</p>
-                )}
-                <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="flex flex-col gap-1.5 mt-1">
-                    <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
-                    {msg.sources.map((s, j) => (
-                      <a
-                        key={j}
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] transition-colors"
-                      >
-                        <span className="text-xs text-white font-medium">{s.subject}</span>
-                        <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date} · <span className="text-[oklch(0.45_0.01_60)]">{s.mailbox ?? "inbox"}</span></span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Streaming message */}
-        {loading && (
-          <div className="flex flex-col gap-3 items-start">
-            {streamingSources.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
-                {streamingSources.map((s, j) => (
-                  <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
-                    className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
-                    <span className="text-xs text-white font-medium">{s.subject}</span>
-                    <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date}</span>
-                  </a>
-                ))}
-              </div>
-            )}
-            <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
-              <ReactMarkdown>{streamingText}</ReactMarkdown>
-              <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
+              <span className="text-xs font-medium" style={{ color: "oklch(0.78 0.14 65)" }}>
+                {syncCount > 0 ? `${Math.min(Math.round((syncCount / 2000) * 100), 99)}%` : "0%"}
+              </span>
+            </div>
+            <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
+              <div className="h-full rounded-full" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 99)}%` : "3%", background: "oklch(0.78 0.14 65)", transition: "width 0.8s ease" }} />
             </div>
           </div>
         )}
 
-        <div ref={bottomRef} />
-      </div>
+        {/* Toast */}
+        {toast && (
+          <div
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3 rounded-2xl text-sm font-medium shadow-lg z-50 cursor-pointer"
+            style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+            onClick={() => setToast(null)}
+          >
+            {toast}
+          </div>
+        )}
 
-      {/* Input - always shown */}
-      {setupState !== "checking" && (
-        <div className="border-t border-[oklch(1_0_0_/_8%)] px-4 py-3 flex-shrink-0 bg-[oklch(0.11_0.008_55)]">
-          <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Ask anything about your workspace..."
-              className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
-              style={{ fontSize: "16px" }}
-              disabled={loading}
-              autoFocus
-            />
-            <button
-              type="submit"
-              disabled={!query.trim() || loading}
-              className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-semibold px-5 py-3 rounded-2xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-            >
-              {loading ? "..." : "Send"}
-            </button>
-          </form>
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 flex flex-col gap-6 max-w-2xl mx-auto w-full min-h-0">
+          {messages.length === 0 && !loading && setupState === "checking" && (
+            <div className="flex items-center justify-center mt-20">
+              <div className="w-1 h-1 rounded-full bg-[oklch(0.45_0.01_60)] animate-pulse" />
+            </div>
+          )}
+          {messages.length === 0 && !loading && setupState === "no-tools" && (
+            <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
+              style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
+              No tools connected yet.{" "}
+              <a href="/connect" className="underline underline-offset-2 hover:opacity-80">Connect Gmail, Drive, or Asana</a>{" "}
+              for full search — or ask a general question.
+            </div>
+          )}
+          {messages.length === 0 && !loading && setupState === "no-data" && (
+            <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
+              style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
+              Tools connected but not synced yet.{" "}
+              <a href="/connect" className="underline underline-offset-2 hover:opacity-80">Sync your data</a>{" "}
+              for full answers — or ask anyway.
+            </div>
+          )}
+          {messages.length === 0 && !loading && (setupState === "ready" || setupState === "no-data") && (
+            <div className="flex flex-col gap-3 mt-8">
+              <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
+              {["What are my last 5 emails?", "What tasks are overdue in Asana?", "Any emails about invoices this week?", "Summarize what's happening with the Acme project"].map((s) => (
+                <button key={s} onClick={() => { setQuery(s); inputRef.current?.focus(); }}
+                  className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors">
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex flex-col gap-2 ${msg.role === "user" ? "items-end" : "items-start"}`}>
+              {msg.role === "user" ? (
+                <div className="bg-[oklch(0.16_0.01_55)] text-white text-sm px-4 py-3 rounded-2xl rounded-tr-sm max-w-[85%]">
+                  {msg.content}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 max-w-full">
+                  {msg.warning && <p className="text-yellow-500 text-xs">{msg.warning}</p>}
+                  <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                  {msg.sources && msg.sources.length > 0 && (
+                    <div className="flex flex-col gap-1.5 mt-1">
+                      <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
+                      {msg.sources.map((s, j) => (
+                        <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
+                          className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] transition-colors">
+                          <span className="text-xs text-white font-medium">{s.subject}</span>
+                          <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date} · <span className="text-[oklch(0.45_0.01_60)]">{s.mailbox ?? "inbox"}</span></span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex flex-col gap-3 items-start">
+              {streamingSources.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <p className="text-xs text-[oklch(0.45_0.01_60)] uppercase tracking-wider">Sources</p>
+                  {streamingSources.map((s, j) => (
+                    <a key={j} href={s.url} target="_blank" rel="noopener noreferrer"
+                      className="flex flex-col gap-0.5 p-3 rounded-2xl border border-[oklch(1_0_0_/_8%)]">
+                      <span className="text-xs text-white font-medium">{s.subject}</span>
+                      <span className="text-xs text-[oklch(0.55_0.012_60)]">{s.sender} · {s.date}</span>
+                    </a>
+                  ))}
+                </div>
+              )}
+              <div className="text-sm text-zinc-100 leading-relaxed prose prose-invert prose-sm max-w-none">
+                <ReactMarkdown>{streamingText}</ReactMarkdown>
+                <span className="inline-block w-1 h-4 bg-zinc-400 ml-1 animate-pulse" />
+              </div>
+            </div>
+          )}
+
+          <div ref={bottomRef} />
         </div>
-      )}
+
+        {/* Input */}
+        {setupState !== "checking" && (
+          <div className="border-t border-[oklch(1_0_0_/_8%)] px-4 py-3 flex-shrink-0" style={{ background: "oklch(0.11 0.008 55)" }}>
+            <form onSubmit={handleSubmit} className="flex gap-2 max-w-2xl mx-auto">
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Ask anything about your workspace..."
+                className="flex-1 bg-[oklch(0.13_0.009_55)] border border-[oklch(1_0_0_/_12%)] rounded-2xl px-4 py-3 text-sm text-[oklch(0.96_0.012_80)] placeholder:text-[oklch(0.45_0.01_60)] focus:outline-none focus:border-[oklch(0.78_0.14_65)]"
+                style={{ fontSize: "16px" }}
+                disabled={loading}
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!query.trim() || loading}
+                className="bg-[oklch(0.78_0.14_65)] text-[oklch(0.11_0.008_55)] text-sm font-semibold px-5 py-3 rounded-2xl hover:bg-[oklch(0.85_0.08_70)] disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+              >
+                {loading ? "..." : "Send"}
+              </button>
+            </form>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

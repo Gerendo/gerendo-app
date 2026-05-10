@@ -158,6 +158,26 @@ Tool cards should stay compact on mobile with status text on a single line. Cate
 
 ---
 
+## BUG-011 - Gmail webhook fires even when Gmail is not connected
+
+**Status:** Open
+**Platform:** All
+**Area:** Webhooks / Gmail integration
+
+**Description:**
+The `/api/webhooks/gmail` endpoint receives POST requests and logs `[webhook/gmail] gmail sync failed: Gmail not connected` even when no user has connected Gmail. The webhook is being registered or kept active regardless of whether the integration is enabled for the workspace.
+
+**Expected behavior:**
+If Gmail is not connected for a workspace, the Gmail webhook should never be configured in the first place. Nango (or whatever registers the webhook subscription) should only set up the webhook after the user successfully connects Gmail, and should tear it down on disconnect.
+
+**Root cause:**
+The Gmail webhook subscription (likely a Google Pub/Sub push subscription) is being registered globally or at app startup rather than per-user on successful OAuth connect. Disconnect does not deregister it.
+
+**Fix:**
+(1) Only register the Gmail Pub/Sub push subscription when a user successfully connects Gmail (post-OAuth callback). (2) Deregister the subscription on disconnect. (3) In the webhook handler, if no active Gmail connection is found for the incoming push, return 200 immediately with no processing (to avoid Google retrying) but log a warning at debug level only, not error level.
+
+---
+
 ## BUG-004 - Chat AI claims it cannot access full Asana data when it can
 
 **Status:** Open  
