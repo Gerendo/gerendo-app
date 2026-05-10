@@ -9,6 +9,11 @@ interface Conversation {
   updated_at: string;
 }
 
+interface UserInfo {
+  name: string;
+  email: string;
+}
+
 interface SidebarProps {
   currentConversationId: string | null;
   onSelectConversation: (id: string) => void;
@@ -44,10 +49,29 @@ function groupByDate(convs: Conversation[]): { label: string; items: Conversatio
   return groups.filter(g => g.items.length > 0);
 }
 
+// Sidebar toggle icon — two vertical panels, left one highlighted
+function SidebarIcon({ open }: { open: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.4"/>
+      <path d="M6 1v16" stroke="currentColor" strokeWidth="1.4"/>
+      {open && (
+        // Arrow pointing left when open (collapse)
+        <path d="M10 6.5l-2.5 2.5 2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      )}
+      {!open && (
+        // Arrow pointing right when collapsed (expand)
+        <path d="M10 6.5l2.5 2.5-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+      )}
+    </svg>
+  );
+}
+
 export default function Sidebar({ currentConversationId, onSelectConversation, onNewChat, collapsed, onToggleCollapse }: SidebarProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [user, setUser] = useState<UserInfo | null>(null);
 
   const loadConversations = useCallback(() => {
     fetch("/api/conversations")
@@ -58,10 +82,16 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
-  // Reload when a new conversation is created
   useEffect(() => {
     if (currentConversationId) loadConversations();
   }, [currentConversationId, loadConversations]);
+
+  useEffect(() => {
+    fetch("/api/workspace/info")
+      .then(r => r.json())
+      .then(d => { if (d.currentUser) setUser(d.currentUser); })
+      .catch(() => {});
+  }, []);
 
   async function deleteConversation(e: React.MouseEvent, id: string) {
     e.stopPropagation();
@@ -74,24 +104,25 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
 
   const groups = groupByDate(conversations);
   const border = "oklch(1 0 0 / 8%)";
-  const muted = "oklch(0.55 0.012 60)";
+  const muted = "oklch(0.72 0.012 60)";
   const ember = "oklch(0.78 0.14 65)";
+
+  const initials = user?.name
+    ? user.name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
 
   return (
     <>
       {/* Sidebar panel */}
       <div
         className="flex-shrink-0 flex flex-col h-full transition-all duration-200 overflow-hidden border-r"
-        style={{
-          width: collapsed ? 0 : 260,
-          borderColor: border,
-          background: "oklch(0.13 0.009 55)",
-        }}
+        style={{ width: collapsed ? 0 : 260, borderColor: border, background: "oklch(0.13 0.009 55)" }}
       >
         <div className="flex flex-col h-full" style={{ width: 260, minWidth: 260 }}>
-          {/* Top: logo + collapse */}
-          <div className="flex items-center justify-between px-4 py-4 flex-shrink-0">
-            <a href="/ask" className="text-base font-semibold tracking-tight hover:opacity-80 transition-opacity"
+
+          {/* Top: logo + collapse toggle */}
+          <div className="flex items-center justify-between px-3 py-3 flex-shrink-0">
+            <a href="/ask" className="px-1 text-base font-semibold tracking-tight hover:opacity-80 transition-opacity"
               style={{ fontFamily: "var(--font-display)" }}>
               Gerendo
             </a>
@@ -101,9 +132,7 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
               style={{ color: muted }}
               aria-label="Collapse sidebar"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
+              <SidebarIcon open={true} />
             </button>
           </div>
 
@@ -135,16 +164,12 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
                       onClick={() => onSelectConversation(conv.id)}
                       onMouseEnter={() => setHoveredId(conv.id)}
                       onMouseLeave={() => setHoveredId(null)}
-                      className="group relative flex items-center gap-1 px-3 py-2 rounded-xl cursor-pointer text-sm transition-colors"
+                      className="relative flex items-center gap-1 px-3 py-2 rounded-xl cursor-pointer transition-colors"
                       style={{
                         background: currentConversationId === conv.id
                           ? "oklch(0.78 0.14 65 / 12%)"
-                          : hoveredId === conv.id
-                          ? "oklch(1 0 0 / 5%)"
-                          : "transparent",
-                        color: currentConversationId === conv.id
-                          ? ember
-                          : "oklch(0.75 0.01 60)",
+                          : hoveredId === conv.id ? "oklch(1 0 0 / 5%)" : "transparent",
+                        color: currentConversationId === conv.id ? ember : "oklch(0.75 0.01 60)",
                       }}
                     >
                       <span className="flex-1 truncate text-xs leading-relaxed">{conv.title}</span>
@@ -168,47 +193,63 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
             )}
           </div>
 
-          {/* Bottom nav */}
-          <div className="flex-shrink-0 border-t px-3 py-3 flex flex-col gap-0.5" style={{ borderColor: border }}>
-            {[
-              { label: "Connect tools", href: "/connect" },
-              { label: "Settings", href: "/settings" },
-              { label: "Privacy", href: "/privacy", external: true },
-            ].map(item => (
-              <a
-                key={item.href}
-                href={item.href}
-                target={item.external ? "_blank" : undefined}
-                className="flex items-center px-3 py-2 rounded-xl text-xs transition-colors hover:opacity-80"
-                style={{ color: muted }}
+          {/* Bottom section: nav links + user avatar */}
+          <div className="flex-shrink-0 border-t" style={{ borderColor: border }}>
+            {/* Nav links */}
+            <div className="px-3 pt-2 pb-1 flex flex-col gap-0.5">
+              {[
+                { label: "Connect tools", href: "/connect" },
+                { label: "Settings", href: "/settings" },
+                { label: "Privacy policy", href: "/privacy", external: true },
+              ].map(item => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target={item.external ? "_blank" : undefined}
+                  className="flex items-center px-3 py-2 rounded-xl text-xs transition-colors hover:opacity-80"
+                  style={{ color: muted }}
+                >
+                  {item.label}
+                </a>
+              ))}
+            </div>
+
+            {/* Divider */}
+            <div className="mx-3 border-t" style={{ borderColor: border }} />
+
+            {/* User row */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0"
+                style={{ background: ember, color: "oklch(0.11 0.008 55)" }}
               >
-                {item.label}
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium truncate" style={{ color: "oklch(0.85 0.008 60)" }}>
+                  {user?.name ?? ""}
+                </p>
+                <p className="text-xs truncate" style={{ color: muted }}>
+                  {user?.email ?? ""}
+                </p>
+              </div>
+              <a
+                href="/api/auth/signout"
+                className="flex-shrink-0 p-1.5 rounded-lg hover:opacity-70 transition-opacity"
+                style={{ color: muted }}
+                aria-label="Log out"
+                title="Log out"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M5 2H2.5A1.5 1.5 0 001 3.5v7A1.5 1.5 0 002.5 12H5M9.5 10l3-3-3-3M13 7H5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
               </a>
-            ))}
-            <a
-              href="/api/auth/signout"
-              className="flex items-center px-3 py-2 rounded-xl text-xs transition-colors hover:opacity-80"
-              style={{ color: "oklch(0.45 0.01 60)" }}
-            >
-              Log out
-            </a>
+            </div>
           </div>
+
         </div>
       </div>
 
-      {/* Collapsed toggle button (shown when sidebar is closed) */}
-      {collapsed && (
-        <button
-          onClick={onToggleCollapse}
-          className="absolute left-3 top-4 z-10 p-1.5 rounded-lg hover:opacity-70 transition-opacity"
-          style={{ color: muted }}
-          aria-label="Open sidebar"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-        </button>
-      )}
     </>
   );
 }

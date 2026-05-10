@@ -249,10 +249,21 @@ export default function AskPage() {
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Thin top bar - just the collapse toggle when sidebar is open, or page context */}
-        <div className="border-b border-[oklch(1_0_0_/_8%)] px-4 py-2.5 flex items-center gap-3 flex-shrink-0">
+        {/* Top bar */}
+        <div className="border-b border-[oklch(1_0_0_/_8%)] px-3 py-2.5 flex items-center gap-2 flex-shrink-0">
           {sidebarCollapsed && (
-            <div className="w-6" /> /* spacer for toggle button which is absolutely positioned */
+            <button
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-lg hover:opacity-70 transition-opacity flex-shrink-0"
+              style={{ color: "oklch(0.55 0.012 60)" }}
+              aria-label="Open sidebar"
+            >
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M6 1v16" stroke="currentColor" strokeWidth="1.4"/>
+                <path d="M10 6.5l2.5 2.5-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
           )}
           <span className="text-sm font-medium text-[oklch(0.55_0.012_60)]">
             {conversationId ? "" : "New chat"}

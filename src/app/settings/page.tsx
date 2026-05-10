@@ -72,7 +72,7 @@ export default function SettingsPage() {
 
   const borderColor = "oklch(1 0 0 / 8%)";
   const mutedColor = "oklch(0.65 0.015 60)";
-  const dimColor = "oklch(0.55 0.012 60)";
+  const dimColor = "oklch(0.72 0.012 60)";
   const emberColor = "oklch(0.78 0.14 65)";
   const inkSoft = "oklch(0.16 0.01 55)";
 

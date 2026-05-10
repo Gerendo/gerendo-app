@@ -1,3 +1,32 @@
+## a745210 - feat: collapsible sidebar with persistent chat history
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 08:56
+
+DB: conversations + conversation_messages tables (requires migration SQL)
+
+API:
+- GET/POST /api/conversations - list and create conversations
+- PATCH/DELETE /api/conversations/[id] - rename/delete
+- GET/POST /api/conversations/[id]/messages - load and save messages
+
+Sidebar (src/components/Sidebar.tsx):
+- 260px collapsible panel, collapse state persisted in localStorage
+- New chat button, conversation list grouped by Today/Yesterday/7d/30d/Older
+- Hover to reveal delete button per conversation
+- Bottom nav: Connect tools, Settings, Privacy, Log out
+
+Ask page refactor:
+- Sidebar layout (flex row) replaces top header nav
+- Conversation persistence: first message creates conversation, URL updates
+  to /ask?c=[id], messages saved to DB after each exchange
+- Page reload restores conversation from DB via URL param
+- Switching conversations loads messages from DB
+- Auto-title from first user message (first 50 chars)
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
 ## 6766a9c - fix: user menu always shows branded amber initials, ignores Google avatar
 
 **Author:** Tocki28  
