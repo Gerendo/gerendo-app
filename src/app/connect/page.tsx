@@ -205,7 +205,6 @@ function ConnectPageInner() {
       const { error } = await res.json();
       if (error) throw new Error(error);
       startPoll();
-      fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
       setToolStatus(p => ({ ...p, gmail: "active" }));
     } catch (err: any) {
       setToolStatus(p => ({ ...p, gmail: "error" }));
