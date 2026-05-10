@@ -18,9 +18,11 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`);
   }
 
-  // Create workspace for new users on first login
+  // Create workspace for new users on first login.
+  // Skip if redirecting to /join - the join flow adds them to the invited workspace instead.
+  const isJoiningViaInvite = next.startsWith("/join");
   const existing = await getWorkspaceFromSession(data.user.id);
-  if (!existing) {
+  if (!existing && !isJoiningViaInvite) {
     const name =
       data.user.user_metadata?.full_name ??
       data.user.email?.split("@")[0] ??
