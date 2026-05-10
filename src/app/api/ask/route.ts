@@ -611,7 +611,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                     limit?: number;
                   };
                   const token = await getAsanaToken(workspaceId, userId);
-                  const maxTasks = Math.min(input.limit ?? 30, 100);
+                  const maxTasks = Math.min(input.limit ?? 100, 200);
                   const statusFilter = input.status ?? "open";
                   const workspaces = await asanaGet(token, "/workspaces");
                   const allTasks: string[] = [];
@@ -657,7 +657,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                         const overdue = task.due_on && task.due_on < todayIso && !task.completed;
                         if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
                         allTasks.push([
-                          `Task: ${task.name}`,
+                          `#${allTasks.length + 1} Task: ${task.name}`,
                           `Project: ${project.name}`,
                           task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
                           task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
@@ -675,7 +675,7 @@ export async function POST(req: NextRequest): Promise<Response> {
                     })}\n\n`));
                   });
                   result = allTasks.length > 0
-                    ? `LIVE ASANA TASKS (${allTasks.length} returned):\n` + allTasks.join("\n")
+                    ? `LIVE ASANA TASKS — TOTAL COUNT: ${allTasks.length} tasks returned (this is the exact count, do not guess):\n` + allTasks.join("\n")
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
                   result = `(Asana API error: ${err?.message ?? "unknown"})`;
