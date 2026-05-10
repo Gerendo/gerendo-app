@@ -50,11 +50,48 @@ export async function getNangoGmailToken(secretKey: string): Promise<{ token: st
   throw new Error("Use getGmailToken from agency-db instead");
 }
 
+const WEBHOOK_BATCH_SIZE = 100;
+
+async function batchFetchMessages(token: string, ids: string[]): Promise<Map<string, any>> {
+  const boundary = "batch_gerendo";
+  const parts = ids.map((id) =>
+    `--${boundary}\r\nContent-Type: application/http\r\n\r\nGET /gmail/v1/users/me/messages/${id}?format=full HTTP/1.1\r\n\r\n`
+  );
+  const body = parts.join("") + `--${boundary}--`;
+
+  const res = await fetch("https://www.googleapis.com/batch/gmail/v1", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": `multipart/mixed; boundary=${boundary}`,
+    },
+    body,
+  });
+
+  const text = await res.text();
+  const responseBoundary = res.headers.get("content-type")?.match(/boundary=(.+)/)?.[1];
+  if (!responseBoundary) return new Map();
+
+  const result = new Map<string, any>();
+  const sections = text.split(`--${responseBoundary}`).slice(1);
+  for (const section of sections) {
+    if (section.trim() === "--") break;
+    const jsonMatch = section.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) continue;
+    try {
+      const msg = JSON.parse(jsonMatch[0]);
+      if (msg.id) result.set(msg.id, msg);
+    } catch { continue; }
+  }
+  return result;
+}
+
 async function fetchAndStoreMessages(
   gmail: ReturnType<typeof google.gmail>,
   db: Awaited<ReturnType<typeof openAgencyDb>>,
   labelId: string,
   labelName: string,
+  token: string,
 ): Promise<number> {
   const stateKey = `gmail:${labelId}`;
   const { cursor } = await getSyncState(db, stateKey);
@@ -102,14 +139,16 @@ async function fetchAndStoreMessages(
       const retryAt = new Date(retryMatch[1]).getTime();
       const waitMs = Math.max(0, retryAt - Date.now());
       if (waitMs > 0 && waitMs < 60_000) {
-        // Short wait - retry once after the window
         await new Promise(r => setTimeout(r, waitMs + 500));
         try {
-          return await fetchAndStoreMessages(gmail, db, labelId, labelName);
+          return await fetchAndStoreMessages(gmail, db, labelId, labelName, token);
         } catch { return 0; }
       }
-      // Long rate limit window - persist it so the webhook handler skips future attempts
       await setSyncState(db, "gmail:rate_limit_until", String(retryAt));
+    } else if (cursor) {
+      // Non-rate-limit error on history.list = stale historyId (expires after ~7 days).
+      // Clear cursor so next run falls back to messages.list and gets a fresh historyId.
+      await setSyncState(db, stateKey, "");
     }
     console.error(`[sync] ${labelName} list error:`, msg);
     return 0;
@@ -131,34 +170,34 @@ async function fetchAndStoreMessages(
     receivedAt: number;
   }> = [];
 
-  for (const id of messageIds) {
-    try {
-      const msgRes = await gmail.users.messages.get({ userId: "me", id, format: "full" });
-      const msg = msgRes.data;
-      const headers = msg.payload?.headers ?? [];
-      const sender = getHeader(headers, "from");
-      const subject = getHeader(headers, "subject") || "(no subject)";
-      const dateStr = getHeader(headers, "date");
-      const receivedAt = dateStr
-        ? new Date(dateStr).getTime()
-        : msg.internalDate
-          ? parseInt(msg.internalDate)
-          : Date.now();
-      const body = extractBody(msg.payload);
-      const keywordText = `${subject}. From: ${sender}. ${body}`.slice(0, 1500);
-
-      messageRows.push({
-        source: "gmail",
-        externalId: id,
-        threadId: msg.threadId ?? null,
-        sender,
-        subject,
-        mailbox: labelName,
-        receivedAt,
-      });
-      keywordTexts.push(keywordText);
-    } catch {
-      continue;
+  for (let b = 0; b < messageIds.length; b += WEBHOOK_BATCH_SIZE) {
+    const batchIds = messageIds.slice(b, b + WEBHOOK_BATCH_SIZE);
+    const msgMap = await batchFetchMessages(token, batchIds);
+    for (const id of batchIds) {
+      const msg = msgMap.get(id);
+      if (!msg) continue;
+      try {
+        const headers = msg.payload?.headers ?? [];
+        const sender = getHeader(headers, "from");
+        const subject = getHeader(headers, "subject") || "(no subject)";
+        const dateStr = getHeader(headers, "date");
+        const receivedAt = dateStr
+          ? new Date(dateStr).getTime()
+          : msg.internalDate
+            ? parseInt(msg.internalDate)
+            : Date.now();
+        const body = extractBody(msg.payload);
+        messageRows.push({
+          source: "gmail",
+          externalId: id,
+          threadId: msg.threadId ?? null,
+          sender,
+          subject,
+          mailbox: labelName,
+          receivedAt,
+        });
+        keywordTexts.push(`${subject}. From: ${sender}. ${body}`.slice(0, 1500));
+      } catch { continue; }
     }
   }
 
@@ -205,19 +244,32 @@ export async function runGmailSyncForUser(
       id,
       name: id.toLowerCase().replace("category_", ""),
     }));
-    try {
-      const labelsRes = await gmail.users.labels.list({ userId: "me" });
-      const userLabels = (labelsRes.data.labels ?? [])
-        .filter((l) => l.type === "user" && l.id && l.name)
-        .map((l) => ({ id: l.id!, name: l.name! }));
-      labelsToSync = [...labelsToSync, ...userLabels];
-    } catch (err: any) {
-      console.error("[sync] failed to fetch label list, using system labels only:", err?.message);
+    // Cache user labels for 24h — labels.list was being called on every webhook fire
+    const LABEL_CACHE_TTL = 24 * 60 * 60 * 1000;
+    const { lastSyncedAt: labelsCachedAt, cursor: labelsJson } = await getSyncState(db, "gmail:labels_cache");
+    const cacheValid = labelsCachedAt && (Date.now() - labelsCachedAt) < LABEL_CACHE_TTL && labelsJson;
+    if (cacheValid) {
+      try {
+        const cached: Array<{ id: string; name: string }> = JSON.parse(labelsJson!);
+        labelsToSync = [...labelsToSync, ...cached];
+      } catch { /* ignore bad cache, fall through to fetch */ }
+    }
+    if (!cacheValid) {
+      try {
+        const labelsRes = await gmail.users.labels.list({ userId: "me" });
+        const userLabels = (labelsRes.data.labels ?? [])
+          .filter((l) => l.type === "user" && l.id && l.name)
+          .map((l) => ({ id: l.id!, name: l.name! }));
+        labelsToSync = [...labelsToSync, ...userLabels];
+        await setSyncState(db, "gmail:labels_cache", JSON.stringify(userLabels));
+      } catch (err: any) {
+        console.error("[sync] failed to fetch label list, using system labels only:", err?.message);
+      }
     }
   }
 
   for (const label of labelsToSync) {
-    const count = await fetchAndStoreMessages(gmail, db, label.id, label.name);
+    const count = await fetchAndStoreMessages(gmail, db, label.id, label.name, token);
     totalSynced += count;
   }
 
