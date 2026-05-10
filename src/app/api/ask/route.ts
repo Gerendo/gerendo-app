@@ -445,9 +445,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     : "";
 
   const [emailCount, driveCount, asanaCount] = await Promise.all([
-    db.supabase.from("messages").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId),
-    db.supabase.from("drive_files").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId),
-    db.supabase.from("asana_items").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId),
+    db.supabase.from("messages").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId).eq("user_id", db.userId),
+    db.supabase.from("drive_files").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId).eq("user_id", db.userId),
+    db.supabase.from("asana_items").select("id", { count: "exact", head: true }).eq("workspace_id", db.workspaceId).eq("user_id", db.userId),
   ]);
   const inventory = `INDEXED SNAPSHOTS (stale — use tools for live counts): ${emailCount.count ?? 0} emails | ${driveCount.count ?? 0} Drive files | ${asanaCount.count ?? 0} Asana task snapshots. For live Asana counts always call get_asana_tasks.`;
 

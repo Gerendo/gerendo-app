@@ -1,3 +1,100 @@
+## deb72df - fix(security): verify workspace membership before storing Asana handshake secret
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 17:14
+
+The handshake endpoint accepted workspace_id/user_id from query params
+without validating they correspond to a real workspace member with Asana
+connected. An attacker with valid UUIDs could overwrite a user's stored
+HMAC secret, breaking event verification or injecting Asana task data.
+
+Fix: check workspace_members + oauth_tokens before upsert. Returns 401
+if either check fails, so the Asana handshake is rejected cleanly.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 27b0060 - fix(gmail): skip labels API call when rate limit window is active
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 17:10
+
+Prevents burning quota units on the label picker when we already know
+the API is rate limited. Returns hardcoded defaults immediately with
+rateLimited:true so the UI still works.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 65110b8 - fix(marketing): self-host fonts to fix 4x 404 errors on gerendo.com
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 17:03
+
+Fraunces v37, Inter v19, JetBrains Mono v24 woff2 URLs were returning
+404 after Google updated font versions. Downloaded current Latin subset
+woff2 files locally and updated @font-face src to /fonts/* so this
+cannot break again on a Google Fonts version bump.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 8170099 - fix(gmail): batch messages.get, reset stale cursor, cache labels
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:43
+
+- Replace individual gmail.users.messages.get calls with batch API
+  (100 messages per HTTP request), matching what stream/route.ts already
+  does. This was the primary driver of 98k GetMessage calls.
+
+- Clear the historyId cursor from sync_state when history.list fails with
+  a non-rate-limit error (stale cursor, expires ~7 days). Previously the
+  stale cursor was kept, causing 70k ListHistory calls at 99% error rate
+  on every webhook fire.
+
+- Cache user labels in sync_state for 24h. labels.list was called on
+  every webhook trigger regardless of push frequency, driving 7.9k
+  ListLabels calls at 98.7% error rate.
+
+Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
+
+---
+## 3e119b6 - fix: persist gmail rate limit window to sync_state so webhook skips sync until quota resets
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:20
+
+
+---
+## 5402d62 - fix(qa): ISSUE-006 — founding partner CTA links to app.gerendo.com beta instead of waitlist
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:13
+
+
+---
+## 81cb72f - fix(qa): ISSUE-MKTG-002 — add initial r value to BrainOrb motion.circle to fix SVG undefined attribute error
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:12
+
+
+---
+## 38a9c69 - fix(qa): ISSUE-006 — add Sign in link and Open app footer link to gerendo.com
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:12
+
+
+---
+## 8f2e8f4 - chore: add .gstack to gitignore, update git history doc
+
+**Author:** Tocki28  
+**Date:** 2026-05-10 16:08
+
+
+---
 ## bb7d0bd - fix: add 200ms delay between labels and 100ms between pagination pages to stay within Gmail quota
 
 **Author:** Tocki28  

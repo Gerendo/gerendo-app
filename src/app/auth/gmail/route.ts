@@ -2,13 +2,22 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { getWorkspaceFromSession } from "@/lib/agency-db";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { cookies } from "next/headers";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
   const error = searchParams.get("error");
 
   if (error || !code) {
+    return NextResponse.redirect(`${origin}/connect?gmail_error=auth_failed`);
+  }
+
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("oauth_state_gmail")?.value;
+  cookieStore.delete("oauth_state_gmail");
+  if (!expectedState || state !== expectedState) {
     return NextResponse.redirect(`${origin}/connect?gmail_error=auth_failed`);
   }
 

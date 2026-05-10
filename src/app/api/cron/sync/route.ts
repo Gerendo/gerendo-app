@@ -3,12 +3,13 @@ import { createServiceClient } from "@/lib/supabase-server";
 import { runGmailSyncForUser } from "@/app/api/sync/gmail/route";
 import { runDriveSyncForUser } from "@/app/api/sync/drive/route";
 import { runAsanaSyncForUser } from "@/app/api/sync/asana/route";
+import { safeEqual } from "@/lib/crypto";
 
 export const maxDuration = 300;
 
 function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  return auth === `Bearer ${process.env.CRON_SECRET}`;
+  const auth = request.headers.get("authorization") ?? "";
+  return safeEqual(auth, `Bearer ${process.env.CRON_SECRET ?? ""}`);
 }
 
 export async function GET(request: Request): Promise<NextResponse> {

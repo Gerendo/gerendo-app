@@ -806,9 +806,10 @@ export async function createInviteToken(
   const token = Array.from(crypto.getRandomValues(new Uint8Array(32)))
     .map(b => b.toString(16).padStart(2, "0"))
     .join("");
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
     .from("invite_tokens")
-    .insert({ workspace_id: workspaceId, created_by: createdBy, token })
+    .insert({ workspace_id: workspaceId, created_by: createdBy, token, expires_at: expiresAt })
     .select("token")
     .single();
   if (!data) throw new Error(`Failed to create invite: ${error?.message}`);

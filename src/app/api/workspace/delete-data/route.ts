@@ -35,6 +35,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     await supabase.from("oauth_tokens").delete().eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "asana");
   }
   if (!tool) {
+    const { data: member } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (member?.role !== "owner" && member?.role !== "admin") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
     await supabase.from("summaries").delete().eq("workspace_id", workspaceId);
     await supabase.from("facts").delete().eq("workspace_id", workspaceId);
     await supabase.from("workspace_contexts").delete().eq("workspace_id", workspaceId);

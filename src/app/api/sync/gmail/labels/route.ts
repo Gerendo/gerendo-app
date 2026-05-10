@@ -1,7 +1,8 @@
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
-import { getGmailToken, openAgencyDb, getSyncState } from "@/lib/agency-db";
+import { getGmailToken, openAgencyDb, getSyncState, setSyncState } from "@/lib/agency-db";
+import { createServiceClient } from "@/lib/supabase-server";
 
 // Only exclude true system internals that are never useful to index
 const EXCLUDED_LABELS = new Set(["UNREAD", "CHAT"]);
@@ -37,8 +38,23 @@ export async function GET(): Promise<NextResponse> {
 
   // Skip API call if we're inside a known rate limit window
   const db = openAgencyDb(workspaceId, userId);
+  const supabase = createServiceClient();
+
   const { cursor: rateLimitUntil } = await getSyncState(db, "gmail:rate_limit_until");
-  if (rateLimitUntil && Number(rateLimitUntil) > Date.now()) {
+  const { data: watchRateLimit } = await supabase
+    .from("webhook_secrets")
+    .select("meta")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .eq("key", "watch_rate_limit")
+    .maybeSingle();
+  const watchRetryAfter = watchRateLimit?.meta?.retryAfter ? Number(watchRateLimit.meta.retryAfter) : 0;
+  const isRateLimited =
+    (rateLimitUntil && Number(rateLimitUntil) > Date.now()) ||
+    (watchRetryAfter && watchRetryAfter > Date.now());
+
+  if (isRateLimited) {
     const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
       id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
     }));
@@ -55,7 +71,14 @@ export async function GET(): Promise<NextResponse> {
     all = labelsRes.data.labels ?? [];
   } catch (err: any) {
     console.error("[gmail/labels] Gmail API error:", err?.message);
-    // Rate limited or API error - return hardcoded defaults so the user can still start a sync
+    // Persist rate limit window so subsequent calls (labels + register) skip the API
+    const retryMatch = err?.message?.match(/Retry after (\S+)/);
+    if (retryMatch) {
+      const retryAfter = new Date(retryMatch[1]).getTime();
+      if (!isNaN(retryAfter)) {
+        await setSyncState(db, "gmail:rate_limit_until", String(retryAfter));
+      }
+    }
     const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
       id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
     }));

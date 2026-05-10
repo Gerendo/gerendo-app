@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { getWorkspaceFromSession } from "@/lib/agency-db";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { cookies } from "next/headers";
 
 // Handles Google OAuth callback for Drive
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const state = searchParams.get("state");
   const error = searchParams.get("error");
 
   if (error || !code) {
+    return NextResponse.redirect(`${origin}/connect?drive_error=auth_failed`);
+  }
+
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("oauth_state_drive")?.value;
+  cookieStore.delete("oauth_state_drive");
+  if (!expectedState || state !== expectedState) {
     return NextResponse.redirect(`${origin}/connect?drive_error=auth_failed`);
   }
 

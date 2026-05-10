@@ -150,7 +150,7 @@ function ConnectPageInner() {
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
-    }, 2000);
+    }, 5000);
   }
 
   // Default labels shown before API loads - user can start sync immediately with these

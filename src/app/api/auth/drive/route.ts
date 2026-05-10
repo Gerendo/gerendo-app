@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
-// Redirects user to Google OAuth for Drive access
 export async function GET(): Promise<NextResponse> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   if (!clientId) return NextResponse.json({ error: "GOOGLE_CLIENT_ID not set" }, { status: 500 });
 
+  const state = crypto.randomUUID();
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/auth/drive`;
   const scope = "https://www.googleapis.com/auth/drive.readonly";
 
@@ -15,6 +16,10 @@ export async function GET(): Promise<NextResponse> {
   url.searchParams.set("scope", scope);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
+  url.searchParams.set("state", state);
+
+  const cookieStore = await cookies();
+  cookieStore.set("oauth_state_drive", state, { httpOnly: true, sameSite: "lax", maxAge: 600, path: "/" });
 
   return NextResponse.redirect(url.toString());
 }

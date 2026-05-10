@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { getGmailToken } from "@/lib/agency-db";
+import { safeEqual } from "@/lib/crypto";
 
 export const maxDuration = 60;
 
@@ -12,7 +13,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const authHeader = request.headers.get("authorization");
 
-  if (authHeader === `Bearer ${process.env.CRON_SECRET}`) {
+  if (safeEqual(authHeader ?? "", `Bearer ${process.env.CRON_SECRET ?? ""}`)) {
     const body = await request.json();
     workspaceId = body.workspaceId;
     userId = body.userId;

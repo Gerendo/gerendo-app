@@ -2,6 +2,7 @@ import { createHmac } from "crypto";
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { syncSingleAsanaTask } from "@/app/api/sync/asana/route";
+import { safeEqual } from "@/lib/crypto";
 
 const DEBOUNCE_MS = 15_000;
 
@@ -92,7 +93,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     .update(rawBody)
     .digest("hex");
 
-  if (hookSignature !== expectedSig) {
+  if (!safeEqual(hookSignature, expectedSig)) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
