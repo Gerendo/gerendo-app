@@ -77,6 +77,8 @@ function ConnectPageInner() {
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!authChecked) return; // wait for session to be confirmed before fetching
+
     const gmailConnected = searchParams.get("gmail_connected");
     const driveConnected = searchParams.get("drive_connected");
     const asanaConnected = searchParams.get("asana_connected");
@@ -124,7 +126,7 @@ function ConnectPageInner() {
     }).catch(() => {});
 
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, []);
+  }, [authChecked, searchParams]);
 
   function startPoll() {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -378,6 +380,15 @@ function ConnectPageInner() {
                   </div>
                   <div className="flex items-center justify-between sm:justify-end gap-3 flex-shrink-0 pl-12 sm:pl-0">
                     <span className="text-xs whitespace-nowrap" style={{ color: statusColor }}>{statusText}</span>
+                    {!tool.comingSoon && isConnected && !isConfirming && tool.id === "gmail" && (
+                      <button
+                        onClick={() => openLabelPicker()}
+                        className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors"
+                        style={{ background: "oklch(0.78 0.14 65 / 10%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
+                      >
+                        Manage labels
+                      </button>
+                    )}
                     {!tool.comingSoon && isConnected && !isConfirming && (
                       <button
                         onClick={() => setConfirmDisconnect(tool.id)}
