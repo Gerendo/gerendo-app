@@ -23,9 +23,15 @@ interface WorkspaceInfo {
 export default function SettingsPage() {
   const router = useRouter();
 
+  const [authChecked, setAuthChecked] = useState(false);
+
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) router.replace("/login");
+      if (!data.user) {
+        router.replace("/login");
+      } else {
+        setAuthChecked(true);
+      }
     });
   }, [router]);
 
@@ -85,6 +91,8 @@ export default function SettingsPage() {
   const dimColor = "oklch(0.72 0.012 60)";
   const emberColor = "oklch(0.78 0.14 65)";
   const inkSoft = "oklch(0.16 0.01 55)";
+
+  if (!authChecked) return null;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>

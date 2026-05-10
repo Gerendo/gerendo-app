@@ -17,10 +17,16 @@ type Message = {
 export default function AskPage() {
   const router = useRouter();
 
+  const [authChecked, setAuthChecked] = useState(false);
+
   // Guard: verify session is live on the server (catches back button after logout)
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) router.replace("/login");
+      if (!data.user) {
+        router.replace("/login");
+      } else {
+        setAuthChecked(true);
+      }
     });
   }, [router]);
 
@@ -246,6 +252,8 @@ export default function AskPage() {
     setLoading(false);
     setTimeout(() => inputRef.current?.focus(), 50);
   }
+
+  if (!authChecked) return null;
 
   return (
     <div className="h-dvh flex relative overflow-hidden" style={{ background: "oklch(0.11 0.008 55)", color: "white" }}>

@@ -37,9 +37,15 @@ function ConnectPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
+  const [authChecked, setAuthChecked] = useState(false);
+
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
-      if (!data.user) router.replace("/login");
+      if (!data.user) {
+        router.replace("/login");
+      } else {
+        setAuthChecked(true);
+      }
     });
   }, [router]);
 
@@ -246,6 +252,8 @@ function ConnectPageInner() {
     if (connectedTools.has(tool.id)) return { text: "Active - auto-syncing", color: "oklch(0.78 0.14 65)" };
     return { text: "Not connected", color: "oklch(0.45 0.01 60)" };
   }
+
+  if (!authChecked) return null;
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "oklch(0.11 0.008 55)", color: "oklch(0.96 0.012 80)" }}>
