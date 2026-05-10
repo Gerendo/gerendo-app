@@ -629,48 +629,68 @@ export async function POST(req: NextRequest): Promise<Response> {
                   const allTaskMeta: Array<{ name: string; due_on: string | null; permalink_url: string }> = [];
 
                   for (const ws of workspaces) {
-                    // Use Asana search API for consistent server-side filtering
-                    let searchCursor: string | null = null;
-                    do {
-                      const params = new URLSearchParams({
-                        "opt_fields": "name,completed,assignee.name,due_on,permalink_url,memberships.project.name",
-                        "limit": "100",
-                      });
-                      if (statusFilter === "open") params.set("completed", "false");
-                      if (statusFilter === "completed") params.set("completed", "true");
-                      if (input.due_before) params.set("due_on.before", input.due_before);
-                      if (input.assignee_name) params.set("assignee.any", input.assignee_name);
-                      if (searchCursor) params.set("offset", searchCursor);
+                    let projects: any[] = [];
+                    try {
+                      projects = await asanaGet(token, `/projects?workspace=${ws.gid}&limit=100&opt_fields=gid,name`);
+                    } catch { continue; }
 
-                      let page: any;
-                      try {
-                        const res = await fetch(`https://app.asana.com/api/1.0/workspaces/${ws.gid}/tasks/search?${params}`, {
-                          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                    if (input.project_name) {
+                      const needle = input.project_name.toLowerCase();
+                      projects = projects.filter((p: any) => p.name?.toLowerCase().includes(needle));
+                    }
+
+                    for (const project of projects) {
+                      let cursor: string | null = null;
+                      do {
+                        const params = new URLSearchParams({
+                          project: project.gid,
+                          limit: "100",
+                          "opt_fields": "gid,name,completed,assignee.name,due_on,permalink_url",
                         });
-                        page = await res.json();
-                      } catch { break; }
+                        if (statusFilter !== "all") params.set("completed", statusFilter === "completed" ? "true" : "false");
+                        if (cursor) params.set("offset", cursor);
 
-                      for (const task of page.data ?? []) {
-                        if (input.project_name) {
-                          const projects = task.memberships?.map((m: any) => m.project?.name?.toLowerCase()) ?? [];
-                          if (!projects.some((p: string) => p?.includes(input.project_name!.toLowerCase()))) continue;
+                        let page: any;
+                        try {
+                          const res = await fetch(`https://app.asana.com/api/1.0/tasks?${params}`, {
+                            headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+                          });
+                          page = await res.json();
+                        } catch { break; }
+
+                        for (const task of page.data ?? []) {
+                          // Filter by assignee
+                          if (input.assignee_name && !task.assignee?.name?.toLowerCase().includes(input.assignee_name.toLowerCase())) continue;
+                          // Filter by due date - tasks with no due_on are excluded when due_before is set
+                          if (input.due_before) {
+                            if (!task.due_on || task.due_on > input.due_before) continue;
+                          }
+
+                          const overdue = task.due_on && task.due_on < todayIso && !task.completed;
+                          if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
+                          allTasks.push([
+                            `#${allTasks.length + 1} Task: ${task.name}`,
+                            `Project: ${project.name}`,
+                            task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
+                            task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
+                            `Status: ${task.completed ? "Completed" : "Open"}`,
+                            task.permalink_url ? `URL: ${task.permalink_url}` : null,
+                          ].filter(Boolean).join(" | "));
                         }
-                        const projectName = task.memberships?.[0]?.project?.name ?? "No project";
-                        const overdue = task.due_on && task.due_on < todayIso && !task.completed;
-                        if (task.permalink_url) allTaskMeta.push({ name: task.name, due_on: task.due_on ?? null, permalink_url: task.permalink_url });
-                        allTasks.push([
-                          `#${allTasks.length + 1} Task: ${task.name}`,
-                          `Project: ${projectName}`,
-                          task.assignee?.name ? `Assignee: ${task.assignee.name}` : null,
-                          task.due_on ? `Due: ${task.due_on}${overdue ? " OVERDUE" : ""}` : "Due: none",
-                          `Status: ${task.completed ? "Completed" : "Open"}`,
-                          task.permalink_url ? `URL: ${task.permalink_url}` : null,
-                        ].filter(Boolean).join(" | "));
-                      }
 
-                      searchCursor = page.next_page?.offset ?? null;
-                    } while (searchCursor);
+                        cursor = page.next_page?.offset ?? null;
+                      } while (cursor);
+                    }
                   }
+
+                  // Sort by due_on ascending for consistent ordering
+                  allTasks.sort((a, b) => {
+                    const da = a.match(/Due: (\d{4}-\d{2}-\d{2})/)?.[1] ?? "9999";
+                    const db = b.match(/Due: (\d{4}-\d{2}-\d{2})/)?.[1] ?? "9999";
+                    return da.localeCompare(db);
+                  });
+                  // Re-number after sort
+                  const renumbered = allTasks.map((t, i) => t.replace(/^#\d+/, `#${i + 1}`));
 
                   allTaskMeta.forEach((task, i) => {
                     writer.write(encoder.encode(`data: ${JSON.stringify({
@@ -678,9 +698,9 @@ export async function POST(req: NextRequest): Promise<Response> {
                       source: { ref: `A${i + 1}`, label: task.name, sublabel: task.due_on ?? "No due date", url: task.permalink_url, kind: "asana" },
                     })}\n\n`));
                   });
-                  const totalCount = allTasks.length;
+                  const totalCount = renumbered.length;
                   const pageSize = input.show_all ? totalCount : 10;
-                  const displayTasks = allTasks.slice(offset, offset + pageSize);
+                  const displayTasks = renumbered.slice(offset, offset + pageSize);
                   const remaining = totalCount - offset - displayTasks.length;
                   result = totalCount > 0
                     ? `LIVE ASANA TASKS — EXACT TOTAL: ${totalCount}. Showing tasks ${offset + 1}–${offset + displayTasks.length}${remaining > 0 ? `. ${remaining} more — call again with offset=${offset + pageSize} for next page, or show_all=true for everything` : " (end of list)"}:\n` + displayTasks.join("\n")
