@@ -57,6 +57,21 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
   }
 
+  // Also skip if rate limited - check for a stored retry-after timestamp
+  const { data: rateLimitRow } = await supabase.from("webhook_secrets")
+    .select("meta")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("provider", "gmail")
+    .eq("key", "watch_rate_limit")
+    .maybeSingle();
+  if (rateLimitRow?.meta?.retryAfter) {
+    const retryAfter = Number(rateLimitRow.meta.retryAfter);
+    if (!isNaN(retryAfter) && retryAfter > Date.now()) {
+      return NextResponse.json({ error: "Rate limited, retry after " + new Date(retryAfter).toISOString() }, { status: 429 });
+    }
+  }
+
   let watchRes;
   try {
     watchRes = await gmail.users.watch({
@@ -65,6 +80,19 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
   } catch (err: any) {
     console.error("[webhook/gmail/register] Gmail watch failed:", err?.message);
+    // Store retry-after so subsequent calls don't hammer the quota
+    const retryMatch = err?.message?.match(/Retry after (\S+)/);
+    if (retryMatch) {
+      const retryAfter = new Date(retryMatch[1]).getTime();
+      await supabase.from("webhook_secrets").upsert({
+        workspace_id: workspaceId,
+        user_id: userId,
+        provider: "gmail",
+        key: "watch_rate_limit",
+        secret: "",
+        meta: { retryAfter },
+      }, { onConflict: "workspace_id,user_id,provider,key" });
+    }
     return NextResponse.json({ error: err?.message ?? "Gmail watch failed" }, { status: 502 });
   }
 
