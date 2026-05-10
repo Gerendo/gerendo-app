@@ -261,7 +261,6 @@ export default function AskPage() {
               <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
                 <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.4"/>
                 <path d="M6 1v16" stroke="currentColor" strokeWidth="1.4"/>
-                <path d="M10 6.5l2.5 2.5-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </button>
           )}
