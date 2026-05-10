@@ -78,8 +78,8 @@ export function BrainOrb({ className = "" }: { className?: string }) {
               <motion.circle
                 cx={n.x}
                 cy={n.y}
-                r={n.size / 2}
                 fill="oklch(0.96 0.012 80)"
+                initial={{ r: n.size / 2, opacity: 0.4 }}
                 animate={{ opacity: [0.4, 1, 0.4], r: [n.size / 2, n.size / 1.6, n.size / 2] }}
                 transition={{ duration: 2.4, delay: i * 0.25, repeat: Infinity, ease: "easeInOut" }}
               />
