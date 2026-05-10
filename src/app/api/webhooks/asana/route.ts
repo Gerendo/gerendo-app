@@ -23,8 +23,33 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const supabase = createServiceClient();
 
-  // Handshake phase: Asana sends X-Hook-Secret on first POST
+  // Handshake phase: Asana sends X-Hook-Secret on first POST.
+  // Verify the workspace/user pair is legitimate before storing the secret —
+  // prevents an attacker with known UUIDs from overwriting a real user's HMAC secret.
   if (hookSecret) {
+    const { data: member } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!member) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: token } = await supabase
+      .from("oauth_tokens")
+      .select("user_id")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .eq("provider", "asana")
+      .maybeSingle();
+
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     await supabase.from("webhook_secrets").upsert({
       workspace_id: workspaceId,
       user_id: userId,
