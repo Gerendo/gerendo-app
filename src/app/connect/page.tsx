@@ -255,6 +255,8 @@ function ConnectPageInner() {
       setConnectedTools(p => { const n = new Set(p); n.delete(toolId); return n; });
       setToolStatus(p => { const n = { ...p }; delete n[toolId]; return n; });
       setSyncedCounts(p => { const n = { ...p }; delete n[toolId]; return n; });
+      setInitialSyncing(p => p === toolId ? null : p);
+      if (pollRef.current) clearInterval(pollRef.current);
     } catch {
       setToolError(p => ({ ...p, [toolId]: "Disconnect failed" }));
     } finally {
