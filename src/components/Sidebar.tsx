@@ -50,19 +50,11 @@ function groupByDate(convs: Conversation[]): { label: string; items: Conversatio
 }
 
 // Sidebar toggle icon — two vertical panels, left one highlighted
-function SidebarIcon({ open }: { open: boolean }) {
+function SidebarIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
       <rect x="1" y="1" width="16" height="16" rx="3" stroke="currentColor" strokeWidth="1.4"/>
       <path d="M6 1v16" stroke="currentColor" strokeWidth="1.4"/>
-      {open && (
-        // Arrow pointing left when open (collapse)
-        <path d="M10 6.5l-2.5 2.5 2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-      )}
-      {!open && (
-        // Arrow pointing right when collapsed (expand)
-        <path d="M10 6.5l2.5 2.5-2.5 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-      )}
     </svg>
   );
 }
@@ -132,7 +124,7 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
               style={{ color: muted }}
               aria-label="Collapse sidebar"
             >
-              <SidebarIcon open={true} />
+              <SidebarIcon />
             </button>
           </div>
 
