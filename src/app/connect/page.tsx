@@ -146,12 +146,14 @@ function ConnectPageInner() {
     setLoadingLabels(true);
     try {
       const res = await fetch("/api/sync/gmail/labels");
+      if (!res.ok) throw new Error("Gmail not connected");
       const { labels } = await res.json();
-      setAvailableLabels(labels ?? []);
-      setSelectedLabels(new Set((labels ?? []).filter((l: any) => l.default).map((l: any) => l.id)));
+      if (!labels?.length) throw new Error("No labels found");
+      setAvailableLabels(labels);
+      setSelectedLabels(new Set(labels.filter((l: any) => l.default).map((l: any) => l.id)));
     } catch {
-      setAvailableLabels([]);
-      setSelectedLabels(new Set(["INBOX", "SENT"]));
+      setShowLabelPicker(false);
+      setToolError(p => ({ ...p, gmail: "Could not load Gmail mailboxes. Please try connecting again." }));
     } finally {
       setLoadingLabels(false);
     }
