@@ -41,10 +41,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   auth.setCredentials({ access_token: token });
   const gmail = google.gmail({ version: "v1", auth });
 
-  const watchRes = await gmail.users.watch({
-    userId: "me",
-    requestBody: { topicName, labelIds: ["INBOX"] },
-  });
+  let watchRes;
+  try {
+    watchRes = await gmail.users.watch({
+      userId: "me",
+      requestBody: { topicName, labelIds: ["INBOX"] },
+    });
+  } catch (err: any) {
+    console.error("[webhook/gmail/register] Gmail watch failed:", err?.message);
+    return NextResponse.json({ error: err?.message ?? "Gmail watch failed" }, { status: 502 });
+  }
 
   const { historyId, expiration } = watchRes.data;
 
