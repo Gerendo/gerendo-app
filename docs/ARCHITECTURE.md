@@ -300,6 +300,86 @@ For each source kind:
 
 ---
 
+## Sync and webhook architecture
+
+> **Last verified:** 2026-05-10. All three sources below are fully implemented.
+
+### Sync is real-time, not polling
+
+All three sources use push webhooks. Data is searchable within seconds of a change - the daily cron is a safety net only, not the primary sync mechanism.
+
+| Source | Push latency | Time to searchable | Notes |
+|---|---|---|---|
+| Gmail | ~1-5s (Google Pub/Sub) | ~10-30s | Fastest - Pub/Sub is designed for low latency |
+| Google Drive | ~5-30s (Drive push channel) | ~30-60s | Less consistent than Pub/Sub; Drive can batch notifications within the debounce window but `changes.list` picks up all of them in one call |
+| Asana | ~5-15s (Asana webhooks) | ~15-30s | Per-task GID push; debounce prevents duplicate syncs on rapid edits to the same task |
+
+The daily 3am cron (`/api/cron/sync`) catches anything missed due to Vercel timeouts, transient network errors, or Google retry exhaustion. In normal operation it syncs 0 new items.
+
+### How each source gets triggered
+
+| Source | Real-time trigger | Incremental mechanism | Cron fallback | Debounce |
+|---|---|---|---|---|
+| Gmail | Google Pub/Sub push to `/api/webhooks/gmail` | `historyId` cursor in `sync_state` | Daily cron (`source=gmail`) | 30s per user (`gmail:webhook_lock`) |
+| Google Drive | Drive push channel to `/api/webhooks/drive` | `changes.list` page token in `sync_state` (`drive:changes_page_token`) | Daily cron (`source=drive`) | 30s per user (`drive:webhook_lock`) |
+| Asana | Asana webhooks to `/api/webhooks/asana` | Webhook fires per-task GID; `syncSingleAsanaTask` fetches the specific task | Daily cron (`source=asana`) | 15s per Asana workspace (`asana:webhook_lock:{asanaWsKey}`) |
+
+### Gmail
+
+**Registration:** `POST /api/webhooks/gmail/register` — calls Google Pub/Sub `watch`. Must be renewed before the watch expires (Google requires renewal every 7 days; cron runs `source=gmail-watch-renew` daily).
+
+**Webhook receiver:** `/api/webhooks/gmail` — verifies the Pub/Sub JWT, decodes the base64 message to get `emailAddress`, looks up the user, debounces, then calls `runGmailSyncForUser` with `{ labelsOnly: ["INBOX", "SENT"] }`. Also fires Drive sync as fire-and-forget (in case a Meet transcript landed in Drive).
+
+**Incremental sync:** `runGmailSyncForUser` uses the Gmail `historyId` cursor stored in `sync_state` (source key: `'gmail:INBOX'`, `'gmail:SENT'`, etc.). On first run (no cursor), it does a full label scan.
+
+### Google Drive
+
+**Registration:** `POST /api/webhooks/drive/register` — calls `drive.changes.watch` with a UUID channel ID and a 6-day TTL (Google max is 7 days). Stores `{ key: "channel", secret: channelId, meta: { resourceId, expiration } }` in `webhook_secrets`. Must be renewed before expiry; cron runs `source=drive-channel-renew` daily (checks expiry, re-registers if within 24h buffer).
+
+**Webhook receiver:** `/api/webhooks/drive` — verifies the channel ID (`X-Goog-Channel-ID`) maps to a known `webhook_secrets.secret`, acks the initial `sync` handshake, debounces with `drive:webhook_lock`, then fires `runDriveSyncForUser` as fire-and-forget.
+
+**Incremental sync:** `runDriveSyncForUser` uses `changes.list` with the page token stored in `sync_state` (key: `drive:changes_page_token`). On first run (no token), it does a full `files.list` scan and stores the `startPageToken` for future incremental runs. The `syncFile` helper is shared between full and incremental paths.
+
+**Channel stop on delete:** when a user deletes their Drive data (`DELETE /api/workspace/delete-data?tool=drive`), the `webhook_secrets` row is deleted. On next renewal attempt, registration starts fresh.
+
+### Asana
+
+**Registration:** `POST /api/webhooks/asana/register` — iterates the user's Asana workspaces, calls `POST /api/1.0/webhooks` with a target URL of `/api/webhooks/asana?workspace_id=...&user_id=...&asana_ws={gid}`. Skips if already registered (checks `webhook_secrets` for that `provider=asana, key={asanaWs.gid}`). Must be re-run after OAuth connects.
+
+**Known blocker:** BUG-007 - Asana OAuth won't complete until `https://app.gerendo.com/auth/asana` is added to the Asana developer console redirect URIs. Registration cannot happen until OAuth is fixed.
+
+**Webhook receiver:** `/api/webhooks/asana` — handshake phase echoes back `X-Hook-Secret` and stores it. Event phase verifies HMAC-SHA256 signature, debounces (15s per Asana workspace), dedupes task GIDs, calls `syncSingleAsanaTask` per task. Heartbeats (empty events array) are acked silently.
+
+**No cursor for Asana:** Asana pushes individual task GIDs on change, so there is no page-token-style cursor. The webhook handler processes the exact tasks that changed. The daily cron does a full project scan as a safety net.
+
+### Cron schedule
+
+Vercel cron config (`vercel.json`) should include:
+
+```json
+{ "path": "/api/cron/sync?source=gmail",              "schedule": "0 3 * * *" },
+{ "path": "/api/cron/sync?source=drive",              "schedule": "0 3 * * *" },
+{ "path": "/api/cron/sync?source=asana",              "schedule": "0 3 * * *" },
+{ "path": "/api/cron/sync?source=gmail-watch-renew",  "schedule": "0 2 * * *" },
+{ "path": "/api/cron/sync?source=drive-channel-renew","schedule": "0 2 * * *" }
+```
+
+All cron routes require `Authorization: Bearer {CRON_SECRET}`.
+
+### webhook_secrets table
+
+Used for both Pub/Sub (Gmail), push channels (Drive), and HMAC secrets (Asana):
+
+| provider | key | secret | meta |
+|---|---|---|---|
+| `gmail` | `"watch"` | Gmail `historyId` | `{ expiration, registeredAt }` |
+| `drive` | `"channel"` | current channel UUID | `{ resourceId, expiration, registeredAt }` |
+| `asana` | Asana workspace GID | HMAC secret from Asana handshake | `{ registeredAt }` |
+
+UNIQUE constraint: `(workspace_id, user_id, provider, key)`.
+
+---
+
 ## Retrieval pipeline (per query)
 
 ```

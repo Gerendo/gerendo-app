@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { syncSingleAsanaTask } from "@/app/api/sync/asana/route";
 
+const DEBOUNCE_MS = 15_000;
+
 export const maxDuration = 300;
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -73,6 +75,26 @@ export async function POST(request: Request): Promise<NextResponse> {
   const events: Array<{ resource: { gid: string; resource_type: string }; action: string }> = body.events ?? [];
 
   if (events.length === 0) return NextResponse.json({ ok: true }); // heartbeat
+
+  // Debounce: Asana fires multiple events on bulk updates (e.g. moving tasks between sections)
+  const now = Date.now();
+  const debounceKey = `asana:webhook_lock:${asanaWsKey}`;
+  const { data: lockState } = await supabase
+    .from("sync_state")
+    .select("last_synced_at")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("source", debounceKey)
+    .maybeSingle();
+
+  if (lockState?.last_synced_at && (now - lockState.last_synced_at) < DEBOUNCE_MS) {
+    return NextResponse.json({ ok: true });
+  }
+
+  await supabase.from("sync_state").upsert(
+    { workspace_id: workspaceId, user_id: userId, source: debounceKey, last_synced_at: now, cursor: null },
+    { onConflict: "workspace_id,user_id,source" }
+  );
 
   // Dedupe task GIDs, skip removed events
   const taskGids = [...new Set(

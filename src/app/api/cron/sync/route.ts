@@ -56,6 +56,28 @@ export async function GET(request: Request): Promise<NextResponse> {
           body: JSON.stringify({ workspaceId: workspace_id, userId: user_id }),
         });
         results.push({ workspaceId: workspace_id, userId: user_id, result: await res.json() });
+      } else if (source === "drive-channel-renew") {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+        const res = await fetch(`${appUrl}/api/webhooks/drive/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.CRON_SECRET}`,
+          },
+          body: JSON.stringify({ workspaceId: workspace_id, userId: user_id }),
+        });
+        results.push({ workspaceId: workspace_id, userId: user_id, result: await res.json() });
+      } else if (source === "asana-webhook-register") {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
+        const res = await fetch(`${appUrl}/api/webhooks/asana/register`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.CRON_SECRET}`,
+          },
+          body: JSON.stringify({ workspaceId: workspace_id, userId: user_id }),
+        });
+        results.push({ workspaceId: workspace_id, userId: user_id, result: await res.json() });
       }
     } catch (err: any) {
       console.error(`[cron/${source}] ${workspace_id}/${user_id}:`, err?.message);

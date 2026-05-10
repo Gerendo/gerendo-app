@@ -24,6 +24,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     await supabase.from("drive_embeddings").delete().eq("workspace_id", workspaceId).eq("user_id", userId);
     await supabase.from("drive_files").delete().eq("workspace_id", workspaceId).eq("user_id", userId);
     await supabase.from("sync_state").delete().eq("workspace_id", workspaceId).eq("user_id", userId).like("source", "drive%");
+    await supabase.from("webhook_secrets").delete().eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "drive");
     await supabase.from("oauth_tokens").delete().eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-drive");
   }
   if (tool === "asana" || !tool) {
