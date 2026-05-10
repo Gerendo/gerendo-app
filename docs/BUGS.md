@@ -72,7 +72,7 @@ Add a logout button to a globally accessible UI element. Options: (1) user avata
 
 ## BUG-007 - Asana OAuth fails with invalid redirect_uri
 
-**Status:** Open  
+**Status:** Resolved  
 **Platform:** All  
 **Area:** Connect / Asana OAuth
 

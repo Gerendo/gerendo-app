@@ -54,5 +54,16 @@ export async function GET(request: Request): Promise<NextResponse> {
     expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
   }, { onConflict: "workspace_id,user_id,provider" });
 
+  // Register Drive push webhook immediately on connect (fire-and-forget).
+  // The daily cron also renews it, so non-fatal if this fails.
+  fetch(`${origin}/api/webhooks/drive/register`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${process.env.CRON_SECRET}`,
+    },
+    body: JSON.stringify({ workspaceId, userId }),
+  }).catch(() => {});
+
   return NextResponse.redirect(`${origin}/connect?drive_connected=1`);
 }
