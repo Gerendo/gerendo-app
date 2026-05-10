@@ -99,15 +99,17 @@ async function fetchAndStoreMessages(
     const msg: string = err?.message ?? "";
     const retryMatch = msg.match(/Retry after (\S+)/);
     if (retryMatch) {
-      // Rate limited - wait until Google says we can retry, then try once more
       const retryAt = new Date(retryMatch[1]).getTime();
       const waitMs = Math.max(0, retryAt - Date.now());
       if (waitMs > 0 && waitMs < 60_000) {
+        // Short wait - retry once after the window
         await new Promise(r => setTimeout(r, waitMs + 500));
         try {
           return await fetchAndStoreMessages(gmail, db, labelId, labelName);
         } catch { return 0; }
       }
+      // Long rate limit window - persist it so the webhook handler skips future attempts
+      await setSyncState(db, "gmail:rate_limit_until", String(retryAt));
     }
     console.error(`[sync] ${labelName} list error:`, msg);
     return 0;

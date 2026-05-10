@@ -59,10 +59,23 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   if (!member) return NextResponse.json({ ok: true });
 
-  // Debounce: skip if a webhook sync ran for this user in the last 30 seconds.
-  // Prevents thundering herd when Pub/Sub delivers multiple notifications rapidly.
-  const DEBOUNCE_MS = 5 * 60_000; // 5 minutes
   const now = Date.now();
+
+  // Skip sync if Gmail API is rate limited - prevents hammering the API every 5 min
+  const { data: rateLimitState } = await supabase
+    .from("sync_state")
+    .select("cursor")
+    .eq("workspace_id", member.workspace_id)
+    .eq("user_id", user.id)
+    .eq("source", "gmail:rate_limit_until")
+    .maybeSingle();
+  if (rateLimitState?.cursor && Number(rateLimitState.cursor) > now) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // Debounce: skip if a webhook sync ran for this user in the last 5 minutes.
+  // Prevents thundering herd when Pub/Sub delivers multiple notifications rapidly.
+  const DEBOUNCE_MS = 5 * 60_000;
   const { data: lockState } = await supabase
     .from("sync_state")
     .select("last_synced_at")
