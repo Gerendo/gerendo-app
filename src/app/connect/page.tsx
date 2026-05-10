@@ -337,11 +337,16 @@ function ConnectPageInner() {
                   <button
                     onClick={async () => {
                       await fetch("/api/sync/stop", { method: "POST" });
+                      await fetch("/api/sync/disconnect", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ tool: initialSyncing }),
+                      });
                       if (pollRef.current) clearInterval(pollRef.current);
                       setInitialSyncing(null);
                       setSyncCount(0);
-                      setToolStatus(p => { const n = { ...p }; delete n.gmail; return n; });
-                      setConnectedTools(p => { const n = new Set(p); n.delete("gmail"); return n; });
+                      setToolStatus(p => { const n = { ...p }; delete n[initialSyncing!]; return n; });
+                      setConnectedTools(p => { const n = new Set(p); n.delete(initialSyncing!); return n; });
                     }}
                     className="text-xs px-2.5 py-1 rounded-lg font-medium opacity-80 hover:opacity-100 transition-opacity flex-shrink-0"
                     style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
