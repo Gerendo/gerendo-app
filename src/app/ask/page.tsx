@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import ReactMarkdown from "react-markdown";
 import Sidebar from "@/components/Sidebar";
+import { createClient } from "@/lib/supabase";
 
 type Source = { subject: string; sender: string; date: string; url: string; mailbox?: string };
 type Message = {
@@ -13,6 +15,15 @@ type Message = {
 };
 
 export default function AskPage() {
+  const router = useRouter();
+
+  // Guard: if session is gone (e.g. after logout + back button), redirect immediately
+  useEffect(() => {
+    createClient().auth.getSession().then(({ data }) => {
+      if (!data.session) router.replace("/login");
+    });
+  }, [router]);
+
   const [query, setQuery] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import UserMenu from "@/components/UserMenu";
+import { createClient } from "@/lib/supabase";
 
 type ToolStatus = "idle" | "connecting" | "syncing" | "active" | "error";
 
@@ -32,7 +34,14 @@ const ALL_TOOLS: Tool[] = [
 ];
 
 function ConnectPageInner() {
+  const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    createClient().auth.getSession().then(({ data }) => {
+      if (!data.session) router.replace("/login");
+    });
+  }, [router]);
 
   const [connectedTools, setConnectedTools] = useState<Set<string>>(new Set());
   const [toolStatus, setToolStatus] = useState<Record<string, ToolStatus>>({});

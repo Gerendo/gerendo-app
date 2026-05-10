@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase";
 
 interface Member {
   userId: string;
@@ -19,6 +21,14 @@ interface WorkspaceInfo {
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    createClient().auth.getSession().then(({ data }) => {
+      if (!data.session) router.replace("/login");
+    });
+  }, [router]);
+
   const [info, setInfo] = useState<WorkspaceInfo | null>(null);
   const [inviteUrl, setInviteUrl] = useState("");
   const [copied, setCopied] = useState(false);
