@@ -336,18 +336,18 @@ function ConnectPageInner() {
                   opacity: tool.comingSoon ? 0.6 : 1,
                 }}
               >
-                <div className="flex items-center justify-between p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-2">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-9 h-9 rounded-xl flex items-center justify-center text-sm font-semibold flex-shrink-0"
                       style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.78 0.14 65)" }}>
                       {tool.name[0]}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="text-sm font-medium">{tool.name}</div>
                       <div className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>{tool.description}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-shrink-0 pl-12 sm:pl-0">
                     <span className="text-xs whitespace-nowrap" style={{ color: statusColor }}>{statusText}</span>
                     {!tool.comingSoon && isConnected && !isConfirming && (
                       <button
