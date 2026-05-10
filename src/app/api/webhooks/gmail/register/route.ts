@@ -25,6 +25,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     ({ workspaceId, userId } = _ws);
   }
 
+  console.log(`[webhook/gmail/register] called workspaceId=${workspaceId} userId=${userId} isCron=${authHeader?.startsWith("Bearer") ?? false}`);
+
   const topicName = process.env.GMAIL_PUBSUB_TOPIC;
   if (!topicName) {
     return NextResponse.json({ error: "GMAIL_PUBSUB_TOPIC not configured" }, { status: 500 });
