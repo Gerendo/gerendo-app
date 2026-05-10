@@ -333,7 +333,7 @@ function ConnectPageInner() {
                     ? "Indexing Google Drive files..."
                     : "Syncing Asana tasks..."}
                 </div>
-                {initialSyncing === "gmail" && (
+                {initialSyncing && (
                   <button
                     onClick={async () => {
                       await fetch("/api/sync/stop", { method: "POST" });
@@ -355,7 +355,7 @@ function ConnectPageInner() {
                   </button>
                 )}
               </div>
-              {initialSyncing === "gmail" && (
+              {initialSyncing === "gmail" && syncCount >= 0 && (
                 <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "oklch(0.16 0.01 55)" }}>
                   <div className="h-full rounded-full" style={{ width: syncCount > 0 ? `${Math.min((syncCount / 2000) * 100, 95)}%` : "5%", background: "oklch(0.78 0.14 65)", transition: "width 1s ease" }} />
                 </div>
