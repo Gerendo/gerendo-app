@@ -193,6 +193,57 @@ export async function insertFact(
   });
 }
 
+// ── Per-user quota ────────────────────────────────────────────────────────────
+
+export async function checkAndIncrementQuota(
+  supabase: ReturnType<typeof createServiceClient>,
+  workspaceId: string,
+  userId: string,
+  limit: number
+): Promise<{ allowed: boolean; used: number; limit: number }> {
+  const month = new Date().toISOString().slice(0, 7);
+  const source = `quota:ask:${month}`;
+
+  const { data: existing } = await supabase
+    .from("sync_state")
+    .select("cursor")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("source", source)
+    .maybeSingle();
+
+  const used = parseInt(existing?.cursor ?? "0", 10);
+
+  if (used >= limit) {
+    return { allowed: false, used, limit };
+  }
+
+  await supabase.from("sync_state").upsert(
+    { workspace_id: workspaceId, user_id: userId, source, last_synced_at: Date.now(), cursor: String(used + 1) },
+    { onConflict: "workspace_id,user_id,source" }
+  );
+
+  return { allowed: true, used: used + 1, limit };
+}
+
+export async function getQuotaUsage(
+  supabase: ReturnType<typeof createServiceClient>,
+  workspaceId: string,
+  userId: string,
+  limit: number
+): Promise<{ used: number; limit: number; remaining: number }> {
+  const month = new Date().toISOString().slice(0, 7);
+  const { data } = await supabase
+    .from("sync_state")
+    .select("cursor")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("source", `quota:ask:${month}`)
+    .maybeSingle();
+  const used = parseInt(data?.cursor ?? "0", 10);
+  return { used, limit, remaining: Math.max(0, limit - used) };
+}
+
 export async function getSyncState(
   db: AgencyDb,
   source: string

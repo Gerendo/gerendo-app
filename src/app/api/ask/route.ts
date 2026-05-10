@@ -2,7 +2,7 @@ import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
-import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, type AgencyDb } from "@/lib/agency-db";
+import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, checkAndIncrementQuota, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
 
@@ -333,6 +333,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   const _ws = await requireWorkspace(); if (isErrorResponse(_ws)) return _ws; const { workspaceId, userId } = _ws;
 
   const db = openAgencyDb(workspaceId, userId);
+
+  // Per-user monthly question limit
+  const monthlyLimit = parseInt(process.env.USER_MONTHLY_QUESTION_LIMIT ?? "500", 10);
+  const quota = await checkAndIncrementQuota(db.supabase, workspaceId, userId, monthlyLimit);
+  if (!quota.allowed) {
+    return Response.json(
+      { error: "monthly_limit_reached", used: quota.used, limit: quota.limit },
+      { status: 429 }
+    );
+  }
 
   // Detect which tools are connected for this workspace
   const { data: tokenRows } = await db.supabase

@@ -114,12 +114,15 @@ export default function AskPage() {
       const contentType = res.headers.get("content-type") ?? "";
       if (!contentType.includes("text/event-stream")) {
         const err = await res.json();
-        setMessages((prev) => [...prev, {
-          role: "assistant",
-          content: err.error === "no_results"
-            ? "I couldn't find any relevant emails for that. Try rephrasing or sync more emails."
-            : (err.error ?? "Something went wrong."),
-        }]);
+        let errorMessage: string;
+        if (err.error === "monthly_limit_reached") {
+          errorMessage = `You've used all ${err.limit} questions for this month. Your limit resets on the 1st. Contact support if you need more.`;
+        } else if (err.error === "no_results") {
+          errorMessage = "I couldn't find any relevant emails for that. Try rephrasing or sync more emails.";
+        } else {
+          errorMessage = err.error ?? "Something went wrong.";
+        }
+        setMessages((prev) => [...prev, { role: "assistant", content: errorMessage }]);
         setLoading(false);
         return;
       }
