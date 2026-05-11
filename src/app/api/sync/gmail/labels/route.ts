@@ -129,9 +129,14 @@ export async function GET(): Promise<NextResponse> {
       return a.name.localeCompare(b.name);
     });
 
-  const syncedLabelIds = [...distinctMailboxes]
-    .map(m => mailboxToLabelId[m] ?? m.toUpperCase())
-    .filter(id => labels.some(l => l.id === id));
+  // Build a name→id map from the full labels list so custom labels resolve correctly
+  // (custom label IDs are opaque like "Label_1234" — match by display name)
+  const labelNameToId = new Map(labels.map(l => [l.name.toLowerCase(), l.id]));
+
+  const syncedLabelIds = [...distinctMailboxes].map(m => {
+    // Try hardcoded system map first, then match by label display name
+    return mailboxToLabelId[m] ?? labelNameToId.get(m) ?? null;
+  }).filter((id): id is string => id !== null && labels.some(l => l.id === id));
 
   return NextResponse.json({ labels, syncedLabelIds });
 }
