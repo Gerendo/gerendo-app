@@ -54,11 +54,30 @@ export async function GET(): Promise<NextResponse> {
     (rateLimitUntil && Number(rateLimitUntil) > Date.now()) ||
     (watchRetryAfter && watchRetryAfter > Date.now());
 
+  // Always compute synced labels from messages table — available in all response paths including rate-limited
+  const { data: mailboxRows } = await supabase
+    .from("messages")
+    .select("mailbox")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("source", "gmail");
+
+  const mailboxToLabelId: Record<string, string> = {
+    inbox: "INBOX", sent: "SENT", draft: "DRAFT", starred: "STARRED",
+    important: "IMPORTANT", spam: "SPAM", trash: "TRASH", snoozed: "SNOOZED",
+    scheduled: "SCHEDULED", personal: "CATEGORY_PERSONAL", social: "CATEGORY_SOCIAL",
+    promotions: "CATEGORY_PROMOTIONS", updates: "CATEGORY_UPDATES", forums: "CATEGORY_FORUMS",
+  };
+  const distinctMailboxes = new Set((mailboxRows ?? []).map(r => r.mailbox?.toLowerCase()).filter(Boolean));
+
   if (isRateLimited) {
     const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
       id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
     }));
-    return NextResponse.json({ labels: defaults, rateLimited: true });
+    const syncedLabelIds = [...distinctMailboxes]
+      .map(m => mailboxToLabelId[m] ?? m.toUpperCase())
+      .filter(id => defaults.some(l => l.id === id));
+    return NextResponse.json({ labels: defaults, syncedLabelIds, rateLimited: true });
   }
 
   const auth = new google.auth.OAuth2();
@@ -71,7 +90,6 @@ export async function GET(): Promise<NextResponse> {
     all = labelsRes.data.labels ?? [];
   } catch (err: any) {
     console.error("[gmail/labels] Gmail API error:", err?.message);
-    // Persist rate limit window so subsequent calls (labels + register) skip the API
     const retryMatch = err?.message?.match(/Retry after (\S+)/);
     if (retryMatch) {
       const retryAfter = new Date(retryMatch[1]).getTime();
@@ -82,7 +100,10 @@ export async function GET(): Promise<NextResponse> {
     const defaults = Object.entries(LABEL_META).map(([id, meta]) => ({
       id, name: meta.displayName, icon: meta.icon, type: "system", default: meta.default,
     }));
-    return NextResponse.json({ labels: defaults });
+    const syncedLabelIds = [...distinctMailboxes]
+      .map(m => mailboxToLabelId[m] ?? m.toUpperCase())
+      .filter(id => defaults.some(l => l.id === id));
+    return NextResponse.json({ labels: defaults, syncedLabelIds });
   }
 
   const labels = all
@@ -108,22 +129,6 @@ export async function GET(): Promise<NextResponse> {
       return a.name.localeCompare(b.name);
     });
 
-  // Derive synced labels from what actually has data in the messages table
-  const { data: mailboxRows } = await supabase
-    .from("messages")
-    .select("mailbox")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", userId)
-    .eq("source", "gmail");
-
-  const mailboxToLabelId: Record<string, string> = {
-    inbox: "INBOX", sent: "SENT", draft: "DRAFT", starred: "STARRED",
-    important: "IMPORTANT", spam: "SPAM", trash: "TRASH", snoozed: "SNOOZED",
-    scheduled: "SCHEDULED", personal: "CATEGORY_PERSONAL", social: "CATEGORY_SOCIAL",
-    promotions: "CATEGORY_PROMOTIONS", updates: "CATEGORY_UPDATES", forums: "CATEGORY_FORUMS",
-  };
-
-  const distinctMailboxes = new Set((mailboxRows ?? []).map(r => r.mailbox?.toLowerCase()));
   const syncedLabelIds = [...distinctMailboxes]
     .map(m => mailboxToLabelId[m] ?? m.toUpperCase())
     .filter(id => labels.some(l => l.id === id));
