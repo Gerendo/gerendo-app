@@ -20,24 +20,21 @@ const SIGNAL_WORDS = [
 ];
 
 function isObviousNonDecision(text: string): boolean {
-  // Strip the "Subject. From: sender." prefix added by keyword_text format
-  const body = text.replace(/^.+?\.\s*From:.+?\.\s*/i, "").trim();
-  const lower = body.toLowerCase();
+  const lower = text.toLowerCase().trim();
   const words = lower.split(/\s+/).filter(Boolean);
 
-  if (words.length < 8) return true;
+  if (words.length < 5) return true;
 
-  // Pure question
-  if (lower.endsWith("?") && /^(when|what|how|can|could|would|is|are|do|does|did|will|who|where|why)\b/.test(lower)) {
+  // Pure question (short message that's only a question)
+  if (words.length < 15 && lower.endsWith("?") && /^(when|what|how|can|could|would|is|are|do|does|did|will|who|where|why)\b/.test(lower)) {
     return true;
   }
 
-  // Standalone acknowledgement
+  // Standalone acknowledgement only
   if (/^(ok|okay|thanks|thank you|got it|perfect|super|multumesc|da|bun|noted|sounds good)[.!\s]*$/i.test(lower)) {
     return true;
   }
 
-  // No signal words at all → pass to Haiku anyway (exclusion list, not inclusion)
   return false;
 }
 
