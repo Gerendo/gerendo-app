@@ -128,18 +128,20 @@ export async function upsertEmbedding(
     .maybeSingle();
 
   if (existing) {
-    await db.supabase
+    const { error } = await db.supabase
       .from("embeddings")
       .update({ embedding: vec, keyword_text: keywordText, indexed_at: Date.now() })
       .eq("id", existing.id);
+    if (error) console.error("[db] upsertEmbedding update failed:", error.message);
   } else {
-    await db.supabase.from("embeddings").insert({
+    const { error } = await db.supabase.from("embeddings").insert({
       workspace_id: db.workspaceId,
       message_id: messageId,
       embedding: vec,
       keyword_text: keywordText,
       indexed_at: Date.now(),
     });
+    if (error) console.error("[db] upsertEmbedding insert failed:", error.message);
   }
 }
 
