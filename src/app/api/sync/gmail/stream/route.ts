@@ -3,7 +3,7 @@ import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { openAgencyDb, batchUpsertMessages, batchUpsertEmbeddings, getSyncState, setSyncState, getGmailToken } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
-import { getNangoGmailToken, extractBody, getHeader, SYSTEM_LABEL_IDS } from "../route";
+import { extractBody, getHeader } from "../route";
 
 export const maxDuration = 300;
 
@@ -51,19 +51,20 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
   const supabase = createServiceClient();
   const db = openAgencyDb(workspaceId, userId);
 
-    // In-memory state to avoid read-modify-write races
   const labelProgress: Record<string, { synced: number; total: number; status: string }> = {};
   let totalSynced = 0;
+  let gmailToken = "";
 
   async function updateJob(patch: object) {
     await supabase.from("sync_jobs").update(patch).eq("id", jobId);
   }
 
   async function pushProgress() {
-    await supabase.from("sync_jobs").update({
+    const { error } = await supabase.from("sync_jobs").update({
       label_progress: labelProgress,
       total_synced: totalSynced,
     }).eq("id", jobId);
+    if (error) console.error("[sync] pushProgress failed:", error.message, error.code);
   }
 
   async function isCancelled(): Promise<boolean> {
@@ -71,12 +72,60 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     return data?.status === "cancelled";
   }
 
+  // Fetch, embed, and store a batch of message IDs. Counts only once, after embedding succeeds.
+  async function processBatch(ids: string[], labelName: string) {
+    const msgMap = await batchFetchMessages(gmailToken, ids);
+    const keywordTexts: string[] = [];
+    const messageRows: Array<{
+      source: string; externalId: string; threadId: string | null;
+      sender: string; subject: string; mailbox: string; receivedAt: number;
+    }> = [];
+
+    for (const id of ids) {
+      const msg = msgMap.get(id);
+      if (!msg) continue;
+      try {
+        const headers = msg.payload?.headers ?? [];
+        const sender = getHeader(headers, "from");
+        const subject = getHeader(headers, "subject") || "(no subject)";
+        const dateStr = getHeader(headers, "date");
+        const receivedAt = dateStr ? new Date(dateStr).getTime()
+          : msg.internalDate ? parseInt(msg.internalDate) : Date.now();
+        const body = extractBody(msg.payload);
+        messageRows.push({
+          source: "gmail", externalId: id, threadId: msg.threadId ?? null,
+          sender, subject, mailbox: labelName, receivedAt,
+        });
+        keywordTexts.push(`${subject}. From: ${sender}. ${body}`.slice(0, 1500));
+      } catch { continue; }
+    }
+
+    if (messageRows.length === 0) return;
+
+    try {
+      const [embeddings, idMap] = await Promise.all([
+        embedTexts(keywordTexts),
+        batchUpsertMessages(db, messageRows),
+      ]);
+      const embItems = messageRows.map((row, i) => {
+        const messageId = idMap.get(row.externalId);
+        if (!messageId) return null;
+        return { messageId, embedding: embeddings[i], keywordText: keywordTexts[i] };
+      }).filter(Boolean) as Array<{ messageId: number; embedding: Float32Array; keywordText: string }>;
+      await batchUpsertEmbeddings(db, embItems);
+      labelProgress[labelName].synced += messageRows.length;
+      totalSynced += messageRows.length;
+      await pushProgress();
+    } catch (err: any) {
+      console.error(`[sync] batch failed for ${labelName}:`, err?.message);
+    }
+  }
+
   try {
-    const token = await getGmailToken(workspaceId, userId);
+    gmailToken = await getGmailToken(workspaceId, userId);
     const auth = new google.auth.OAuth2();
-    auth.setCredentials({ access_token: token });
+    auth.setCredentials({ access_token: gmailToken });
     const gmail = google.gmail({ version: "v1", auth });
-    const gmailToken = token;
 
     // Use labels passed from the UI, fallback to inbox+sent
     const labelsToSync: Array<{ id: string; name: string }> = selectedLabels.length > 0
@@ -94,11 +143,12 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
 
       const stateKey = `gmail:${label.id}`;
       const { cursor } = await getSyncState(db, stateKey);
-      let messageIds: string[] = [];
       let newCursor = cursor;
 
-      try {
-        if (cursor) {
+      if (cursor) {
+        // Incremental: fetch only new messages via history API
+        let messageIds: string[] = [];
+        try {
           const historyRes = await gmail.users.history.list({
             userId: "me", startHistoryId: cursor,
             historyTypes: ["messageAdded"], labelId: label.id, maxResults: BATCH_SIZE,
@@ -107,92 +157,62 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
             for (const m of h.messagesAdded ?? [])
               if (m.message?.id) messageIds.push(m.message.id);
           if (historyRes.data.historyId) newCursor = historyRes.data.historyId;
-        } else {
-          let pageToken: string | undefined;
-          do {
+        } catch (err: any) {
+          console.error(`[sync] history list failed for ${label.name}:`, err?.message, err?.code);
+          labelProgress[label.name] = { synced: 0, total: 0, status: "error" };
+          await pushProgress();
+          continue;
+        }
+
+        if (messageIds.length === 0) {
+          labelProgress[label.name] = { synced: 0, total: 0, status: "done" };
+          await pushProgress();
+          if (newCursor) await setSyncState(db, stateKey, newCursor);
+          continue;
+        }
+
+        labelProgress[label.name] = { synced: 0, total: messageIds.length, status: "syncing" };
+        await pushProgress();
+
+        for (let b = 0; b < messageIds.length; b += SUB_BATCH) {
+          if (await isCancelled()) break;
+          await processBatch(messageIds.slice(b, b + SUB_BATCH), label.name);
+        }
+
+      } else {
+        // Full scan: process each page of IDs immediately so progress shows right away
+        labelProgress[label.name] = { synced: 0, total: 0, status: "syncing" };
+        await pushProgress();
+
+        let pageToken: string | undefined;
+        let listError = false;
+        do {
+          if (await isCancelled()) break;
+          try {
             const listRes = await gmail.users.messages.list({
-              userId: "me", maxResults: BATCH_SIZE, labelIds: [label.id], pageToken,
+              userId: "me", maxResults: SUB_BATCH, labelIds: [label.id], pageToken,
             });
-            messageIds.push(...(listRes.data.messages ?? []).map((m: any) => m.id!).filter(Boolean));
+            const pageIds = (listRes.data.messages ?? []).map((m: any) => m.id!).filter(Boolean);
             pageToken = listRes.data.nextPageToken ?? undefined;
+            if (pageIds.length > 0) await processBatch(pageIds, label.name);
             if (pageToken) await new Promise(r => setTimeout(r, 100));
-          } while (pageToken);
+          } catch (err: any) {
+            console.error(`[sync] messages.list failed for ${label.name}:`, err?.message, err?.code);
+            listError = true;
+            break;
+          }
+        } while (pageToken);
+
+        if (listError) {
+          labelProgress[label.name].status = "error";
+          await pushProgress();
+          continue;
+        }
+
+        try {
           const profileRes = await gmail.users.getProfile({ userId: "me" });
           if (profileRes.data.historyId) newCursor = profileRes.data.historyId;
-        }
-      } catch (err: any) {
-        console.error(`[sync] failed to list messages for label ${label.name}:`, err?.message, err?.code, err?.status);
-        labelProgress[label.name] = { synced: 0, total: 0, status: "error" };
-        await pushProgress();
-        continue;
-      }
-
-      if (messageIds.length === 0) {
-        labelProgress[label.name] = { synced: 0, total: 0, status: "done" };
-        await pushProgress();
-        if (newCursor) await setSyncState(db, stateKey, newCursor);
-        continue;
-      }
-
-      labelProgress[label.name] = { synced: 0, total: messageIds.length, status: "syncing" };
-      await pushProgress();
-
-      // Process in sub-batches using Gmail batch API (100 messages per HTTP request)
-      for (let b = 0; b < messageIds.length; b += SUB_BATCH) {
-        if (await isCancelled()) break;
-        const batchIds = messageIds.slice(b, b + SUB_BATCH);
-        const keywordTexts: string[] = [];
-        const messageRows: Array<{
-          source: string; externalId: string; threadId: string | null;
-          sender: string; subject: string; mailbox: string; receivedAt: number;
-        }> = [];
-
-        // One HTTP request fetches all 100 messages at once
-        console.log(`[sync] fetching batch of ${batchIds.length} messages for label ${label.name}`);
-        const msgMap = await batchFetchMessages(gmailToken, batchIds);
-        console.log(`[sync] batch returned ${msgMap.size} messages`);
-
-        for (const id of batchIds) {
-          const msg = msgMap.get(id);
-          if (!msg) continue;
-          try {
-            const headers = msg.payload?.headers ?? [];
-            const sender = getHeader(headers, "from");
-            const subject = getHeader(headers, "subject") || "(no subject)";
-            const dateStr = getHeader(headers, "date");
-            const receivedAt = dateStr ? new Date(dateStr).getTime()
-              : msg.internalDate ? parseInt(msg.internalDate) : Date.now();
-            const body = extractBody(msg.payload);
-            messageRows.push({
-              source: "gmail", externalId: id, threadId: msg.threadId ?? null,
-              sender, subject, mailbox: label.name, receivedAt,
-            });
-            keywordTexts.push(`${subject}. From: ${sender}. ${body}`.slice(0, 1500));
-            labelProgress[label.name].synced += 1;
-            totalSynced += 1;
-          } catch { continue; }
-        }
-        await pushProgress();
-
-        if (messageRows.length > 0) {
-          try {
-            const [embeddings, idMap] = await Promise.all([
-              embedTexts(keywordTexts),
-              batchUpsertMessages(db, messageRows),
-            ]);
-            const embItems = messageRows.map((row, i) => {
-              const messageId = idMap.get(row.externalId);
-              if (!messageId) return null;
-              return { messageId, embedding: embeddings[i], keywordText: keywordTexts[i] };
-            }).filter(Boolean) as Array<{ messageId: number; embedding: Float32Array; keywordText: string }>;
-            await batchUpsertEmbeddings(db, embItems);
-            labelProgress[label.name].synced += messageRows.length;
-            totalSynced += messageRows.length;
-            await pushProgress();
-          } catch (err: any) {
-            console.error(`[sync] sub-batch failed for ${label.name}:`, err?.message);
-          }
-        }
+        } catch { /* non-fatal */ }
       }
 
       labelProgress[label.name].status = "done";
@@ -204,6 +224,7 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     // Sync drafts
     await updateJob({ current_label: "drafts" });
     try {
+      labelProgress["drafts"] = { synced: 0, total: 0, status: "syncing" };
       let draftIds: string[] = [];
       let pageToken: string | undefined;
       do {

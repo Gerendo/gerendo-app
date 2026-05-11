@@ -167,18 +167,28 @@ function ConnectPageInner() {
     { id: "TRASH", name: "Trash", icon: "delete", type: "system", default: false },
   ];
 
+  function getSavedLabels(): Set<string> | null {
+    try {
+      const saved = localStorage.getItem("gerendo_gmail_selected_labels");
+      if (!saved) return null;
+      return new Set<string>(JSON.parse(saved));
+    } catch { return null; }
+  }
+
   async function openLabelPicker(fetchFresh = false) {
     setShowLabelPicker(true);
     setLabelError(null);
 
+    const isFreshLoad = availableLabels.length === 0;
+
     // Always show defaults immediately so the modal is usable without any API call
-    if (availableLabels.length === 0) {
+    if (isFreshLoad) {
       setAvailableLabels(DEFAULT_LABELS);
-      setSelectedLabels(new Set(DEFAULT_LABELS.filter(l => l.default).map(l => l.id)));
+      const saved = getSavedLabels();
+      setSelectedLabels(saved ?? new Set(DEFAULT_LABELS.filter(l => l.default).map(l => l.id)));
     }
 
     // Only fetch full label list (including custom labels) when explicitly requested
-    // e.g. via "Manage labels" button after initial connect, not on first open
     if (fetchFresh) {
       setLoadingLabels(true);
       fetch("/api/sync/gmail/labels")
@@ -186,11 +196,26 @@ function ConnectPageInner() {
         .then(body => {
           if (body.labels?.length) {
             setAvailableLabels(body.labels);
-            setSelectedLabels(p => {
-              const next = new Set(p);
-              body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
-              return next;
-            });
+            if (isFreshLoad) {
+              // Restore saved selection, keeping only IDs that actually exist in this account
+              const saved = getSavedLabels();
+              setSelectedLabels(() => {
+                const next = new Set<string>();
+                body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
+                if (saved) {
+                  const validIds = new Set(body.labels.map((l: any) => l.id));
+                  saved.forEach((id: string) => { if (validIds.has(id)) next.add(id); });
+                }
+                return next;
+              });
+            } else {
+              // Same session: preserve current selection, just add any API-reported defaults
+              setSelectedLabels(p => {
+                const next = new Set(p);
+                body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
+                return next;
+              });
+            }
           } else if (body.error) {
             setLabelError(body.error);
           }
@@ -201,6 +226,7 @@ function ConnectPageInner() {
   }
 
   async function startGmailSyncWithLabels() {
+    try { localStorage.setItem("gerendo_gmail_selected_labels", JSON.stringify(Array.from(selectedLabels))); } catch {}
     setShowLabelPicker(false);
     const labelsParam = Array.from(selectedLabels).join(",");
     setConnectedTools(p => new Set([...p, "gmail"]));
