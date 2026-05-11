@@ -185,40 +185,32 @@ function ConnectPageInner() {
 
     const isFreshLoad = availableLabels.length === 0;
 
-    // Always show defaults immediately so the modal is usable without any API call
+    // Show defaults immediately so the modal is usable without waiting
     if (isFreshLoad) {
       setAvailableLabels(DEFAULT_LABELS);
-      const saved = getSavedLabels();
-      setSelectedLabels(saved ?? new Set(DEFAULT_LABELS.filter(l => l.default).map(l => l.id)));
+      // Don't pre-select anything yet — wait for API to tell us what's actually syncing
+      setSelectedLabels(new Set());
     }
 
-    // Only fetch full label list (including custom labels) when explicitly requested
-    if (fetchFresh) {
+    // Always fetch to get currently synced labels (syncedLabelIds from backend)
+    if (fetchFresh || isFreshLoad) {
       setLoadingLabels(true);
       fetch("/api/sync/gmail/labels")
         .then(r => r.json())
         .then(body => {
           if (body.labels?.length) {
             setAvailableLabels(body.labels);
-            if (isFreshLoad) {
-              // Restore saved selection, keeping only IDs that actually exist in this account
-              const saved = getSavedLabels();
-              setSelectedLabels(() => {
-                const next = new Set<string>();
-                body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
-                if (saved) {
-                  const validIds = new Set(body.labels.map((l: any) => l.id));
-                  saved.forEach((id: string) => { if (validIds.has(id)) next.add(id); });
-                }
-                return next;
-              });
+            const validIds = new Set(body.labels.map((l: any) => l.id));
+            // Use synced labels from backend as the source of truth for current selection
+            if (body.syncedLabelIds?.length) {
+              setSelectedLabels(new Set(
+                (body.syncedLabelIds as string[]).filter((id: string) => validIds.has(id))
+              ));
             } else {
-              // Same session: preserve current selection, just add any API-reported defaults
-              setSelectedLabels(p => {
-                const next = new Set(p);
-                body.labels.filter((l: any) => l.default).forEach((l: any) => next.add(l.id));
-                return next;
-              });
+              // First-time setup (nothing synced yet) — default to INBOX + SENT
+              setSelectedLabels(new Set(
+                body.labels.filter((l: any) => l.default).map((l: any) => l.id)
+              ));
             }
           } else if (body.error) {
             setLabelError(body.error);
@@ -238,6 +230,8 @@ function ConnectPageInner() {
         body: JSON.stringify({ labelIds: [labelId] }),
       });
       setPendingDeleteLabel(null);
+      // Deselect the deleted label immediately
+      setSelectedLabels(p => { const next = new Set(p); next.delete(labelId); return next; });
       // Refresh the synced count displayed on the tool card
       fetch("/api/workspace/info").then(r => r.json()).then(info => {
         if (info.emailCount >= 0) setSyncedCounts(p => ({ ...p, gmail: info.emailCount }));

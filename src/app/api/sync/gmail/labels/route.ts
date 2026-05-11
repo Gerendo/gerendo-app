@@ -108,7 +108,21 @@ export async function GET(): Promise<NextResponse> {
       return a.name.localeCompare(b.name);
     });
 
-  return NextResponse.json({ labels });
+  // Return which labels are actively syncing (have a non-empty cursor in sync_state)
+  const { data: syncStates } = await supabase
+    .from("sync_state")
+    .select("source")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .like("source", "gmail:%")
+    .not("cursor", "is", null)
+    .neq("cursor", "");
+
+  const syncedLabelIds = (syncStates ?? [])
+    .map(s => s.source.replace("gmail:", "").toUpperCase())
+    .filter(id => labels.some(l => l.id === id));
+
+  return NextResponse.json({ labels, syncedLabelIds });
 }
 
 export async function DELETE(request: Request): Promise<NextResponse> {
