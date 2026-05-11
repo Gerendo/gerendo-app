@@ -207,10 +207,8 @@ function ConnectPageInner() {
                 (body.syncedLabelIds as string[]).filter((id: string) => validIds.has(id))
               ));
             } else {
-              // First-time setup (nothing synced yet) — default to INBOX + SENT
-              setSelectedLabels(new Set(
-                body.labels.filter((l: any) => l.default).map((l: any) => l.id)
-              ));
+              // First-time setup (nothing synced yet) — no default selection
+              setSelectedLabels(new Set());
             }
           } else if (body.error) {
             setLabelError(body.error);
