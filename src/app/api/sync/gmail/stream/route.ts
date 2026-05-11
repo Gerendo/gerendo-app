@@ -1,4 +1,5 @@
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
+import { after } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { openAgencyDb, batchUpsertMessages, batchUpsertEmbeddings, getSyncState, setSyncState, getGmailToken } from "@/lib/agency-db";
@@ -319,7 +320,7 @@ export async function GET(request: Request): Promise<Response> {
     return Response.json({ error: "Failed to create sync job" }, { status: 500 });
   }
 
-  runSyncJob(job.id, workspaceId, userId, selectedLabels);
+  after(runSyncJob(job.id, workspaceId, userId, selectedLabels));
 
   return Response.json({ jobId: job.id });
 }
