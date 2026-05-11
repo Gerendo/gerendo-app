@@ -135,6 +135,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
 
   const alreadyDetected = new Set(existing?.map((f) => f.source_external_id) ?? []);
   const newMessages = messages.filter((m) => !alreadyDetected.has(m.external_id));
+  console.log(`[detector] ${newMessages.length} not yet detected (${alreadyDetected.size} already seen)`);
   if (!newMessages.length) return;
 
   // Get keyword texts
@@ -152,13 +153,19 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     const keywordText = textMap.get(message.id);
     if (!keywordText) continue;
 
+    console.log(`[detector] processing: "${message.subject}" from ${message.sender}`);
+
     // Layer 1
-    if (isObviousNonDecision(keywordText)) continue;
+    if (isObviousNonDecision(keywordText)) {
+      console.log("[detector] layer 1 dropped");
+      continue;
+    }
 
     // Layer 2
     let isDecision: boolean;
     try {
       isDecision = await classifyWithHaiku(keywordText);
+      console.log(`[detector] Haiku says: ${isDecision ? "YES" : "NO"}`);
     } catch (err) {
       console.error("[detector] Haiku error:", err);
       continue;
