@@ -104,10 +104,9 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
     if (messageRows.length === 0) return;
 
     try {
-      const [embeddings, idMap] = await Promise.all([
-        embedTexts(keywordTexts),
-        batchUpsertMessages(db, messageRows),
-      ]);
+      // Embed first — if Voyage fails, don't store messages (avoids orphaned messages without embeddings)
+      const embeddings = await embedTexts(keywordTexts);
+      const idMap = await batchUpsertMessages(db, messageRows);
       const embItems = messageRows.map((row, i) => {
         const messageId = idMap.get(row.externalId);
         if (!messageId) return null;
@@ -262,10 +261,8 @@ async function runSyncJob(jobId: string, workspaceId: string, userId: string, se
 
         if (messageRows.length > 0) {
           try {
-            const [embeddings, idMap] = await Promise.all([
-              embedTexts(keywordTexts),
-              batchUpsertMessages(db, messageRows),
-            ]);
+            const embeddings = await embedTexts(keywordTexts);
+            const idMap = await batchUpsertMessages(db, messageRows);
             const embItems = messageRows.map((row, i) => {
               const messageId = idMap.get(row.externalId);
               if (!messageId) return null;
