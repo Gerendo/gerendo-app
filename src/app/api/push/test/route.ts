@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   const payload = JSON.stringify({
     title: "Gerendo",
     body: "Acme confirmed the launch is moving to May 20. Update the Asana task from May 12?",
-    tag: "gerendo-test",
+    tag: `gerendo-test-${Date.now()}`,
     actions: [
       { action: "confirm", title: "Yes" },
       { action: "edit", title: "Edit" },
