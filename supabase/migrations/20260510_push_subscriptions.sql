@@ -17,3 +17,6 @@ create policy "users manage own push subscriptions"
   for all
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
+
+grant all on push_subscriptions to authenticated, service_role;
+grant all on sequence push_subscriptions_id_seq to authenticated, service_role;
