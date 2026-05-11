@@ -77,6 +77,8 @@ function ConnectPageInner() {
   const [labelError, setLabelError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexResult, setReindexResult] = useState<{ backfilled: number; remaining: number } | null>(null);
   const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
   const [deletingLabel, setDeletingLabel] = useState(false);
 
@@ -555,6 +557,42 @@ function ConnectPageInner() {
           >
             Ask your agency brain
           </a>
+        )}
+
+        {/* Re-index */}
+        {connectedTools.has("gmail") && (
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>
+                Search not finding everything?
+              </p>
+              <button
+                onClick={async () => {
+                  setReindexing(true);
+                  setReindexResult(null);
+                  try {
+                    const res = await fetch("/api/sync/embeddings-backfill", { method: "POST" });
+                    const data = await res.json();
+                    setReindexResult(data);
+                  } catch { /* ignore */ } finally {
+                    setReindexing(false);
+                  }
+                }}
+                disabled={reindexing}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium disabled:opacity-50 transition-colors"
+                style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 8%)" }}
+              >
+                {reindexing ? "Re-indexing..." : "Re-index"}
+              </button>
+            </div>
+            {reindexResult && (
+              <p className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
+                {reindexResult.backfilled > 0
+                  ? `Indexed ${reindexResult.backfilled} emails. ${reindexResult.remaining > 0 ? `${reindexResult.remaining} remaining — press again.` : "All caught up."}`
+                  : "All emails already indexed."}
+              </p>
+            )}
+          </div>
         )}
       </div>
 

@@ -3,6 +3,7 @@
     { "path": "/api/cron/sync?source=drive",               "schedule": "0 0 * * *" },
     { "path": "/api/cron/sync?source=gmail-watch-renew",   "schedule": "0 6 * * *" },
     { "path": "/api/cron/sync?source=drive-channel-renew", "schedule": "0 5 * * *" },
-    { "path": "/api/cron/sync?source=asana-webhook-register", "schedule": "0 7 * * *" }
+    { "path": "/api/cron/sync?source=asana-webhook-register", "schedule": "0 7 * * *" },
+    { "path": "/api/cron/sync?source=embeddings-backfill",    "schedule": "0 4 * * *" }
   ]
 }

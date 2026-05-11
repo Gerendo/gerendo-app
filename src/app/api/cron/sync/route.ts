@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase-server";
 import { runGmailSyncForUser } from "@/app/api/sync/gmail/route";
 import { runDriveSyncForUser } from "@/app/api/sync/drive/route";
 import { runAsanaSyncForUser } from "@/app/api/sync/asana/route";
+import { backfillEmbeddingsForUser } from "@/lib/embeddings-backfill";
 import { safeEqual } from "@/lib/crypto";
 
 export const maxDuration = 300;
@@ -30,6 +31,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   const providerFilter: Record<string, string> = {
     "gmail": "google-gmail",
     "gmail-watch-renew": "google-gmail",
+    "embeddings-backfill": "google-gmail",
     "drive": "google-drive",
     "drive-channel-renew": "google-drive",
     "asana": "asana",
@@ -90,6 +92,9 @@ export async function GET(request: Request): Promise<NextResponse> {
           body: JSON.stringify({ workspaceId: workspace_id, userId: user_id }),
         });
         results.push({ workspaceId: workspace_id, userId: user_id, result: await res.json() });
+      } else if (source === "embeddings-backfill") {
+        const result = await backfillEmbeddingsForUser(workspace_id, user_id);
+        results.push({ workspaceId: workspace_id, userId: user_id, result });
       } else if (source === "asana-webhook-register") {
         const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
         const res = await fetch(`${appUrl}/api/webhooks/asana/register`, {
