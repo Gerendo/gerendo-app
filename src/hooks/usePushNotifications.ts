@@ -17,8 +17,14 @@ export function usePushNotifications() {
     navigator.serviceWorker.register("/sw.js").then((reg) => {
       return reg.pushManager.getSubscription().then((sub) => {
         setSubscription(sub);
-        const perm = Notification.permission;
-        setState(sub ? "granted" : perm === "default" ? "prompt" : perm as PushState);
+        if (sub) {
+          setState("granted");
+        } else if (Notification.permission === "denied") {
+          setState("denied");
+        } else {
+          // Permission is "granted" or "default" but no active subscription — prompt to (re-)enable
+          setState("prompt");
+        }
       });
     }).catch(() => setState("unsupported"));
   }, []);
