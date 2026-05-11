@@ -94,6 +94,7 @@ async function extractWithSonnet(text: string): Promise<{ summary: string; draft
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export async function detectDecisionsForUser(workspaceId: string, userId: string): Promise<void> {
+  console.log("[detector] starting for user", userId);
   const supabase = createServiceClient();
 
   // Only proceed if user has push subscriptions — no point classifying otherwise
@@ -102,7 +103,10 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .select("endpoint, p256dh, auth")
     .eq("user_id", userId);
 
-  if (!subs?.length) return;
+  if (!subs?.length) {
+    console.log("[detector] no push subscriptions, skipping");
+    return;
+  }
 
   // Get messages synced in the last 4 minutes, received in the last 7 days
   const fourMinsAgo = Date.now() - 4 * 60 * 1000;
@@ -117,6 +121,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .gte("received_at", sevenDaysAgo)
     .limit(30);
 
+  console.log(`[detector] found ${messages?.length ?? 0} recent messages`);
   if (!messages?.length) return;
 
   // Skip messages already detected
