@@ -151,8 +151,9 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
   const MAX_SONNET_CALLS = 3; // cost guard per webhook trigger
 
   for (const message of newMessages) {
-    const keywordText = textMap.get(message.id);
-    if (!keywordText) continue;
+    // Use embedding keyword_text if available, otherwise fall back to subject + sender
+    const keywordText = textMap.get(message.id) ?? `${message.subject}. From: ${message.sender}.`;
+    if (!keywordText.trim()) continue;
 
     console.log(`[detector] processing: "${message.subject}" from ${message.sender}`);
 
