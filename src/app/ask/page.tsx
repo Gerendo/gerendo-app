@@ -146,22 +146,26 @@ export default function AskPage() {
 
   function startSyncPoll() {
     if (pollRef.current) clearInterval(pollRef.current);
+    const deadline = Date.now() + 20 * 60 * 1000;
     pollRef.current = setInterval(async () => {
       try {
         const job = await fetch("/api/sync/status").then(r => r.json());
         if (job.totalSynced) setSyncCount(job.totalSynced);
-        if (job.status === "done") {
+        const timedOut = Date.now() > deadline;
+        if (job.status === "done" || timedOut) {
           setSyncingInBackground(false);
           setSetupState("ready");
-          setToast(`Sync complete — ${job.totalSynced?.toLocaleString() ?? 0} items indexed.`);
-          setTimeout(() => setToast(null), 5000);
+          if (job.status === "done") {
+            setToast(`Sync complete — ${job.totalSynced?.toLocaleString() ?? 0} items indexed.`);
+            setTimeout(() => setToast(null), 5000);
+          }
           if (pollRef.current) clearInterval(pollRef.current);
         } else if (job.status === "error") {
           setSyncingInBackground(false);
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
-    }, 3000);
+    }, 15000);
   }
 
   function buildHistory(): Array<{ role: "user" | "assistant"; content: string }> {

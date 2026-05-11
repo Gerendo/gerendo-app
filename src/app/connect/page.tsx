@@ -140,17 +140,20 @@ function ConnectPageInner() {
 
   function startPoll() {
     if (pollRef.current) clearInterval(pollRef.current);
+    const deadline = Date.now() + 20 * 60 * 1000;
     pollRef.current = setInterval(async () => {
       try {
         const job = await fetch("/api/sync/status").then(r => r.json());
         if (job.totalSynced) setSyncCount(job.totalSynced);
-        if (job.status === "done" || job.status === "cancelled" || job.status !== "running") {
+        const finished = job.status === "done" || job.status === "cancelled" || job.status !== "running";
+        const timedOut = Date.now() > deadline;
+        if (finished || timedOut) {
           setInitialSyncing(null);
           setSyncedCounts(p => ({ ...p, gmail: job.totalSynced ?? 0 }));
           if (pollRef.current) clearInterval(pollRef.current);
         }
       } catch {}
-    }, 5000);
+    }, 15000);
   }
 
   // Default labels shown before API loads - user can start sync immediately with these
