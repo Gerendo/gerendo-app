@@ -77,8 +77,9 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ ok: true });
   }
 
-  // Debounce: skip if a webhook sync ran for this user in the last 5 minutes.
-  const DEBOUNCE_MS = 5 * 60_000;
+  // Debounce: 30s is enough to prevent concurrent syncs while still allowing
+  // Gmail's history API propagation delay (webhook fires before message appears in history).
+  const DEBOUNCE_MS = 30_000;
   const { data: lockState } = await supabase
     .from("sync_state")
     .select("last_synced_at")
