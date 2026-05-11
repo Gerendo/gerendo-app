@@ -108,18 +108,24 @@ export async function GET(): Promise<NextResponse> {
       return a.name.localeCompare(b.name);
     });
 
-  // Return which labels are actively syncing (have a non-empty cursor in sync_state)
-  const { data: syncStates } = await supabase
-    .from("sync_state")
-    .select("source")
+  // Derive synced labels from what actually has data in the messages table
+  const { data: mailboxRows } = await supabase
+    .from("messages")
+    .select("mailbox")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
-    .like("source", "gmail:%")
-    .not("cursor", "is", null)
-    .neq("cursor", "");
+    .eq("source", "gmail");
 
-  const syncedLabelIds = (syncStates ?? [])
-    .map(s => s.source.replace("gmail:", "").toUpperCase())
+  const mailboxToLabelId: Record<string, string> = {
+    inbox: "INBOX", sent: "SENT", draft: "DRAFT", starred: "STARRED",
+    important: "IMPORTANT", spam: "SPAM", trash: "TRASH", snoozed: "SNOOZED",
+    scheduled: "SCHEDULED", personal: "CATEGORY_PERSONAL", social: "CATEGORY_SOCIAL",
+    promotions: "CATEGORY_PROMOTIONS", updates: "CATEGORY_UPDATES", forums: "CATEGORY_FORUMS",
+  };
+
+  const distinctMailboxes = new Set((mailboxRows ?? []).map(r => r.mailbox?.toLowerCase()));
+  const syncedLabelIds = [...distinctMailboxes]
+    .map(m => mailboxToLabelId[m] ?? m.toUpperCase())
     .filter(id => labels.some(l => l.id === id));
 
   return NextResponse.json({ labels, syncedLabelIds });
