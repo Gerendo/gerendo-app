@@ -1,12 +1,6 @@
 import { NextResponse } from "next/server";
-import webpush from "web-push";
+import { webpush } from "@/lib/push";
 import { createServiceClient } from "@/lib/supabase-server";
-
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
 
 export interface PushPayload {
   title: string;
