@@ -110,3 +110,49 @@ export async function GET(): Promise<NextResponse> {
 
   return NextResponse.json({ labels });
 }
+
+export async function DELETE(request: Request): Promise<NextResponse> {
+  const _ws = await requireWorkspace();
+  if (isErrorResponse(_ws)) return _ws;
+  const { workspaceId, userId } = _ws;
+
+  const { labelIds } = await request.json();
+  if (!Array.isArray(labelIds) || labelIds.length === 0) {
+    return NextResponse.json({ error: "labelIds required" }, { status: 400 });
+  }
+
+  const mailboxNames = (labelIds as string[]).map(id => id.toLowerCase().replace("category_", ""));
+  const supabase = createServiceClient();
+
+  // Find message IDs so we can delete their embeddings
+  const { data: messages } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", userId)
+    .eq("source", "gmail")
+    .in("mailbox", mailboxNames);
+
+  const messageIds = (messages ?? []).map((m: any) => m.id);
+  let deleted = 0;
+
+  if (messageIds.length > 0) {
+    await supabase.from("embeddings").delete().in("message_id", messageIds);
+    const { count } = await supabase
+      .from("messages")
+      .delete({ count: "exact" } as any)
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userId)
+      .eq("source", "gmail")
+      .in("mailbox", mailboxNames);
+    deleted = count ?? messageIds.length;
+  }
+
+  // Clear sync cursors so the next sync re-fetches from scratch for these labels
+  const db = openAgencyDb(workspaceId, userId);
+  for (const labelId of labelIds as string[]) {
+    await setSyncState(db, `gmail:${labelId}`, "");
+  }
+
+  return NextResponse.json({ deleted });
+}

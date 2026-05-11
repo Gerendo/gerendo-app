@@ -77,6 +77,8 @@ function ConnectPageInner() {
   const [labelError, setLabelError] = useState<string | null>(null);
   const [disconnecting, setDisconnecting] = useState<string | null>(null);
   const [confirmDisconnect, setConfirmDisconnect] = useState<string | null>(null);
+  const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
+  const [deletingLabel, setDeletingLabel] = useState(false);
 
   useEffect(() => {
     if (!authChecked) return; // wait for session to be confirmed before fetching
@@ -222,6 +224,24 @@ function ConnectPageInner() {
         })
         .catch(() => {})
         .finally(() => setLoadingLabels(false));
+    }
+  }
+
+  async function deleteLabel(labelId: string) {
+    setDeletingLabel(true);
+    try {
+      await fetch("/api/sync/gmail/labels", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labelIds: [labelId] }),
+      });
+      setPendingDeleteLabel(null);
+      // Refresh the synced count displayed on the tool card
+      fetch("/api/workspace/info").then(r => r.json()).then(info => {
+        if (info.emailCount >= 0) setSyncedCounts(p => ({ ...p, gmail: info.emailCount }));
+      }).catch(() => {});
+    } finally {
+      setDeletingLabel(false);
     }
   }
 
@@ -555,40 +575,75 @@ function ConnectPageInner() {
               <div className="flex flex-col gap-2 max-h-64 overflow-y-auto">
                 {availableLabels.map(label => {
                   const selected = selectedLabels.has(label.id);
-                  return (
-                    <button
-                      key={label.id}
-                      onClick={() => setSelectedLabels(p => {
-                        const next = new Set(p);
-                        if (next.has(label.id)) next.delete(label.id);
-                        else next.add(label.id);
-                        return next;
-                      })}
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors w-full"
-                      style={{
-                        background: selected ? "oklch(0.78 0.14 65 / 12%)" : "oklch(0.11 0.008 55)",
-                        border: `1px solid ${selected ? "oklch(0.78 0.14 65 / 30%)" : "oklch(1 0 0 / 8%)"}`,
-                      }}
-                    >
-                      {/* Checkbox */}
-                      <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
-                        style={{ background: selected ? "oklch(0.78 0.14 65)" : "transparent", border: `1.5px solid ${selected ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 25%)"}` }}>
-                        {selected && (
-                          <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                            <path d="M1 4L3.5 6.5L9 1" stroke="oklch(0.11 0.008 55)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
+                  const isPendingDelete = pendingDeleteLabel === label.id;
+
+                  if (isPendingDelete) {
+                    return (
+                      <div key={label.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl gap-3"
+                        style={{ background: "oklch(0.62 0.22 25 / 8%)", border: "1px solid oklch(0.62 0.22 25 / 30%)" }}>
+                        <span className="text-sm" style={{ color: "oklch(0.75 0.18 25)" }}>Delete all {label.name} data?</span>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => setPendingDeleteLabel(null)}
+                            className="text-xs px-2.5 py-1 rounded-lg font-medium"
+                            style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
+                          >Cancel</button>
+                          <button
+                            onClick={() => deleteLabel(label.id)}
+                            disabled={deletingLabel}
+                            className="text-xs px-2.5 py-1 rounded-lg font-medium disabled:opacity-40"
+                            style={{ background: "oklch(0.62 0.22 25)", color: "white" }}
+                          >{deletingLabel ? "..." : "Delete"}</button>
+                        </div>
                       </div>
-                      {/* Icon */}
-                      <span className="material-icons text-base flex-shrink-0" style={{ color: selected ? "oklch(0.78 0.14 65)" : "oklch(0.45 0.01 60)", fontSize: "18px" }}>
-                        {label.icon}
-                      </span>
-                      {/* Name */}
-                      <span className="text-sm flex-1 text-left">{label.name}</span>
-                      {label.type === "user" && (
-                        <span className="text-xs" style={{ color: "oklch(0.45 0.01 60)" }}>label</span>
-                      )}
-                    </button>
+                    );
+                  }
+
+                  return (
+                    <div key={label.id} className="flex items-center gap-1">
+                      {/* Selection toggle */}
+                      <button
+                        onClick={() => setSelectedLabels(p => {
+                          const next = new Set(p);
+                          if (next.has(label.id)) next.delete(label.id);
+                          else next.add(label.id);
+                          return next;
+                        })}
+                        className="flex-1 flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors"
+                        style={{
+                          background: selected ? "oklch(0.78 0.14 65 / 12%)" : "oklch(0.11 0.008 55)",
+                          border: `1px solid ${selected ? "oklch(0.78 0.14 65 / 30%)" : "oklch(1 0 0 / 8%)"}`,
+                        }}
+                      >
+                        {/* Checkbox */}
+                        <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                          style={{ background: selected ? "oklch(0.78 0.14 65)" : "transparent", border: `1.5px solid ${selected ? "oklch(0.78 0.14 65)" : "oklch(1 0 0 / 25%)"}` }}>
+                          {selected && (
+                            <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                              <path d="M1 4L3.5 6.5L9 1" stroke="oklch(0.11 0.008 55)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                        {/* Icon */}
+                        <span className="material-icons text-base flex-shrink-0" style={{ color: selected ? "oklch(0.78 0.14 65)" : "oklch(0.45 0.01 60)", fontSize: "18px" }}>
+                          {label.icon}
+                        </span>
+                        {/* Name */}
+                        <span className="text-sm flex-1 text-left">{label.name}</span>
+                        {label.type === "user" && (
+                          <span className="text-xs" style={{ color: "oklch(0.45 0.01 60)" }}>label</span>
+                        )}
+                      </button>
+                      {/* Delete data button */}
+                      <button
+                        onClick={() => setPendingDeleteLabel(label.id)}
+                        className="p-1.5 rounded-lg flex-shrink-0 opacity-25 hover:opacity-70 transition-opacity"
+                        style={{ color: "oklch(0.75 0.18 25)" }}
+                        title={`Delete ${label.name} data from index`}
+                      >
+                        <span className="material-icons" style={{ fontSize: "16px" }}>delete</span>
+                      </button>
+                    </div>
                   );
                 })}
               </div>
