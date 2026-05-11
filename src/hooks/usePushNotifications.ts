@@ -38,7 +38,7 @@ export function usePushNotifications() {
         applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!).buffer as ArrayBuffer,
       });
 
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,6 +49,7 @@ export function usePushNotifications() {
           },
         }),
       });
+      if (!res.ok) throw new Error("Failed to save subscription");
 
       setSubscription(sub);
       setState("granted");
