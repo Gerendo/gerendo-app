@@ -11,11 +11,11 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body,
       icon: "/Gerendo-Favicon.png",
-      badge: "/Gerendo-Favicon.png",
       tag: tag ?? "gerendo",
       actions: actions ?? [],
       data: notifData ?? {},
-      requireInteraction: true,
+    }).catch((err) => {
+      console.error("[sw] showNotification failed:", err);
     })
   );
 });
