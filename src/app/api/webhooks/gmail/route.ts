@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { runGmailSyncForUser } from "@/app/api/sync/gmail/route";
+import { detectDecisionsForUser } from "@/lib/decision-detector";
 
 export const maxDuration = 300;
 
@@ -103,6 +104,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   } catch (err: any) {
     console.error("[webhook/gmail] gmail sync failed:", err?.message);
   }
+
+  // Run decision detection after response is sent — doesn't block the 200 ack
+  after(() => detectDecisionsForUser(workspaceId, userId));
 
   return NextResponse.json({ ok: true });
 }
