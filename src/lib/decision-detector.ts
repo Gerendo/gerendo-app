@@ -145,6 +145,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .in("message_id", newMessages.map((m) => m.id));
 
   const textMap = new Map(embeddings?.map((e) => [e.message_id, e.keyword_text]) ?? []);
+  console.log(`[detector] embeddings found: ${textMap.size}, message ids: ${newMessages.map(m => m.id).join(",")}`);
 
   let sonnetCallsUsed = 0;
   const MAX_SONNET_CALLS = 3; // cost guard per webhook trigger
