@@ -1,5 +1,41 @@
 # Gerendo - Changelog
 
+## 2026-05-11 (Push notifications + decision detection pipeline + embeddings fix)
+
+**Push notification layer (full stack)**
+- Installed `web-push`, generated VAPID keys, created `push_subscriptions` table
+- Service worker (`public/sw.js`) with Yes/Edit/No action buttons and `skipWaiting`/`clients.claim`
+- `POST /api/push/subscribe` and `DELETE` for managing browser subscriptions
+- `POST /api/push/send` internal route (CRON_SECRET gated) for the detection pipeline
+- `POST /api/push/test` for manual testing from settings
+- `usePushNotifications` hook handles permission, SW registration, subscribe/unsubscribe
+- Notifications section in Settings with Enable/Disable/Test buttons and browser-specific unblock instructions
+- Fixed hydration mismatch (`Notification.permission === "default"` mapped to "prompt")
+- Fixed Chrome silent replacement bug by using unique tag per test notification
+
+**Decision detection pipeline**
+- 3-layer classifier hooked into Gmail webhook via synchronous call after sync
+- Layer 1: rules-based exclusion (short messages, pure questions, standalone acks) - free
+- Layer 2: Haiku 4.5 classification with prompt caching (~$0.0002/call), EN+RO signal words
+- Layer 3: Sonnet 4.6 extraction (max 3/trigger) returning `decision_summary` and `draft_update`
+- Writes `drift_findings` row per detected decision
+- Fires push notification to PM with Got it/Dismiss actions
+- Fixed Gmail webhook debounce from 5min to 30s to handle Gmail history propagation delay
+- Fixed Layer 1 stripping subject line when no body present (fallback to subject+sender)
+
+**Embeddings root cause fix**
+- Found bug: `Promise.all([embedTexts(), batchUpsertMessages()])` in stream sync meant if Voyage failed, messages stored without embeddings
+- Fixed: embed first, then store messages only if embedding succeeds (both label sync and drafts sync)
+- Added error logging to `upsertEmbedding` (was silently failing)
+- Backfill route `POST /api/sync/embeddings-backfill` fetches real body from Gmail and creates missing embeddings (50/call)
+- Re-index button added to Connect page for user-triggered backfill
+- Daily cron at 4am runs backfill automatically for all Gmail users
+- Reduced sync status poll from 5s to 15s, added 20min hard stop
+
+**Other fixes**
+- Fixed `url.parse()` deprecation warning: consolidated webpush into `src/lib/push.ts`
+- Fixed Next.js 16 stylesheet precedence warning in layout
+
 ## 2026-05-02 (Engram extraction + search token optimization)
 
 - Extracted the Voyage RAG pipeline into a standalone open source repo at github.com/Gerendo/engram. Engram is config-driven (engram.config.json), repo-agnostic, and includes an init wizard that wires the MCP server into any project's .claude/settings.json automatically.
