@@ -91,7 +91,6 @@ async function extractWithSonnet(text: string): Promise<{ summary: string; draft
 // ─── Main entry point ─────────────────────────────────────────────────────────
 
 export async function detectDecisionsForUser(workspaceId: string, userId: string): Promise<void> {
-  console.log("[detector] starting for user", userId);
   const supabase = createServiceClient();
 
   // Only proceed if user has push subscriptions — no point classifying otherwise
@@ -100,10 +99,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .select("endpoint, p256dh, auth")
     .eq("user_id", userId);
 
-  if (!subs?.length) {
-    console.log("[detector] no push subscriptions, skipping");
-    return;
-  }
+  if (!subs?.length) return;
 
   // Get messages synced in the last 4 minutes, received in the last 7 days
   const fourMinsAgo = Date.now() - 4 * 60 * 1000;
@@ -118,7 +114,6 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .gte("received_at", sevenDaysAgo)
     .limit(30);
 
-  console.log(`[detector] found ${messages?.length ?? 0} recent messages`);
   if (!messages?.length) return;
 
   // Skip messages already detected
@@ -132,7 +127,6 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
 
   const alreadyDetected = new Set(existing?.map((f) => f.source_external_id) ?? []);
   const newMessages = messages.filter((m) => !alreadyDetected.has(m.external_id));
-  console.log(`[detector] ${newMessages.length} not yet detected (${alreadyDetected.size} already seen)`);
   if (!newMessages.length) return;
 
   // Get keyword texts
@@ -142,8 +136,6 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     .in("message_id", newMessages.map((m) => m.id));
 
   const textMap = new Map(embeddings?.map((e) => [e.message_id, e.keyword_text]) ?? []);
-  console.log(`[detector] embeddings found: ${textMap.size}, message ids: ${newMessages.map(m => m.id).join(",")}`);
-
   let sonnetCallsUsed = 0;
   const MAX_SONNET_CALLS = 3; // cost guard per webhook trigger
 
@@ -152,19 +144,13 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     const keywordText = textMap.get(message.id) ?? `${message.subject}. From: ${message.sender}.`;
     if (!keywordText.trim()) continue;
 
-    console.log(`[detector] processing: "${message.subject}" from ${message.sender}`);
-
     // Layer 1
-    if (isObviousNonDecision(keywordText)) {
-      console.log("[detector] layer 1 dropped");
-      continue;
-    }
+    if (isObviousNonDecision(keywordText)) continue;
 
     // Layer 2
     let isDecision: boolean;
     try {
       isDecision = await classifyWithHaiku(keywordText);
-      console.log(`[detector] Haiku says: ${isDecision ? "YES" : "NO"}`);
     } catch (err) {
       console.error("[detector] Haiku error:", err);
       continue;
@@ -224,6 +210,5 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
       )
     );
 
-    console.log(`[detector] finding ${finding.id} created and pushed: ${extracted.summary}`);
   }
 }
