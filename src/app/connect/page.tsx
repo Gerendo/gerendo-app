@@ -97,19 +97,21 @@ function ConnectPageInner() {
   const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
   const [deletingLabel, setDeletingLabel] = useState(false);
 
-  // Asana defaults inline picker
+  // Asana defaults picker modal
   const [asanaPicker, setAsanaPicker] = useState<AsanaPickerState>({
     status: "idle",
     workspaces: [],
     current: null,
     error: null,
   });
-  const [asanaPickerExpanded, setAsanaPickerExpanded] = useState(false);
+  const [showAsanaPicker, setShowAsanaPicker] = useState(false);
+  const asanaModalAutoOpenedRef = useRef(false);
   const [asanaPickerWorkspaceGid, setAsanaPickerWorkspaceGid] = useState("");
   const [asanaPickerTeamGid, setAsanaPickerTeamGid] = useState("");
   const [asanaPickerPrivacy, setAsanaPickerPrivacy] = useState<"public_to_team" | "private">("public_to_team");
   const [asanaPickerSubmitting, setAsanaPickerSubmitting] = useState(false);
   const [asanaPickerSubmitError, setAsanaPickerSubmitError] = useState<string | null>(null);
+  const [asanaFormSeeded, setAsanaFormSeeded] = useState(false);
 
   useEffect(() => {
     if (!authChecked) return; // wait for session to be confirmed before fetching
@@ -198,10 +200,6 @@ function ConnectPageInner() {
           current: data.current ?? null,
           error: null,
         });
-        // If no current defaults, start in expanded mode.
-        if (!data.current) {
-          setAsanaPickerExpanded(true);
-        }
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -215,9 +213,21 @@ function ConnectPageInner() {
     return () => { cancelled = true; };
   }, [authChecked, connectedTools, toolStatus.asana, asanaPicker.status]);
 
-  // Seed form fields whenever the picker enters expanded mode.
+  // Auto-open the modal once when picker becomes ready and there are no saved defaults.
   useEffect(() => {
-    if (!asanaPickerExpanded) return;
+    if (asanaPicker.status !== "ready") return;
+    if (asanaPicker.current !== null) return;
+    if (showAsanaPicker) return;
+    if (asanaModalAutoOpenedRef.current) return;
+    asanaModalAutoOpenedRef.current = true;
+    setShowAsanaPicker(true);
+  }, [asanaPicker.status, asanaPicker.current, showAsanaPicker]);
+
+  // Seed form fields the first time the modal opens with a ready picker.
+  useEffect(() => {
+    if (!showAsanaPicker) return;
+    if (asanaPicker.status !== "ready") return;
+    if (asanaFormSeeded) return;
     setAsanaPickerSubmitError(null);
     const current = asanaPicker.current;
     if (current) {
@@ -228,7 +238,18 @@ function ConnectPageInner() {
       setAsanaPickerWorkspaceGid(prev => prev || asanaPicker.workspaces[0].gid);
       setAsanaPickerTeamGid(prev => prev || (asanaPicker.workspaces[0].teams[0]?.gid ?? ""));
     }
-  }, [asanaPickerExpanded, asanaPicker.current, asanaPicker.workspaces]);
+    setAsanaFormSeeded(true);
+  }, [showAsanaPicker, asanaPicker.status, asanaPicker.current, asanaPicker.workspaces, asanaFormSeeded]);
+
+  // Close modal on Escape key.
+  useEffect(() => {
+    if (!showAsanaPicker) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowAsanaPicker(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showAsanaPicker]);
 
   function onAsanaWorkspaceChange(nextGid: string) {
     setAsanaPickerWorkspaceGid(nextGid);
@@ -287,7 +308,7 @@ function ConnectPageInner() {
         throw new Error(data.error ?? `Failed to save (${res.status})`);
       }
       await reloadAsanaDefaults();
-      setAsanaPickerExpanded(false);
+      setShowAsanaPicker(false);
     } catch (err: unknown) {
       setAsanaPickerSubmitError(err instanceof Error ? err.message : "Failed to save");
     } finally {
@@ -466,7 +487,9 @@ function ConnectPageInner() {
       if (pollRef.current) clearInterval(pollRef.current);
       if (toolId === "asana") {
         setAsanaPicker({ status: "idle", workspaces: [], current: null, error: null });
-        setAsanaPickerExpanded(false);
+        setShowAsanaPicker(false);
+        asanaModalAutoOpenedRef.current = false;
+        setAsanaFormSeeded(false);
         setAsanaPickerWorkspaceGid("");
         setAsanaPickerTeamGid("");
         setAsanaPickerPrivacy("public_to_team");
@@ -645,6 +668,15 @@ function ConnectPageInner() {
                         Manage labels
                       </button>
                     )}
+                    {!tool.comingSoon && isConnected && !isConfirming && tool.id === "asana" && toolStatus.asana === "active" && (
+                      <button
+                        onClick={() => setShowAsanaPicker(true)}
+                        className="text-xs px-2.5 py-1.5 rounded-xl font-medium transition-colors"
+                        style={{ background: "oklch(0.78 0.14 65 / 10%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
+                      >
+                        Manage projects
+                      </button>
+                    )}
                     {!tool.comingSoon && isConnected && !isConfirming && (
                       <button
                         onClick={() => setConfirmDisconnect(tool.id)}
@@ -693,184 +725,6 @@ function ConnectPageInner() {
                   </div>
                 )}
 
-                {/* Asana defaults inline picker */}
-                {tool.id === "asana" && isConnected && !isConfirming && toolStatus.asana === "active" && asanaPicker.status === "ready" && (() => {
-                  const current = asanaPicker.current;
-                  const ws = current ? asanaPicker.workspaces.find(w => w.gid === current.asanaWorkspaceGid) : null;
-                  const team = ws?.teams.find(t => t.gid === current?.asanaTeamGid);
-                  const wsName = ws?.name ?? current?.asanaWorkspaceGid ?? "";
-                  const teamName = team?.name ?? current?.asanaTeamGid ?? "";
-                  const privacyLabel = current?.defaultPrivacy === "private" ? "Private" : "Public to team";
-                  const selectedWorkspace = asanaPicker.workspaces.find(w => w.gid === asanaPickerWorkspaceGid) ?? null;
-                  const showExpanded = asanaPickerExpanded;
-
-                  return (
-                    <div className="px-4 py-3 flex flex-col gap-3" style={{ background: "oklch(0.78 0.14 65 / 6%)", borderTop: "1px solid oklch(0.78 0.14 65 / 18%)" }}>
-                      {!showExpanded && current && (
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
-                            Default project location:{" "}
-                            <span style={{ color: "oklch(0.96 0.012 80)" }}>
-                              {wsName} {String.fromCharCode(183)} {teamName} {String.fromCharCode(183)} {privacyLabel}
-                            </span>
-                          </p>
-                          <button
-                            onClick={() => setAsanaPickerExpanded(true)}
-                            className="text-xs px-3 py-1.5 rounded-xl font-medium flex-shrink-0"
-                            style={{ background: "oklch(0.78 0.14 65 / 12%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
-                          >
-                            Change
-                          </button>
-                        </div>
-                      )}
-
-                      {!showExpanded && !current && (
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs" style={{ color: "oklch(0.65 0.015 60)" }}>
-                            No default project location set.
-                          </p>
-                          <button
-                            onClick={() => setAsanaPickerExpanded(true)}
-                            className="text-xs px-3 py-1.5 rounded-xl font-medium flex-shrink-0"
-                            style={{ background: "oklch(0.78 0.14 65 / 12%)", color: "oklch(0.78 0.14 65)", border: "1px solid oklch(0.78 0.14 65 / 25%)" }}
-                          >
-                            Configure defaults
-                          </button>
-                        </div>
-                      )}
-
-                      {showExpanded && (
-                        <form onSubmit={saveAsanaDefaults} className="flex flex-col gap-3">
-                          <div>
-                            <p className="text-xs font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>
-                              Where should Gerendo create new Asana projects?
-                            </p>
-                            <p className="text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>
-                              Used whenever an email decision references a project that doesn&apos;t exist yet.
-                            </p>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }} htmlFor="asana-picker-workspace">
-                              Asana workspace
-                            </label>
-                            <select
-                              id="asana-picker-workspace"
-                              value={asanaPickerWorkspaceGid}
-                              onChange={(e) => onAsanaWorkspaceChange(e.target.value)}
-                              className="px-3 py-2 text-xs rounded-xl border"
-                              style={{ background: "oklch(0.13 0.009 55)", borderColor: "oklch(1 0 0 / 12%)", color: "oklch(0.96 0.012 80)" }}
-                            >
-                              {asanaPicker.workspaces.length === 0 && <option value="">No workspaces found</option>}
-                              {asanaPicker.workspaces.map(w => (
-                                <option key={w.gid} value={w.gid}>{w.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                            <label className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }} htmlFor="asana-picker-team">
-                              Team
-                            </label>
-                            <select
-                              id="asana-picker-team"
-                              value={asanaPickerTeamGid}
-                              onChange={(e) => setAsanaPickerTeamGid(e.target.value)}
-                              className="px-3 py-2 text-xs rounded-xl border"
-                              style={{ background: "oklch(0.13 0.009 55)", borderColor: "oklch(1 0 0 / 12%)", color: "oklch(0.96 0.012 80)" }}
-                            >
-                              {(selectedWorkspace?.teams ?? []).length === 0 && (
-                                <option value="">No teams in this workspace</option>
-                              )}
-                              {(selectedWorkspace?.teams ?? []).map(t => (
-                                <option key={t.gid} value={t.gid}>{t.name}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <div className="flex flex-col gap-1.5">
-                            <p className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }}>Default privacy for new projects</p>
-                            <label className="flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer" style={{ borderColor: "oklch(1 0 0 / 10%)", background: "oklch(0.13 0.009 55)" }}>
-                              <input
-                                type="radio"
-                                name="asana-picker-privacy"
-                                value="public_to_team"
-                                checked={asanaPickerPrivacy === "public_to_team"}
-                                onChange={() => setAsanaPickerPrivacy("public_to_team")}
-                                className="mt-0.5"
-                              />
-                              <span>
-                                <span className="text-xs font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Public to team</span>
-                                <span className="block text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>
-                                  Anyone on the team can see and collaborate on new projects.
-                                </span>
-                              </span>
-                            </label>
-                            <label className="flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer" style={{ borderColor: "oklch(1 0 0 / 10%)", background: "oklch(0.13 0.009 55)" }}>
-                              <input
-                                type="radio"
-                                name="asana-picker-privacy"
-                                value="private"
-                                checked={asanaPickerPrivacy === "private"}
-                                onChange={() => setAsanaPickerPrivacy("private")}
-                                className="mt-0.5"
-                              />
-                              <span>
-                                <span className="text-xs font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Private, only me</span>
-                                <span className="block text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>
-                                  Only you can see new projects until you invite others manually.
-                                </span>
-                              </span>
-                            </label>
-                          </div>
-
-                          {asanaPickerSubmitError && (
-                            <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>{asanaPickerSubmitError}</p>
-                          )}
-
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button
-                              type="submit"
-                              disabled={asanaPickerSubmitting || !asanaPickerWorkspaceGid || !asanaPickerTeamGid}
-                              className="text-xs px-3 py-1.5 rounded-xl font-semibold disabled:opacity-50"
-                              style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-                            >
-                              {asanaPickerSubmitting ? "Saving..." : "Save defaults"}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAsanaPickerExpanded(false);
-                                setAsanaPickerSubmitError(null);
-                              }}
-                              disabled={asanaPickerSubmitting}
-                              className="text-xs px-3 py-1.5 rounded-xl font-medium"
-                              style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </form>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {/* Asana picker error state */}
-                {tool.id === "asana" && isConnected && !isConfirming && toolStatus.asana === "active" && asanaPicker.status === "error" && (
-                  <div className="flex items-center justify-between px-4 py-3 gap-3" style={{ background: "oklch(0.62 0.22 25 / 6%)", borderTop: "1px solid oklch(0.62 0.22 25 / 18%)" }}>
-                    <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>
-                      {asanaPicker.error ?? "Failed to load Asana defaults."}
-                    </p>
-                    <button
-                      onClick={reloadAsanaDefaults}
-                      className="text-xs px-3 py-1.5 rounded-xl font-medium flex-shrink-0"
-                      style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
-                    >
-                      Retry
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })}
@@ -1045,6 +899,157 @@ function ConnectPageInner() {
                 Start sync ({selectedLabels.size} selected)
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Asana defaults picker modal */}
+      {showAsanaPicker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "oklch(0 0 0 / 70%)" }}
+          onClick={() => setShowAsanaPicker(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl flex flex-col gap-4 p-6"
+            style={{ background: "oklch(0.14 0.009 55)", border: "1px solid oklch(1 0 0 / 10%)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div>
+              <h3 className="text-base font-semibold" style={{ fontFamily: "var(--font-display)" }}>Manage Asana defaults</h3>
+              <p className="text-xs mt-1" style={{ color: "oklch(0.55 0.012 60)" }}>
+                Pick the workspace, team, and default privacy Gerendo uses when it creates new Asana projects for you.
+              </p>
+            </div>
+
+            {asanaPicker.status === "loading" && (
+              <div className="flex items-center justify-center py-8">
+                <span className="text-sm" style={{ color: "oklch(0.55 0.012 60)" }}>Loading workspaces...</span>
+              </div>
+            )}
+
+            {asanaPicker.status === "error" && (
+              <div className="flex flex-col gap-3 py-2">
+                <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>
+                  {asanaPicker.error ?? "Failed to load Asana defaults."}
+                </p>
+                <button
+                  onClick={reloadAsanaDefaults}
+                  className="text-xs px-3 py-1.5 rounded-xl font-medium self-start"
+                  style={{ background: "oklch(0.16 0.01 55)", color: "oklch(0.65 0.015 60)", border: "1px solid oklch(1 0 0 / 10%)" }}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
+
+            {asanaPicker.status === "ready" && (() => {
+              const selectedWorkspace = asanaPicker.workspaces.find(w => w.gid === asanaPickerWorkspaceGid) ?? null;
+              return (
+                <form onSubmit={saveAsanaDefaults} className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }} htmlFor="asana-modal-workspace">
+                      Asana workspace
+                    </label>
+                    <select
+                      id="asana-modal-workspace"
+                      value={asanaPickerWorkspaceGid}
+                      onChange={(e) => onAsanaWorkspaceChange(e.target.value)}
+                      className="px-3 py-2 text-xs rounded-xl border"
+                      style={{ background: "oklch(0.13 0.009 55)", borderColor: "oklch(1 0 0 / 12%)", color: "oklch(0.96 0.012 80)" }}
+                    >
+                      {asanaPicker.workspaces.length === 0 && <option value="">No workspaces found</option>}
+                      {asanaPicker.workspaces.map(w => (
+                        <option key={w.gid} value={w.gid}>{w.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }} htmlFor="asana-modal-team">
+                      Team
+                    </label>
+                    <select
+                      id="asana-modal-team"
+                      value={asanaPickerTeamGid}
+                      onChange={(e) => setAsanaPickerTeamGid(e.target.value)}
+                      className="px-3 py-2 text-xs rounded-xl border"
+                      style={{ background: "oklch(0.13 0.009 55)", borderColor: "oklch(1 0 0 / 12%)", color: "oklch(0.96 0.012 80)" }}
+                    >
+                      {(selectedWorkspace?.teams ?? []).length === 0 && (
+                        <option value="">No teams in this workspace</option>
+                      )}
+                      {(selectedWorkspace?.teams ?? []).map(t => (
+                        <option key={t.gid} value={t.gid}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-xs font-medium" style={{ color: "oklch(0.72 0.012 60)" }}>Default privacy for new projects</p>
+                    <label className="flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer" style={{ borderColor: "oklch(1 0 0 / 10%)", background: "oklch(0.13 0.009 55)" }}>
+                      <input
+                        type="radio"
+                        name="asana-modal-privacy"
+                        value="public_to_team"
+                        checked={asanaPickerPrivacy === "public_to_team"}
+                        onChange={() => setAsanaPickerPrivacy("public_to_team")}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="text-xs font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Public to team</span>
+                        <span className="block text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>
+                          Anyone on the team can see and collaborate on new projects.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 p-2.5 rounded-xl border cursor-pointer" style={{ borderColor: "oklch(1 0 0 / 10%)", background: "oklch(0.13 0.009 55)" }}>
+                      <input
+                        type="radio"
+                        name="asana-modal-privacy"
+                        value="private"
+                        checked={asanaPickerPrivacy === "private"}
+                        onChange={() => setAsanaPickerPrivacy("private")}
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="text-xs font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Private, only me</span>
+                        <span className="block text-xs mt-0.5" style={{ color: "oklch(0.55 0.012 60)" }}>
+                          Only you can see new projects until you invite others manually.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+
+                  {asanaPickerSubmitError && (
+                    <p className="text-xs" style={{ color: "oklch(0.75 0.18 25)" }}>{asanaPickerSubmitError}</p>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAsanaPicker(false);
+                        setAsanaPickerSubmitError(null);
+                      }}
+                      disabled={asanaPickerSubmitting}
+                      className="flex-1 text-sm py-2.5 rounded-xl font-medium"
+                      style={{ background: "oklch(0.11 0.008 55)", border: "1px solid oklch(1 0 0 / 10%)", color: "oklch(0.65 0.015 60)" }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={asanaPickerSubmitting || !asanaPickerWorkspaceGid || !asanaPickerTeamGid}
+                      className="flex-1 text-sm py-2.5 rounded-xl font-medium disabled:opacity-40"
+                      style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
+                    >
+                      {asanaPickerSubmitting ? "Saving..." : "Save defaults"}
+                    </button>
+                  </div>
+                </form>
+              );
+            })()}
           </div>
         </div>
       )}
