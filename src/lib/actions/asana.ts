@@ -175,15 +175,61 @@ export async function createProject(
   };
 }
 
+export async function createSection(
+  ctx: ActionContext,
+  args: { projectGid: string; name: string }
+): Promise<{ logId: number; sectionGid: string; sectionName: string }> {
+  const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+  try {
+    const data = await asanaPost(token, `/projects/${args.projectGid}/sections`, {
+      name: args.name,
+    });
+    const logId = await logAction(ctx, {
+      actionType: "asana.create_section",
+      targetId: (data.gid as string) ?? null,
+      payloadBefore: null,
+      payloadAfter: data,
+      status: "success",
+    });
+    return {
+      logId,
+      sectionGid: data.gid as string,
+      sectionName: (data.name as string) ?? args.name,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await logAction(ctx, {
+      actionType: "asana.create_section",
+      targetId: null,
+      payloadBefore: null,
+      payloadAfter: { error: message, args },
+      status: "failed",
+    });
+    throw err;
+  }
+}
+
 export async function createTask(
   ctx: ActionContext,
-  args: { projectGid: string; name: string; dueOn: string | null; notes?: string }
+  args: {
+    projectGid: string;
+    name: string;
+    dueOn: string | null;
+    notes?: string;
+    sectionGid?: string | null;
+  }
 ): Promise<{ logId: number; taskGid: string; taskName: string; permalinkUrl: string | null }> {
   const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
   const body: Record<string, unknown> = {
     name: args.name,
-    projects: [args.projectGid],
   };
+  // When a section is set, place the task in the section via memberships.
+  // Otherwise fall back to the simple projects array.
+  if (args.sectionGid) {
+    body.memberships = [{ project: args.projectGid, section: args.sectionGid }];
+  } else {
+    body.projects = [args.projectGid];
+  }
   if (args.dueOn) body.due_on = args.dueOn;
   if (args.notes) body.notes = args.notes;
   try {

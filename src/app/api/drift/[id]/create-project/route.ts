@@ -99,13 +99,20 @@ export async function POST(
   }
 
   const bodyProjectName = pickString(body.project_name, body.projectName);
+  const bodySectionName = pickString(body.section_name, body.sectionName);
   const bodyTaskName = pickString(body.task_name, body.taskName);
   const bodyDueOn = pickDueOn(body.due_on, body.dueOn);
 
-  let extracted: { projectName: string; taskName: string; dueOn: string | null };
-  if (bodyProjectName && bodyTaskName && bodyDueOn !== undefined) {
+  let extracted: {
+    projectName: string;
+    sectionName: string;
+    taskName: string;
+    dueOn: string | null;
+  };
+  if (bodyProjectName && bodySectionName && bodyTaskName && bodyDueOn !== undefined) {
     extracted = {
       projectName: bodyProjectName,
+      sectionName: bodySectionName,
       taskName: bodyTaskName,
       dueOn: bodyDueOn,
     };
@@ -117,6 +124,7 @@ export async function POST(
       );
       extracted = {
         projectName: bodyProjectName ?? shape.projectName,
+        sectionName: bodySectionName ?? shape.sectionName,
         taskName: bodyTaskName ?? shape.taskName,
         dueOn: bodyDueOn !== undefined ? bodyDueOn : shape.dueOn,
       };
@@ -128,6 +136,7 @@ export async function POST(
 
   // Defensive: ensure required strings are never empty.
   if (!extracted.projectName) extracted.projectName = "New project";
+  if (!extracted.sectionName) extracted.sectionName = "Decisions";
   if (!extracted.taskName) extracted.taskName = "Decision logged";
 
   // Dedup: see if a project with this name already exists in the team.
@@ -158,7 +167,23 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 502 });
   }
 
-  // Create the task in that project.
+  // Create a section inside the project. Tolerant: if Asana rejects (free-plan
+  // quirks, transient API errors) we log + swallow and continue without a section.
+  let sectionGid: string | null = null;
+  let sectionName: string | null = null;
+  try {
+    const s = await asanaActions.createSection(ctx, {
+      projectGid,
+      name: extracted.sectionName,
+    });
+    sectionGid = s.sectionGid;
+    sectionName = s.sectionName;
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[drift create-project] createSection failed, continuing without section:", message);
+  }
+
+  // Create the task in that project (placed in the section if we got one).
   let taskGid: string;
   let taskName: string;
   let taskPermalink: string | null = null;
@@ -168,6 +193,7 @@ export async function POST(
       name: extracted.taskName,
       dueOn: extracted.dueOn,
       notes: undefined,
+      sectionGid,
     });
     taskGid = t.taskGid;
     taskName = t.taskName;
@@ -242,6 +268,8 @@ export async function POST(
     project_gid: projectGid,
     project_name: projectName,
     project_permalink_url: projectPermalink,
+    section_gid: sectionGid,
+    section_name: sectionName,
     task_gid: taskGid,
     task_name: taskName,
     task_permalink_url: taskPermalink,

@@ -57,8 +57,8 @@ self.addEventListener("notificationclick", (event) => {
           ) {
             const s = payload.suggested;
             const body =
-              `${s.project_name} - ${s.task_name}` +
-              (s.due_on ? ` - due ${s.due_on}` : "");
+              `${s.project_name} > ${s.section_name} > ${s.task_name}` +
+              (s.due_on ? ` · due ${s.due_on}` : "");
             return self.registration.showNotification("Create new Asana project?", {
               body,
               icon: "/Gerendo-Favicon.png",
@@ -116,6 +116,7 @@ self.addEventListener("notificationclick", (event) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           project_name: suggested.project_name,
+          section_name: suggested.section_name,
           task_name: suggested.task_name,
           due_on: suggested.due_on,
         }),
@@ -128,7 +129,7 @@ self.addEventListener("notificationclick", (event) => {
             ok ? "Project created" : "Could not create project",
             {
               body: ok
-                ? `Created ${payload.project_name} in Asana with task ${payload.task_name}.`
+                ? `Created ${payload.project_name} > ${payload.section_name} > ${payload.task_name} in Asana.`
                 : (payload.error || "Open Gerendo to retry."),
               icon: "/Gerendo-Favicon.png",
               tag: `gerendo-created-${findingId}`,

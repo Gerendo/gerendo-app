@@ -114,6 +114,7 @@ export async function POST(
       finding_id: findingId,
       suggested: {
         project_name: shape.projectName,
+        section_name: shape.sectionName,
         task_name: shape.taskName,
         due_on: shape.dueOn,
       },
