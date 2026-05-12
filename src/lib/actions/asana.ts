@@ -1,0 +1,143 @@
+import { createServiceClient } from "@/lib/supabase-server";
+import { getAsanaToken, asanaGet, asanaPost } from "@/lib/agency-db";
+
+export type ActionContext = {
+  workspaceId: string;
+  driftFindingId: number | null;
+  executedBy: string;
+};
+
+type LogArgs = {
+  actionType: string;
+  targetId: string | null;
+  payloadBefore: unknown;
+  payloadAfter: unknown;
+  status: "success" | "failed";
+};
+
+async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("action_log")
+    .insert({
+      workspace_id: ctx.workspaceId,
+      drift_finding_id: ctx.driftFindingId,
+      action_type: args.actionType,
+      target_system: "asana",
+      target_id: args.targetId,
+      payload_before: args.payloadBefore,
+      payload_after: args.payloadAfter,
+      executed_by: ctx.executedBy,
+      status: args.status,
+    })
+    .select("id")
+    .single();
+  if (error || !data) throw new Error(`logAction: ${error?.message ?? "unknown"}`);
+  return data.id as number;
+}
+
+// Asana update uses PUT, which is not exported from agency-db. Define inline.
+async function asanaPut(token: string, path: string, body: object): Promise<any> {
+  const res = await fetch(`https://app.asana.com/api/1.0${path}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ data: body }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(
+      (err as { errors?: Array<{ message?: string }> }).errors?.[0]?.message ??
+        `Asana API error ${res.status}: ${path}`
+    );
+  }
+  const json = await res.json();
+  return json.data;
+}
+
+export async function updateTask(
+  ctx: ActionContext,
+  taskGid: string,
+  fields: { due_on?: string | null; name?: string; notes?: string; completed?: boolean }
+): Promise<{ logId: number; before: unknown; after: unknown }> {
+  const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+  const before = await asanaGet(token, `/tasks/${taskGid}?opt_fields=name,due_on,notes,completed`);
+  try {
+    const after = await asanaPut(token, `/tasks/${taskGid}`, fields);
+    const logId = await logAction(ctx, {
+      actionType: "asana.update_task",
+      targetId: taskGid,
+      payloadBefore: before,
+      payloadAfter: after,
+      status: "success",
+    });
+    return { logId, before, after };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await logAction(ctx, {
+      actionType: "asana.update_task",
+      targetId: taskGid,
+      payloadBefore: before,
+      payloadAfter: { error: message, fields },
+      status: "failed",
+    });
+    throw err;
+  }
+}
+
+export async function addComment(
+  ctx: ActionContext,
+  taskGid: string,
+  body: string,
+  citationUrl?: string
+): Promise<{ logId: number; commentGid: string }> {
+  const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+  const text = citationUrl ? `${body}\n\nSource: ${citationUrl}` : body;
+  try {
+    const data = await asanaPost(token, `/tasks/${taskGid}/stories`, { text });
+    const logId = await logAction(ctx, {
+      actionType: "asana.add_comment",
+      targetId: taskGid,
+      payloadBefore: null,
+      payloadAfter: { story_gid: data.gid, text },
+      status: "success",
+    });
+    return { logId, commentGid: data.gid as string };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await logAction(ctx, {
+      actionType: "asana.add_comment",
+      targetId: taskGid,
+      payloadBefore: null,
+      payloadAfter: { error: message, text },
+      status: "failed",
+    });
+    throw err;
+  }
+}
+
+// Fetch task assignee + followers (with emails) for team broadcast matching.
+export async function getTaskParticipantEmails(
+  workspaceId: string,
+  userId: string,
+  taskGid: string
+): Promise<string[]> {
+  try {
+    const token = await getAsanaToken(workspaceId, userId);
+    const task = await asanaGet(
+      token,
+      `/tasks/${taskGid}?opt_fields=assignee.email,followers.email`
+    );
+    const emails: string[] = [];
+    if (task.assignee?.email) emails.push(String(task.assignee.email).toLowerCase());
+    for (const f of (task.followers as Array<{ email?: string }>) ?? []) {
+      if (f.email) emails.push(String(f.email).toLowerCase());
+    }
+    return emails;
+  } catch {
+    return [];
+  }
+}

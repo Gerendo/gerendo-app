@@ -198,7 +198,10 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
         { action: "confirm", title: "Got it" },
         { action: "dismiss", title: "Dismiss" },
       ],
-      data: { findingId: finding.id },
+      data: {
+        findingId: finding.id,
+        confirmUrl: `/api/drift/${finding.id}/accept`,
+      },
     });
 
     await Promise.allSettled(

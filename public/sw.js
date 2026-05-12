@@ -31,13 +31,47 @@ self.addEventListener("notificationclick", (event) => {
   const { action } = event;
   const { findingId, confirmUrl, dismissUrl } = event.notification.data ?? {};
 
-  let targetUrl = "/ask";
-
+  // Background-action: POST and show a follow-up notification with the result.
   if (action === "confirm" && confirmUrl) {
-    targetUrl = confirmUrl;
-  } else if (action === "dismiss" && dismissUrl) {
-    targetUrl = dismissUrl;
-  } else if (action === "edit" && findingId) {
+    event.waitUntil(
+      fetch(confirmUrl, { method: "POST", credentials: "same-origin" })
+        .then(async (res) => {
+          let payload = {};
+          try { payload = await res.json(); } catch {}
+          const ok = res.ok && (payload.status === "accepted" || payload.status === "already-resolved");
+          const taskLinked = payload.task_linked !== false;
+          return self.registration.showNotification(
+            ok ? "Updated" : "Could not update",
+            {
+              body: ok
+                ? (taskLinked ? "Asana task updated and team notified." : "Decision recorded. Link an Asana task to push the update.")
+                : "Open Gerendo to retry.",
+              icon: "/Gerendo-Favicon.png",
+              tag: `gerendo-result-${findingId}`,
+            }
+          );
+        })
+        .catch(() =>
+          self.registration.showNotification("Could not update", {
+            body: "Open Gerendo to retry.",
+            icon: "/Gerendo-Favicon.png",
+            tag: `gerendo-result-${findingId}`,
+          })
+        )
+    );
+    return;
+  }
+
+  if (action === "dismiss" && dismissUrl) {
+    event.waitUntil(
+      fetch(dismissUrl, { method: "POST", credentials: "same-origin" }).catch(() => {})
+    );
+    return;
+  }
+
+  // Default: focus or open the app at a target URL.
+  let targetUrl = "/ask";
+  if (action === "edit" && findingId) {
     targetUrl = `/ask?finding=${findingId}`;
   }
 
