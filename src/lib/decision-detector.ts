@@ -1,6 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createServiceClient } from "./supabase-server";
 import { webpush } from "./push";
+import { hybridAsanaSearch, type AsanaSearchResult } from "./search";
+import type { AgencyDb } from "./agency-db";
 
 const client = new Anthropic();
 
@@ -59,32 +61,62 @@ async function classifyWithHaiku(text: string): Promise<boolean> {
 
 // ─── Layer 3: Sonnet extraction (only on confirmed decisions) ─────────────────
 
-const SONNET_SYSTEM = `You extract confirmed decisions from marketing agency messages.
+const SONNET_SYSTEM = `You extract confirmed decisions from marketing agency messages and link them to the correct Asana task.
 
-Return a JSON object with exactly these two fields:
+You will receive: the message text, and up to 5 candidate Asana tasks with their id, name, project, assignee, due date, and a snippet.
+
+Return a JSON object with exactly these three fields:
 {
   "decision_summary": "One sentence: what was decided (who, what changed, project name if mentioned)",
-  "draft_update": "What to write in an Asana task comment to record this decision"
+  "draft_update": "What to write in an Asana task comment to record this decision",
+  "asana_item_id": <integer id of the matching task, or null if no candidate is a clear match>
 }
 
+Pick null over guessing. A weak match is worse than no match.
 No markdown, no explanation. JSON only.`;
 
-async function extractWithSonnet(text: string): Promise<{ summary: string; draftUpdate: string }> {
+export async function extractWithSonnet(
+  text: string,
+  candidates: AsanaSearchResult[]
+): Promise<{ summary: string; draftUpdate: string; asanaItemId: number | null }> {
+  const candidateJson = JSON.stringify(
+    candidates.map((c) => ({
+      id: c.itemId,
+      name: c.name,
+      project: c.projectName,
+      assignee: c.assignee,
+      due: c.dueDate,
+      snippet: c.snippet,
+    })),
+    null,
+    2
+  );
+  const userContent = `<email>\n${text}\n</email>\n\n<asana_candidates>\n${candidateJson}\n</asana_candidates>`;
+
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 300,
+    max_tokens: 400,
     system: [{ type: "text", text: SONNET_SYSTEM, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: text }],
+    messages: [{ role: "user", content: userContent }],
   });
   const raw = response.content[0].type === "text" ? response.content[0].text.trim() : "{}";
+
+  const candidateIds = new Set(candidates.map((c) => c.itemId));
   try {
     const parsed = JSON.parse(raw);
+    const rawId = parsed.asana_item_id;
+    const asanaItemId =
+      typeof rawId === "number" && Number.isInteger(rawId) && candidateIds.has(rawId) ? rawId : null;
+    if (rawId != null && asanaItemId == null) {
+      console.warn("[detector] sonnet returned asana_item_id not in candidates:", rawId);
+    }
     return {
       summary: parsed.decision_summary ?? "Decision detected",
       draftUpdate: parsed.draft_update ?? raw,
+      asanaItemId,
     };
   } catch {
-    return { summary: "Decision detected", draftUpdate: raw };
+    return { summary: "Decision detected", draftUpdate: raw, asanaItemId: null };
   }
 }
 
@@ -161,9 +193,18 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
     if (sonnetCallsUsed >= MAX_SONNET_CALLS) break;
     sonnetCallsUsed++;
 
-    let extracted: { summary: string; draftUpdate: string };
+    // Fetch Asana candidates so Sonnet can pick the matching task at detect time.
+    const db: AgencyDb = { supabase, workspaceId, userId };
+    let candidates: AsanaSearchResult[] = [];
     try {
-      extracted = await extractWithSonnet(keywordText);
+      candidates = await hybridAsanaSearch(keywordText, 5, db);
+    } catch (err) {
+      console.error("[detector] asana search error:", err);
+    }
+
+    let extracted: { summary: string; draftUpdate: string; asanaItemId: number | null };
+    try {
+      extracted = await extractWithSonnet(keywordText, candidates);
     } catch (err) {
       console.error("[detector] Sonnet error:", err);
       continue;
@@ -179,6 +220,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
         source_external_id: message.external_id,
         decision_summary: extracted.summary,
         draft_update: extracted.draftUpdate,
+        asana_item_id: extracted.asanaItemId,
         status: "pending",
       })
       .select("id")
@@ -189,9 +231,13 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
       continue;
     }
 
+    const matched = extracted.asanaItemId
+      ? candidates.find((c) => c.itemId === extracted.asanaItemId)
+      : null;
+
     // Push notification
     const payload = JSON.stringify({
-      title: "Decision detected",
+      title: matched ? `Decision on ${matched.name}` : "Decision detected",
       body: extracted.summary,
       tag: `gerendo-finding-${finding.id}`,
       actions: [
