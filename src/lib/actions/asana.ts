@@ -124,36 +124,55 @@ export async function createProject(
   args: { teamGid: string; workspaceGid: string; name: string; isPublic: boolean }
 ): Promise<{ logId: number; projectGid: string; projectName: string; permalinkUrl: string | null }> {
   const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+
+  // Asana free plans don't have teams. Try with team first (paid org behaviour),
+  // fall back to workspace-only on any error so the same code works across plans.
+  let data: { gid?: string; name?: string; permalink_url?: string } | null = null;
+  let firstError: string | null = null;
   try {
-    const data = await asanaPost(token, "/projects", {
+    data = await asanaPost(token, "/projects", {
       name: args.name,
       team: args.teamGid,
       workspace: args.workspaceGid,
     });
-    const logId = await logAction(ctx, {
-      actionType: "asana.create_project",
-      targetId: (data.gid as string) ?? null,
-      payloadBefore: null,
-      payloadAfter: data,
-      status: "success",
-    });
-    return {
-      logId,
-      projectGid: data.gid as string,
-      projectName: (data.name as string) ?? args.name,
-      permalinkUrl: (data.permalink_url as string | undefined) ?? null,
-    };
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    await logAction(ctx, {
-      actionType: "asana.create_project",
-      targetId: null,
-      payloadBefore: null,
-      payloadAfter: { error: message, args },
-      status: "failed",
-    });
-    throw err;
+    firstError = err instanceof Error ? err.message : String(err);
   }
+
+  if (!data) {
+    try {
+      data = await asanaPost(token, "/projects", {
+        name: args.name,
+        workspace: args.workspaceGid,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      await logAction(ctx, {
+        actionType: "asana.create_project",
+        targetId: null,
+        payloadBefore: null,
+        payloadAfter: { error: message, fallback_error: firstError, args },
+        status: "failed",
+      });
+      throw err;
+    }
+  }
+
+  if (!data) throw new Error("Asana createProject returned no data");
+  const created = data;
+  const logId = await logAction(ctx, {
+    actionType: "asana.create_project",
+    targetId: (created.gid as string) ?? null,
+    payloadBefore: null,
+    payloadAfter: created,
+    status: "success",
+  });
+  return {
+    logId,
+    projectGid: created.gid as string,
+    projectName: (created.name as string) ?? args.name,
+    permalinkUrl: (created.permalink_url as string | undefined) ?? null,
+  };
 }
 
 export async function createTask(
