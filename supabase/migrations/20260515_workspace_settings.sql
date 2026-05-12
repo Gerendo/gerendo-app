@@ -9,6 +9,8 @@ create table if not exists workspace_settings (
 
 alter table workspace_settings enable row level security;
 
+drop policy if exists "workspace members read settings" on workspace_settings;
+
 create policy "workspace members read settings"
   on workspace_settings for select
   using (
