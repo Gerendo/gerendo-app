@@ -150,15 +150,24 @@ function Hero({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             </a>
           </motion.div>
 
+          <motion.p
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.5 }}
+            className="mt-10 max-w-xl text-[15px] leading-relaxed text-muted-foreground/90"
+          >
+            Your content is encrypted before it enters our database, in transit over TLS, and stays that way at rest. We hold the key, Supabase does not.
+          </motion.p>
+
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 1, delay: 0.6 }}
-            className="mt-12 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70"
+            className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 font-mono text-[11px] uppercase tracking-wider text-muted-foreground/70"
           >
-            <span>Cited answers</span>
+            <span>Encrypted at rest</span>
             <span className="h-px w-6 bg-border" />
-            <span>Your choice of AI</span>
+            <span>Key outside Supabase</span>
             <span className="h-px w-6 bg-border" />
             <span>Never trained on your data</span>
           </motion.div>
@@ -407,28 +416,28 @@ function BringYourAI() {
 function Security() {
   const items = [
     {
-      title: "Security is a first principle.",
-      body: "We're building Gerendo with security as a foundational concern - not something to bolt on later. Every architecture decision passes through it first.",
+      title: "Encrypted at rest, key outside Supabase.",
+      body: "Email bodies, AI summaries, extracted facts, and OAuth tokens are encrypted with AES-256-GCM before they reach the database. The master key lives in our Vercel environment, not in Supabase. A leaked snapshot shows only ciphertext.",
+    },
+    {
+      title: "RLS for tenant isolation. Encryption for operator isolation.",
+      body: "Postgres Row Level Security stops one tenant reading another. Application-layer encryption stops the database operator reading anyone. We use both, and we keep the line between them clear.",
     },
     {
       title: "Never used to train AI.",
-      body: "Your data is never used to train any model - ours or anyone else's. We route through zero-retention AI endpoints whenever available.",
+      body: "Your data is not anyone's training set. We route through Anthropic's standard commercial API, which does not train on customer data.",
+    },
+    {
+      title: "Honest about chat queries.",
+      body: "When you ask a question, relevant snippets are decrypted in memory on our app server and sent over TLS to Claude. Anthropic may retain prompts up to 30 days for abuse monitoring, per their standard terms. No training.",
     },
     {
       title: "Permission-aware by design.",
-      body: "Gerendo will respect the access controls in your source tools. If a teammate can't see a file in Drive, they won't see an answer based on it.",
-    },
-    {
-      title: "Multi-tenant from line one.",
-      body: "Each workspace's data is isolated at the database level - never retrofitted, never shared by mistake. We're building this in from day one, not later.",
+      body: "Gerendo respects the access controls in your source tools. If a teammate cannot see a file in Drive, they will not see an answer based on it.",
     },
     {
       title: "You own the off switch.",
-      body: "Disconnect any source in one click. Export everything. Delete it all - permanently - whenever you want.",
-    },
-    {
-      title: "Compliance on the roadmap.",
-      body: "We're committed to SOC 2 and GDPR alignment as we grow. EU data residency is part of the plan. Ask us where we are today.",
+      body: "Disconnect any source in one click. Export everything. Delete it all, permanently, whenever you want.",
     },
   ];
 

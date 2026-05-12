@@ -4,6 +4,8 @@ import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { getDriveToken, openAgencyDb, getSyncState, setSyncState } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
+import { encryptForBytea } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export const maxDuration = 300;
 
@@ -105,15 +107,22 @@ async function syncFile(
   const embeddings = await embedTexts(chunks);
   await supabase.from("drive_embeddings").delete().eq("file_id", fileRow.id);
   await supabase.from("drive_embeddings").insert(
-    chunks.map((chunk, i) => ({
-      workspace_id: workspaceId,
-      user_id: userId,
-      file_id: fileRow.id,
-      chunk_index: i,
-      embedding: Array.from(embeddings[i]),
-      keyword_text: `${file.name}. ${chunk}`,
-      indexed_at: Date.now(),
-    }))
+    chunks.map((chunk, i) => {
+      const keywordText = `${file.name}. ${chunk}`;
+      return {
+        workspace_id: workspaceId,
+        user_id: userId,
+        file_id: fileRow.id,
+        chunk_index: i,
+        embedding: Array.from(embeddings[i]),
+        keyword_text: keywordText,
+        keyword_text_enc: encryptForBytea(
+          keywordText,
+          aad.driveEmbeddingsKeywordText(workspaceId, fileRow.id, i)
+        ),
+        indexed_at: Date.now(),
+      };
+    })
   );
 
   return "synced";

@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { getAsanaToken, asanaGet } from "@/lib/agency-db";
 import { embedTexts } from "@/lib/embed";
+import { encryptForBytea } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export const maxDuration = 300;
 
@@ -81,6 +83,10 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
       chunk_index: i,
       embedding: Array.from(embeddings[i]),
       keyword_text: chunk,
+      keyword_text_enc: encryptForBytea(
+        chunk,
+        aad.asanaEmbeddingsKeywordText(workspaceId, itemRow.id, i)
+      ),
       indexed_at: Date.now(),
     }))
   );
@@ -179,6 +185,10 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
               chunk_index: i,
               embedding: Array.from(embeddings[i]),
               keyword_text: chunk,
+              keyword_text_enc: encryptForBytea(
+                chunk,
+                aad.asanaEmbeddingsKeywordText(workspaceId, itemRow.id, i)
+              ),
               indexed_at: Date.now(),
             }))
           );

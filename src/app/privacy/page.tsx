@@ -64,9 +64,88 @@ export default function PrivacyPage() {
             q: "Where is data stored?",
             a: (
               <>
-                <p>Your data is stored in <strong>Supabase</strong>, a managed Postgres database hosted on AWS infrastructure. All data is encrypted at rest using AES-256 and in transit over TLS.</p>
-                <p className="mt-2">Your OAuth access tokens (which grant us read access to Gmail, Drive, and Asana) are stored in this same database. They are protected by row-level security - no other user, even in the same workspace, can read your tokens.</p>
+                <p>Your data is stored in <strong>Supabase</strong>, a managed Postgres database hosted on AWS infrastructure. All data is encrypted in transit over TLS 1.3. Sensitive content is additionally encrypted at the application layer before it reaches the database, with a key only Gerendo holds (see below).</p>
+                <p className="mt-2">Each workspace's data is isolated by Postgres Row Level Security. RLS enforces tenant isolation. Application-layer encryption enforces operator isolation, even from the database operator.</p>
               </>
+            ),
+          },
+          {
+            q: "What is encrypted with a key only Gerendo holds?",
+            a: (
+              <>
+                <ul className="flex flex-col gap-1.5 ml-4">
+                  <li>Email subject lines and body content (after sync from Gmail)</li>
+                  <li>Google Drive document content (after sync)</li>
+                  <li>Asana task descriptions and comments (after sync)</li>
+                  <li>AI-generated summaries derived from your data</li>
+                  <li>Extracted facts (e.g., "Acme decided to launch May 25")</li>
+                  <li>OAuth tokens for your connected tools</li>
+                </ul>
+                <p className="mt-3">These columns are encrypted with AES-256-GCM. The master key lives in our application's environment (Vercel), separate from the database. A Supabase staff member, a leaked database snapshot, or a compromised service-role token sees only ciphertext. We hold the key.</p>
+              </>
+            ),
+          },
+          {
+            q: "What is stored as queryable metadata?",
+            a: (
+              <>
+                <ul className="flex flex-col gap-1.5 ml-4">
+                  <li>Email sender, recipient, timestamp, thread ID</li>
+                  <li>Drive file name, type, modified timestamp</li>
+                  <li>Asana task name, project name, assignee</li>
+                  <li>Internal IDs, foreign keys, audit timestamps</li>
+                </ul>
+                <p className="mt-3">These fields are needed to display search results and join data across sources before any decryption happens. Encrypting them would require decrypting every row of every query, too expensive for our current size. We will revisit as customers and threat model evolve.</p>
+              </>
+            ),
+          },
+          {
+            q: "How do chat queries actually work?",
+            a: (
+              <p>When you ask Gerendo a question, relevant snippets are decrypted in our application server (Vercel) and sent over TLS to our LLM provider (Anthropic Claude) for inference. Anthropic processes the prompt and returns an answer. Per Anthropic's standard commercial terms, prompts may be retained for up to 30 days for abuse monitoring. Anthropic does not train models on your data.</p>
+            ),
+          },
+          {
+            q: "The three layers, in plain English",
+            a: (
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b" style={{ borderColor: border }}>
+                      <th className="py-2 pr-4 text-left font-semibold" style={{ color: "oklch(0.96 0.012 80)" }}>Layer</th>
+                      <th className="py-2 pr-4 text-left font-semibold" style={{ color: "oklch(0.96 0.012 80)" }}>What</th>
+                      <th className="py-2 text-left font-semibold" style={{ color: "oklch(0.96 0.012 80)" }}>Encryption</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b align-top" style={{ borderColor: border }}>
+                      <td className="py-2 pr-4">At rest in Supabase</td>
+                      <td className="py-2 pr-4">Body content, summaries, facts, OAuth tokens</td>
+                      <td className="py-2">AES-256-GCM, key held by Gerendo</td>
+                    </tr>
+                    <tr className="border-b align-top" style={{ borderColor: border }}>
+                      <td className="py-2 pr-4">In transit</td>
+                      <td className="py-2 pr-4">All API traffic</td>
+                      <td className="py-2">TLS 1.3</td>
+                    </tr>
+                    <tr className="align-top">
+                      <td className="py-2 pr-4">During Claude inference</td>
+                      <td className="py-2 pr-4">Decrypted snippets sent to Anthropic</td>
+                      <td className="py-2">TLS 1.3, retained per Anthropic ToS up to 30 days</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            ),
+          },
+          {
+            q: "What we deliberately do not claim",
+            a: (
+              <ul className="flex flex-col gap-1.5 ml-4">
+                <li>We do not claim "zero-knowledge", we hold the encryption key.</li>
+                <li>We do not claim "end-to-end encryption", that means only sender and recipient hold keys, which does not apply to a RAG product.</li>
+                <li>We do not claim "even our engineers cannot read your messages" without context. During a chat query, the data is decrypted briefly in process memory. We claim <em>operator-level isolation</em> (the database operator cannot read it), not absolute isolation.</li>
+              </ul>
             ),
           },
           {
@@ -79,7 +158,7 @@ export default function PrivacyPage() {
                   <li>Asana tasks sync per-user - other workspace members cannot see your personal task data</li>
                   <li>Workspace members cannot access each other's OAuth tokens or raw data</li>
                 </ul>
-                <p className="mt-3">Gerendo employees do not have access to your email content or documents in the normal course of operating the service. Database access is restricted to automated systems running the application.</p>
+                <p className="mt-3">Sensitive content (email bodies, AI summaries, extracted facts, OAuth tokens) is encrypted at the application layer with a key held by Gerendo, outside Supabase. A Gerendo or Supabase operator reading the database directly sees only ciphertext. During a chat query, the relevant snippets are decrypted briefly in process memory on our app server, then sent to Anthropic Claude over TLS. We claim operator-level isolation, not absolute isolation.</p>
               </>
             ),
           },

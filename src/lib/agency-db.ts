@@ -1,5 +1,7 @@
 import { createServiceClient } from "./supabase-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export type AgencyDb = {
   supabase: SupabaseClient;
@@ -31,6 +33,10 @@ export async function batchUpsertMessages(
     thread_id: msg.threadId,
     sender: msg.sender,
     subject: msg.subject,
+    subject_enc: encryptForBytea(
+      msg.subject,
+      aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
+    ),
     mailbox: msg.mailbox,
     received_at: msg.receivedAt,
     synced_at: Date.now(),
@@ -57,6 +63,10 @@ export async function batchUpsertEmbeddings(
     message_id: item.messageId,
     embedding: Array.from(item.embedding),
     keyword_text: item.keywordText,
+    keyword_text_enc: encryptForBytea(
+      item.keywordText,
+      aad.embeddingsKeywordText(db.workspaceId, item.messageId)
+    ),
     indexed_at: Date.now(),
   }));
 
@@ -100,6 +110,10 @@ export async function upsertMessage(
       thread_id: msg.threadId,
       sender: msg.sender,
       subject: msg.subject,
+      subject_enc: encryptForBytea(
+        msg.subject,
+        aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
+      ),
       mailbox: msg.mailbox,
       received_at: msg.receivedAt,
       synced_at: Date.now(),
@@ -127,10 +141,20 @@ export async function upsertEmbedding(
     .eq("workspace_id", db.workspaceId)
     .maybeSingle();
 
+  const keywordTextEnc = encryptForBytea(
+    keywordText,
+    aad.embeddingsKeywordText(db.workspaceId, messageId)
+  );
+
   if (existing) {
     const { error } = await db.supabase
       .from("embeddings")
-      .update({ embedding: vec, keyword_text: keywordText, indexed_at: Date.now() })
+      .update({
+        embedding: vec,
+        keyword_text: keywordText,
+        keyword_text_enc: keywordTextEnc,
+        indexed_at: Date.now(),
+      })
       .eq("id", existing.id);
     if (error) console.error("[db] upsertEmbedding update failed:", error.message);
   } else {
@@ -140,6 +164,7 @@ export async function upsertEmbedding(
       message_id: messageId,
       embedding: vec,
       keyword_text: keywordText,
+      keyword_text_enc: keywordTextEnc,
       indexed_at: Date.now(),
     });
     if (error) console.error("[db] upsertEmbedding insert failed:", error.message);
@@ -156,6 +181,7 @@ export async function upsertSummary(
       workspace_id: db.workspaceId,
       message_id: messageId,
       summary,
+      summary_enc: encryptForBytea(summary, aad.summariesSummary(db.workspaceId, messageId)),
       summarized_at: Date.now(),
     },
     { onConflict: "message_id" }
@@ -169,10 +195,17 @@ export async function getSummariesByMessageIds(
   if (messageIds.length === 0) return [];
   const { data } = await db.supabase
     .from("summaries")
-    .select("message_id, summary")
+    .select("message_id, summary, summary_enc")
     .eq("workspace_id", db.workspaceId)
     .in("message_id", messageIds);
-  return (data ?? []).map((r) => ({ messageId: r.message_id, summary: r.summary }));
+  return (data ?? []).map((r) => ({
+    messageId: r.message_id,
+    summary: decryptOrFallback(
+      r.summary_enc,
+      r.summary,
+      aad.summariesSummary(db.workspaceId, r.message_id)
+    ),
+  }));
 }
 
 export async function insertFact(
@@ -191,6 +224,10 @@ export async function insertFact(
     type: fact.type,
     subject: fact.subject,
     detail: fact.detail,
+    detail_enc: encryptForBytea(
+      fact.detail,
+      aad.factsDetail(db.workspaceId, fact.messageId, fact.type, fact.subject)
+    ),
     client: fact.client,
     extracted_at: Date.now(),
   });
@@ -327,7 +364,7 @@ export async function getMessagesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("embeddings")
-    .select("id, message_id, messages(source, external_id, thread_id, sender, subject, received_at, mailbox)")
+    .select("id, message_id, messages(user_id, source, external_id, thread_id, sender, subject, subject_enc, received_at, mailbox)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -337,7 +374,16 @@ export async function getMessagesByEmbeddingIds(
     externalId: r.messages.external_id,
     threadId: r.messages.thread_id,
     sender: r.messages.sender,
-    subject: r.messages.subject,
+    subject: decryptOrFallback(
+      r.messages.subject_enc,
+      r.messages.subject,
+      aad.messagesSubject(
+        db.workspaceId,
+        r.messages.user_id,
+        r.messages.source,
+        r.messages.external_id
+      )
+    ),
     receivedAt: r.messages.received_at,
     mailbox: r.messages.mailbox,
   }));
@@ -420,7 +466,7 @@ export async function getDriveFilesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("drive_embeddings")
-    .select("id, chunk_index, keyword_text, file_id, drive_files(name, mime_type, web_view_link)")
+    .select("id, chunk_index, keyword_text, keyword_text_enc, file_id, drive_files(name, mime_type, web_view_link)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -431,7 +477,11 @@ export async function getDriveFilesByEmbeddingIds(
     mimeType: r.drive_files.mime_type,
     webViewLink: r.drive_files.web_view_link,
     chunkIndex: r.chunk_index,
-    keywordText: r.keyword_text,
+    keywordText: decryptOrFallback(
+      r.keyword_text_enc,
+      r.keyword_text,
+      aad.driveEmbeddingsKeywordText(db.workspaceId, r.file_id, r.chunk_index)
+    ),
   }));
 }
 
@@ -480,7 +530,7 @@ export async function getAsanaItemsByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("asana_embeddings")
-    .select("id, chunk_index, keyword_text, item_id, asana_items(name, project_name, assignee, due_date, status, permalink_url)")
+    .select("id, chunk_index, keyword_text, keyword_text_enc, item_id, asana_items(name, project_name, assignee, due_date, status, permalink_url)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -493,7 +543,11 @@ export async function getAsanaItemsByEmbeddingIds(
     dueDate: r.asana_items.due_date,
     status: r.asana_items.status,
     permalinkUrl: r.asana_items.permalink_url,
-    keywordText: r.keyword_text,
+    keywordText: decryptOrFallback(
+      r.keyword_text_enc,
+      r.keyword_text,
+      aad.asanaEmbeddingsKeywordText(db.workspaceId, r.item_id, r.chunk_index)
+    ),
   }));
 }
 
@@ -552,7 +606,7 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "google-gmail")
@@ -560,14 +614,20 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Gmail not connected");
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && data.refresh_token) {
+  const refreshToken = decryptOrFallback(
+    data.refresh_token_enc,
+    data.refresh_token,
+    aad.oauthTokensRefreshToken(workspaceId, userId, "google-gmail")
+  );
+
+  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID!,
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        refresh_token: data.refresh_token,
+        refresh_token: refreshToken,
         grant_type: "refresh_token",
       }),
     });
@@ -575,20 +635,28 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
         access_token: tokens.access_token,
+        access_token_enc: encryptForBytea(
+          tokens.access_token,
+          aad.oauthTokensAccessToken(workspaceId, userId, "google-gmail")
+        ),
         expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-gmail");
       return tokens.access_token;
     }
   }
 
-  return data.access_token;
+  return decryptOrFallback(
+    data.access_token_enc,
+    data.access_token,
+    aad.oauthTokensAccessToken(workspaceId, userId, "google-gmail")
+  );
 }
 
 export async function getDriveToken(workspaceId: string, userId: string): Promise<string> {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "google-drive")
@@ -596,14 +664,20 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Google Drive not connected");
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && data.refresh_token) {
+  const refreshToken = decryptOrFallback(
+    data.refresh_token_enc,
+    data.refresh_token,
+    aad.oauthTokensRefreshToken(workspaceId, userId, "google-drive")
+  );
+
+  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: process.env.GOOGLE_CLIENT_ID!,
         client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-        refresh_token: data.refresh_token,
+        refresh_token: refreshToken,
         grant_type: "refresh_token",
       }),
     });
@@ -611,20 +685,28 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
         access_token: tokens.access_token,
+        access_token_enc: encryptForBytea(
+          tokens.access_token,
+          aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
+        ),
         expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-drive");
       return tokens.access_token;
     }
   }
 
-  return data.access_token;
+  return decryptOrFallback(
+    data.access_token_enc,
+    data.access_token,
+    aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
+  );
 }
 
 export async function getAsanaToken(workspaceId: string, userId: string): Promise<string> {
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, refresh_token, expires_at")
+    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "asana")
@@ -632,14 +714,20 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Asana not connected");
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && data.refresh_token) {
+  const refreshToken = decryptOrFallback(
+    data.refresh_token_enc,
+    data.refresh_token,
+    aad.oauthTokensRefreshToken(workspaceId, userId, "asana")
+  );
+
+  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://app.asana.com/-/oauth_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         client_id: process.env.ASANA_CLIENT_ID!,
         client_secret: process.env.ASANA_CLIENT_SECRET!,
-        refresh_token: data.refresh_token,
+        refresh_token: refreshToken,
         grant_type: "refresh_token",
       }),
     });
@@ -647,13 +735,21 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
         access_token: tokens.access_token,
+        access_token_enc: encryptForBytea(
+          tokens.access_token,
+          aad.oauthTokensAccessToken(workspaceId, userId, "asana")
+        ),
         expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "asana");
       return tokens.access_token;
     }
   }
 
-  return data.access_token;
+  return decryptOrFallback(
+    data.access_token_enc,
+    data.access_token,
+    aad.oauthTokensAccessToken(workspaceId, userId, "asana")
+  );
 }
 
 export async function getWorkspaceId(userId: string): Promise<string | null> {

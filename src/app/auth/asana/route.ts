@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase-server";
 import { getWorkspaceFromSession } from "@/lib/agency-db";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { cookies } from "next/headers";
+import { encryptForBytea } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export async function GET(request: Request): Promise<NextResponse> {
   const { searchParams, origin } = new URL(request.url);
@@ -53,7 +55,17 @@ export async function GET(request: Request): Promise<NextResponse> {
     user_id: userId,
     provider: "asana",
     access_token: tokens.access_token,
+    access_token_enc: encryptForBytea(
+      tokens.access_token,
+      aad.oauthTokensAccessToken(workspaceId, userId, "asana")
+    ),
     refresh_token: tokens.refresh_token ?? null,
+    refresh_token_enc: tokens.refresh_token
+      ? encryptForBytea(
+          tokens.refresh_token,
+          aad.oauthTokensRefreshToken(workspaceId, userId, "asana")
+        )
+      : null,
     expires_at: tokens.expires_in ? Date.now() + tokens.expires_in * 1000 : null,
   }, { onConflict: "workspace_id,user_id,provider" });
 

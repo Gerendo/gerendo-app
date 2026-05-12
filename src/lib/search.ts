@@ -1,4 +1,4 @@
-import { ftsSearch, semanticSearch, getMessagesByEmbeddingIds, ftsDriveSearch, semanticDriveSearch, getDriveFilesByEmbeddingIds, ftsAsanaSearch, semanticAsanaSearch, getAsanaItemsByEmbeddingIds, type AgencyDb } from "./agency-db";
+import { semanticSearch, getMessagesByEmbeddingIds, semanticDriveSearch, getDriveFilesByEmbeddingIds, semanticAsanaSearch, getAsanaItemsByEmbeddingIds, type AgencyDb } from "./agency-db";
 import { embedTexts } from "./embed";
 
 export type SearchResult = {
@@ -38,28 +38,21 @@ export type DriveSearchResult = {
   score: number;
 };
 
+// Encryption rollout (Day 4): FTS is disabled because tsvector cannot operate on
+// encrypted bytea / NULL keyword_text. Retrieval is vector-only via Voyage-3.
+// We fetch limit * 4 candidates so the caller's top-K stays well-populated, and
+// derive score from vector rank as 1 / (rank + 1) (reciprocal rank). The exact
+// number doesn't matter — callers only care about ordering.
+
 export async function hybridSearch(query: string, limit = 5, db: AgencyDb): Promise<SearchResult[]> {
   const [queryEmbedding] = await embedTexts([query]);
   const queryVec = Array.from(queryEmbedding);
 
-  const [bm25Results, vectorResults] = await Promise.all([
-    ftsSearch(db, query, 40),
-    semanticSearch(db, queryVec, 20),
-  ]);
+  const vectorResults = await semanticSearch(db, queryVec, limit * 4);
 
-  const rrfScores = new Map<number, number>();
-  const K = 60;
-
-  vectorResults.forEach(({ id }, rank) => {
-    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
-  });
-  bm25Results.forEach(({ id }, rank) => {
-    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
-  });
-
-  const ranked = Array.from(rrfScores.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit);
+  const ranked = vectorResults
+    .slice(0, limit)
+    .map(({ id }, rank) => [id, 1 / (rank + 1)] as const);
 
   if (ranked.length === 0) return [];
 
@@ -87,17 +80,12 @@ export async function hybridAsanaSearch(query: string, limit = 5, db: AgencyDb):
   const [queryEmbedding] = await embedTexts([query]);
   const queryVec = Array.from(queryEmbedding);
 
-  const [bm25Results, vectorResults] = await Promise.all([
-    ftsAsanaSearch(db, query, 40),
-    semanticAsanaSearch(db, queryVec, 20),
-  ]);
+  const vectorResults = await semanticAsanaSearch(db, queryVec, limit * 4);
 
-  const rrfScores = new Map<number, number>();
-  const K = 60;
-  vectorResults.forEach(({ id }, rank) => { rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1)); });
-  bm25Results.forEach(({ id }, rank) => { rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1)); });
+  const ranked = vectorResults
+    .slice(0, limit)
+    .map(({ id }, rank) => [id, 1 / (rank + 1)] as const);
 
-  const ranked = Array.from(rrfScores.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit);
   if (ranked.length === 0) return [];
 
   const items = await getAsanaItemsByEmbeddingIds(db, ranked.map(([id]) => id));
@@ -123,24 +111,11 @@ export async function hybridDriveSearch(query: string, limit = 5, db: AgencyDb):
   const [queryEmbedding] = await embedTexts([query]);
   const queryVec = Array.from(queryEmbedding);
 
-  const [bm25Results, vectorResults] = await Promise.all([
-    ftsDriveSearch(db, query, 40),
-    semanticDriveSearch(db, queryVec, 20),
-  ]);
+  const vectorResults = await semanticDriveSearch(db, queryVec, limit * 4);
 
-  const rrfScores = new Map<number, number>();
-  const K = 60;
-
-  vectorResults.forEach(({ id }, rank) => {
-    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
-  });
-  bm25Results.forEach(({ id }, rank) => {
-    rrfScores.set(id, (rrfScores.get(id) ?? 0) + 1 / (K + rank + 1));
-  });
-
-  const ranked = Array.from(rrfScores.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit);
+  const ranked = vectorResults
+    .slice(0, limit)
+    .map(({ id }, rank) => [id, 1 / (rank + 1)] as const);
 
   if (ranked.length === 0) return [];
 

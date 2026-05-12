@@ -73,11 +73,75 @@ function Privacy() {
 
           <section>
             <h2 className="font-display text-2xl text-foreground">6. Encryption &amp; security</h2>
+
+            <h3 className="mt-5 text-base font-semibold text-foreground">What is encrypted with a key only Gerendo holds</h3>
+            <ul className="mt-3 list-disc pl-5 space-y-2">
+              <li>Email subject lines and body content (after sync from Gmail)</li>
+              <li>Google Drive document content (after sync)</li>
+              <li>Asana task descriptions and comments (after sync)</li>
+              <li>AI-generated summaries derived from your data</li>
+              <li>Extracted facts (e.g., "Acme decided to launch May 25")</li>
+              <li>OAuth tokens for your connected tools</li>
+            </ul>
             <p className="mt-3">
-              All data is encrypted in transit (TLS 1.3) and at rest (AES-256). OAuth tokens are stored in an isolated secrets vault, separate from your general workspace data.
+              These columns are encrypted with AES-256-GCM. The master key lives in our application's environment (Vercel), separate from the database. A Supabase staff member, a leaked database snapshot, or a compromised service-role token sees only ciphertext. We hold the key.
             </p>
+
+            <h3 className="mt-6 text-base font-semibold text-foreground">What is stored as queryable metadata</h3>
+            <ul className="mt-3 list-disc pl-5 space-y-2">
+              <li>Email sender, recipient, timestamp, thread ID</li>
+              <li>Drive file name, type, modified timestamp</li>
+              <li>Asana task name, project name, assignee</li>
+              <li>Internal IDs, foreign keys, audit timestamps</li>
+            </ul>
             <p className="mt-3">
-              Each workspace's data is isolated at the database level - never shared across tenants.
+              These fields are needed to display search results and join data across sources before any decryption happens. Encrypting them would require decrypting every row of every query, too expensive for our current size. We will revisit as customers and threat model evolve.
+            </p>
+
+            <h3 className="mt-6 text-base font-semibold text-foreground">How chat queries actually work</h3>
+            <p className="mt-3">
+              When you ask Gerendo a question, relevant snippets are decrypted in our application server (Vercel) and sent over TLS to our LLM provider (Anthropic Claude) for inference. Anthropic processes the prompt and returns an answer. Per Anthropic's standard commercial terms, prompts may be retained for up to 30 days for abuse monitoring. Anthropic does not train models on your data.
+            </p>
+
+            <h3 className="mt-6 text-base font-semibold text-foreground">Three-layer summary</h3>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-border text-left text-foreground">
+                    <th className="py-2 pr-4 font-semibold">Layer</th>
+                    <th className="py-2 pr-4 font-semibold">What</th>
+                    <th className="py-2 font-semibold">Encryption</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-b border-border/60 align-top">
+                    <td className="py-2 pr-4">At rest in Supabase</td>
+                    <td className="py-2 pr-4">Body content, summaries, facts, OAuth tokens</td>
+                    <td className="py-2">AES-256-GCM, key held by Gerendo</td>
+                  </tr>
+                  <tr className="border-b border-border/60 align-top">
+                    <td className="py-2 pr-4">In transit</td>
+                    <td className="py-2 pr-4">All API traffic</td>
+                    <td className="py-2">TLS 1.3</td>
+                  </tr>
+                  <tr className="align-top">
+                    <td className="py-2 pr-4">During Claude inference</td>
+                    <td className="py-2 pr-4">Decrypted snippets sent to Anthropic</td>
+                    <td className="py-2">TLS 1.3, retained per Anthropic ToS up to 30 days</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="mt-6 text-base font-semibold text-foreground">What we deliberately do not claim</h3>
+            <ul className="mt-3 list-disc pl-5 space-y-2">
+              <li>We do not claim "zero-knowledge", we hold the encryption key.</li>
+              <li>We do not claim "end-to-end encryption", that means only sender and recipient hold keys, which does not apply to a RAG product.</li>
+              <li>We do not claim "even our engineers cannot read your messages" without context. During a chat query, the data is decrypted briefly in process memory. We claim <em>operator-level isolation</em> (the database operator cannot read it), not absolute isolation.</li>
+            </ul>
+
+            <p className="mt-6">
+              Each workspace's data is also isolated at the database level via Postgres Row Level Security, so tenants cannot read each other's rows. RLS enforces tenant isolation. Encryption enforces operator isolation.
             </p>
           </section>
 

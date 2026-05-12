@@ -3,6 +3,8 @@ import { createServiceClient } from "./supabase-server";
 import { webpush } from "./push";
 import { hybridAsanaSearch, type AsanaSearchResult } from "./search";
 import type { AgencyDb } from "./agency-db";
+import { decryptOrFallback } from "./crypto-storage";
+import { aad } from "./crypto-aad";
 
 const client = new Anthropic();
 
@@ -164,10 +166,19 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
   // Get keyword texts
   const { data: embeddings } = await supabase
     .from("embeddings")
-    .select("message_id, keyword_text")
+    .select("message_id, keyword_text, keyword_text_enc")
     .in("message_id", newMessages.map((m) => m.id));
 
-  const textMap = new Map(embeddings?.map((e) => [e.message_id, e.keyword_text]) ?? []);
+  const textMap = new Map(
+    embeddings?.map((e) => [
+      e.message_id,
+      decryptOrFallback(
+        e.keyword_text_enc,
+        e.keyword_text,
+        aad.embeddingsKeywordText(workspaceId, e.message_id)
+      ),
+    ]) ?? []
+  );
   let sonnetCallsUsed = 0;
   const MAX_SONNET_CALLS = 3; // cost guard per webhook trigger
 
