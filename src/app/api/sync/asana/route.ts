@@ -82,7 +82,6 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
       item_id: itemRow.id,
       chunk_index: i,
       embedding: Array.from(embeddings[i]),
-      keyword_text: chunk,
       keyword_text_enc: encryptForBytea(
         chunk,
         aad.asanaEmbeddingsKeywordText(workspaceId, itemRow.id, i)
@@ -184,7 +183,6 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
               item_id: itemRow.id,
               chunk_index: i,
               embedding: Array.from(embeddings[i]),
-              keyword_text: chunk,
               keyword_text_enc: encryptForBytea(
                 chunk,
                 aad.asanaEmbeddingsKeywordText(workspaceId, itemRow.id, i)

@@ -115,7 +115,6 @@ async function syncFile(
         file_id: fileRow.id,
         chunk_index: i,
         embedding: Array.from(embeddings[i]),
-        keyword_text: keywordText,
         keyword_text_enc: encryptForBytea(
           keywordText,
           aad.driveEmbeddingsKeywordText(workspaceId, fileRow.id, i)

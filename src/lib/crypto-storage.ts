@@ -110,6 +110,22 @@ export function decryptOrFallback(
   return plaintext ?? "";
 }
 
+/**
+ * Strict Phase 2 read helper. Decrypts an encrypted bytea column and
+ * throws if it is null/undefined. Use this in read paths after Phase 2
+ * (plaintext columns dropped) where a null _enc value indicates data
+ * loss or a schema bug, not a legitimate fallback case.
+ */
+export function decryptColumn(
+  enc: Buffer | string | null | undefined,
+  aad: string
+): string {
+  if (enc === null || enc === undefined) {
+    throw new Error(`decryptColumn: encrypted column is null (AAD: ${aad})`);
+  }
+  return decrypt(parseBytea(enc), aad);
+}
+
 export function __resetKeyCacheForTests(): void {
   cachedKey = null;
 }

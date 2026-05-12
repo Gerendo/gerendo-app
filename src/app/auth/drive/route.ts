@@ -60,12 +60,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     workspace_id: workspaceId,
     user_id: userId,
     provider: "google-drive",
-    access_token: tokens.access_token,
     access_token_enc: encryptForBytea(
       tokens.access_token,
       aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
     ),
-    refresh_token: tokens.refresh_token ?? null,
     refresh_token_enc: tokens.refresh_token
       ? encryptForBytea(
           tokens.refresh_token,

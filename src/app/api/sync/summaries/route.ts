@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
 import { openAgencyDb, upsertSummary, getGmailToken } from "@/lib/agency-db";
 import { extractBody } from "@/app/api/sync/gmail/route";
+import { decryptColumn } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export const maxDuration = 300;
 
@@ -27,18 +29,29 @@ export async function POST(): Promise<NextResponse> {
   const BATCH = 50;
 
   // Find messages with no summary yet, most recent first
-  const { data: rows } = await db.supabase
+  const { data: rowsRaw } = await db.supabase
     .from("messages")
-    .select("id, external_id, sender, subject, mailbox")
+    .select("id, external_id, sender, source, subject_enc, mailbox")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .not("id", "in", db.supabase.from("summaries").select("message_id").eq("workspace_id", workspaceId))
     .order("received_at", { ascending: false })
     .limit(BATCH);
 
-  if (!rows || rows.length === 0) {
+  if (!rowsRaw || rowsRaw.length === 0) {
     return NextResponse.json({ summarized: 0, remaining: 0 });
   }
+
+  const rows = rowsRaw.map((r) => ({
+    id: r.id,
+    external_id: r.external_id,
+    sender: r.sender,
+    mailbox: r.mailbox,
+    subject: decryptColumn(
+      r.subject_enc,
+      aad.messagesSubject(workspaceId, userId, r.source, r.external_id)
+    ),
+  }));
 
   let summarized = 0;
 

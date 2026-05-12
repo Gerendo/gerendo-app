@@ -3,7 +3,7 @@ import { createServiceClient } from "./supabase-server";
 import { webpush } from "./push";
 import { hybridAsanaSearch, type AsanaSearchResult } from "./search";
 import type { AgencyDb } from "./agency-db";
-import { decryptOrFallback } from "./crypto-storage";
+import { decryptColumn } from "./crypto-storage";
 import { aad } from "./crypto-aad";
 
 const client = new Anthropic();
@@ -139,16 +139,26 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
   const fourMinsAgo = Date.now() - 4 * 60 * 1000;
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
-  const { data: messages } = await supabase
+  const { data: messagesRaw } = await supabase
     .from("messages")
-    .select("id, external_id, subject, sender")
+    .select("id, external_id, source, subject_enc, sender")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .gte("synced_at", fourMinsAgo)
     .gte("received_at", sevenDaysAgo)
     .limit(30);
 
-  if (!messages?.length) return;
+  if (!messagesRaw?.length) return;
+
+  const messages = messagesRaw.map((m) => ({
+    id: m.id,
+    external_id: m.external_id,
+    sender: m.sender,
+    subject: decryptColumn(
+      m.subject_enc,
+      aad.messagesSubject(workspaceId, userId, m.source, m.external_id)
+    ),
+  }));
 
   // Skip messages already detected
   const externalIds = messages.map((m) => m.external_id);
@@ -166,15 +176,14 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
   // Get keyword texts
   const { data: embeddings } = await supabase
     .from("embeddings")
-    .select("message_id, keyword_text, keyword_text_enc")
+    .select("message_id, keyword_text_enc")
     .in("message_id", newMessages.map((m) => m.id));
 
   const textMap = new Map(
     embeddings?.map((e) => [
       e.message_id,
-      decryptOrFallback(
+      decryptColumn(
         e.keyword_text_enc,
-        e.keyword_text,
         aad.embeddingsKeywordText(workspaceId, e.message_id)
       ),
     ]) ?? []

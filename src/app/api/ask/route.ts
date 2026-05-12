@@ -8,6 +8,8 @@ import { google } from "googleapis";
 import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, checkAndIncrementQuota, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
+import { decryptColumn } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -48,7 +50,7 @@ async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows
 
   let query = db.supabase
     .from("messages")
-    .select("id, external_id, thread_id, sender, subject, mailbox, received_at")
+    .select("id, external_id, thread_id, sender, source, subject_enc, mailbox, received_at")
     .eq("workspace_id", db.workspaceId)
     .eq("user_id", db.userId);
 
@@ -71,7 +73,10 @@ async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows
       externalId: r.external_id,
       threadId: r.thread_id ?? null,
       sender: r.sender,
-      subject: r.subject,
+      subject: decryptColumn(
+        r.subject_enc,
+        aad.messagesSubject(db.workspaceId, db.userId, r.source, r.external_id)
+      ),
       mailbox: r.mailbox ?? "inbox",
       receivedAt: r.received_at,
     })),

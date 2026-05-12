@@ -1,6 +1,6 @@
 import { createServiceClient } from "./supabase-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export type AgencyDb = {
@@ -32,7 +32,6 @@ export async function batchUpsertMessages(
     external_id: msg.externalId,
     thread_id: msg.threadId,
     sender: msg.sender,
-    subject: msg.subject,
     subject_enc: encryptForBytea(
       msg.subject,
       aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -62,7 +61,6 @@ export async function batchUpsertEmbeddings(
     user_id: db.userId,
     message_id: item.messageId,
     embedding: Array.from(item.embedding),
-    keyword_text: item.keywordText,
     keyword_text_enc: encryptForBytea(
       item.keywordText,
       aad.embeddingsKeywordText(db.workspaceId, item.messageId)
@@ -109,7 +107,6 @@ export async function upsertMessage(
       external_id: msg.externalId,
       thread_id: msg.threadId,
       sender: msg.sender,
-      subject: msg.subject,
       subject_enc: encryptForBytea(
         msg.subject,
         aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -151,7 +148,6 @@ export async function upsertEmbedding(
       .from("embeddings")
       .update({
         embedding: vec,
-        keyword_text: keywordText,
         keyword_text_enc: keywordTextEnc,
         indexed_at: Date.now(),
       })
@@ -163,7 +159,6 @@ export async function upsertEmbedding(
       user_id: db.userId,
       message_id: messageId,
       embedding: vec,
-      keyword_text: keywordText,
       keyword_text_enc: keywordTextEnc,
       indexed_at: Date.now(),
     });
@@ -180,7 +175,6 @@ export async function upsertSummary(
     {
       workspace_id: db.workspaceId,
       message_id: messageId,
-      summary,
       summary_enc: encryptForBytea(summary, aad.summariesSummary(db.workspaceId, messageId)),
       summarized_at: Date.now(),
     },
@@ -195,14 +189,13 @@ export async function getSummariesByMessageIds(
   if (messageIds.length === 0) return [];
   const { data } = await db.supabase
     .from("summaries")
-    .select("message_id, summary, summary_enc")
+    .select("message_id, summary_enc")
     .eq("workspace_id", db.workspaceId)
     .in("message_id", messageIds);
   return (data ?? []).map((r) => ({
     messageId: r.message_id,
-    summary: decryptOrFallback(
+    summary: decryptColumn(
       r.summary_enc,
-      r.summary,
       aad.summariesSummary(db.workspaceId, r.message_id)
     ),
   }));
@@ -223,7 +216,6 @@ export async function insertFact(
     message_id: fact.messageId,
     type: fact.type,
     subject: fact.subject,
-    detail: fact.detail,
     detail_enc: encryptForBytea(
       fact.detail,
       aad.factsDetail(db.workspaceId, fact.messageId, fact.type, fact.subject)
@@ -364,7 +356,7 @@ export async function getMessagesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("embeddings")
-    .select("id, message_id, messages(user_id, source, external_id, thread_id, sender, subject, subject_enc, received_at, mailbox)")
+    .select("id, message_id, messages(user_id, source, external_id, thread_id, sender, subject_enc, received_at, mailbox)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -374,9 +366,8 @@ export async function getMessagesByEmbeddingIds(
     externalId: r.messages.external_id,
     threadId: r.messages.thread_id,
     sender: r.messages.sender,
-    subject: decryptOrFallback(
+    subject: decryptColumn(
       r.messages.subject_enc,
-      r.messages.subject,
       aad.messagesSubject(
         db.workspaceId,
         r.messages.user_id,
@@ -466,7 +457,7 @@ export async function getDriveFilesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("drive_embeddings")
-    .select("id, chunk_index, keyword_text, keyword_text_enc, file_id, drive_files(name, mime_type, web_view_link)")
+    .select("id, chunk_index, keyword_text_enc, file_id, drive_files(name, mime_type, web_view_link)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -477,9 +468,8 @@ export async function getDriveFilesByEmbeddingIds(
     mimeType: r.drive_files.mime_type,
     webViewLink: r.drive_files.web_view_link,
     chunkIndex: r.chunk_index,
-    keywordText: decryptOrFallback(
+    keywordText: decryptColumn(
       r.keyword_text_enc,
-      r.keyword_text,
       aad.driveEmbeddingsKeywordText(db.workspaceId, r.file_id, r.chunk_index)
     ),
   }));
@@ -530,7 +520,7 @@ export async function getAsanaItemsByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("asana_embeddings")
-    .select("id, chunk_index, keyword_text, keyword_text_enc, item_id, asana_items(name, project_name, assignee, due_date, status, permalink_url)")
+    .select("id, chunk_index, keyword_text_enc, item_id, asana_items(name, project_name, assignee, due_date, status, permalink_url)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -543,9 +533,8 @@ export async function getAsanaItemsByEmbeddingIds(
     dueDate: r.asana_items.due_date,
     status: r.asana_items.status,
     permalinkUrl: r.asana_items.permalink_url,
-    keywordText: decryptOrFallback(
+    keywordText: decryptColumn(
       r.keyword_text_enc,
-      r.keyword_text,
       aad.asanaEmbeddingsKeywordText(db.workspaceId, r.item_id, r.chunk_index)
     ),
   }));
@@ -567,13 +556,18 @@ export async function getDriveFileContent(workspaceId: string, userId: string, f
   // Get Drive token
   const { data: tokenRow } = await supabase
     .from("oauth_tokens")
-    .select("access_token")
+    .select("access_token_enc")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "google-drive")
     .maybeSingle();
 
   if (!tokenRow) return "(Drive not connected)";
+
+  const accessToken = decryptColumn(
+    tokenRow.access_token_enc,
+    aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
+  );
 
   const EXPORT_MIME: Record<string, string> = {
     "application/vnd.google-apps.document": "text/plain",
@@ -590,7 +584,7 @@ export async function getDriveFileContent(workspaceId: string, userId: string, f
       : `https://www.googleapis.com/drive/v3/files/${file.external_id}?alt=media`;
 
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${tokenRow.access_token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (!res.ok) return `(failed to fetch: ${res.status})`;
@@ -606,7 +600,7 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
+    .select("access_token_enc, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "google-gmail")
@@ -614,11 +608,14 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Gmail not connected");
 
-  const refreshToken = decryptOrFallback(
-    data.refresh_token_enc,
-    data.refresh_token,
-    aad.oauthTokensRefreshToken(workspaceId, userId, "google-gmail")
-  );
+  // refresh_token_enc is legitimately nullable: Google does not always return
+  // a refresh token on token rotation. Decrypt only when present.
+  const refreshToken = data.refresh_token_enc
+    ? decryptColumn(
+        data.refresh_token_enc,
+        aad.oauthTokensRefreshToken(workspaceId, userId, "google-gmail")
+      )
+    : null;
 
   if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -634,7 +631,6 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
     const tokens = await res.json();
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
-        access_token: tokens.access_token,
         access_token_enc: encryptForBytea(
           tokens.access_token,
           aad.oauthTokensAccessToken(workspaceId, userId, "google-gmail")
@@ -645,9 +641,8 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
     }
   }
 
-  return decryptOrFallback(
+  return decryptColumn(
     data.access_token_enc,
-    data.access_token,
     aad.oauthTokensAccessToken(workspaceId, userId, "google-gmail")
   );
 }
@@ -656,7 +651,7 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
+    .select("access_token_enc, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "google-drive")
@@ -664,11 +659,14 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Google Drive not connected");
 
-  const refreshToken = decryptOrFallback(
-    data.refresh_token_enc,
-    data.refresh_token,
-    aad.oauthTokensRefreshToken(workspaceId, userId, "google-drive")
-  );
+  // refresh_token_enc is legitimately nullable: Google does not always return
+  // a refresh token on token rotation. Decrypt only when present.
+  const refreshToken = data.refresh_token_enc
+    ? decryptColumn(
+        data.refresh_token_enc,
+        aad.oauthTokensRefreshToken(workspaceId, userId, "google-drive")
+      )
+    : null;
 
   if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -684,7 +682,6 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
     const tokens = await res.json();
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
-        access_token: tokens.access_token,
         access_token_enc: encryptForBytea(
           tokens.access_token,
           aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
@@ -695,9 +692,8 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
     }
   }
 
-  return decryptOrFallback(
+  return decryptColumn(
     data.access_token_enc,
-    data.access_token,
     aad.oauthTokensAccessToken(workspaceId, userId, "google-drive")
   );
 }
@@ -706,7 +702,7 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("oauth_tokens")
-    .select("access_token, access_token_enc, refresh_token, refresh_token_enc, expires_at")
+    .select("access_token_enc, refresh_token_enc, expires_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("provider", "asana")
@@ -714,11 +710,14 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
 
   if (!data) throw new Error("Asana not connected");
 
-  const refreshToken = decryptOrFallback(
-    data.refresh_token_enc,
-    data.refresh_token,
-    aad.oauthTokensRefreshToken(workspaceId, userId, "asana")
-  );
+  // refresh_token_enc is legitimately nullable: not every OAuth response
+  // includes a refresh token. Decrypt only when present.
+  const refreshToken = data.refresh_token_enc
+    ? decryptColumn(
+        data.refresh_token_enc,
+        aad.oauthTokensRefreshToken(workspaceId, userId, "asana")
+      )
+    : null;
 
   if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
     const res = await fetch("https://app.asana.com/-/oauth_token", {
@@ -734,7 +733,6 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
     const tokens = await res.json();
     if (tokens.access_token) {
       await supabase.from("oauth_tokens").update({
-        access_token: tokens.access_token,
         access_token_enc: encryptForBytea(
           tokens.access_token,
           aad.oauthTokensAccessToken(workspaceId, userId, "asana")
@@ -745,9 +743,8 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
     }
   }
 
-  return decryptOrFallback(
+  return decryptColumn(
     data.access_token_enc,
-    data.access_token,
     aad.oauthTokensAccessToken(workspaceId, userId, "asana")
   );
 }

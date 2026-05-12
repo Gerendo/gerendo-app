@@ -4,6 +4,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
 import { openAgencyDb, upsertWorkspaceContext, getWorkspaceContext, getGmailToken } from "@/lib/agency-db";
 import { extractBody } from "@/app/api/sync/gmail/route";
+import { decryptColumn } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export const maxDuration = 300;
 
@@ -39,9 +41,9 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const ninetyDaysAgo = Date.now() - 90 * 24 * 3600000;
 
-  const { data: sentRows } = await db.supabase
+  const { data: sentRowsRaw } = await db.supabase
     .from("messages")
-    .select("id, external_id, sender, subject, received_at")
+    .select("id, external_id, sender, source, subject_enc, received_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .ilike("mailbox", "sent")
@@ -49,9 +51,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     .order("received_at", { ascending: false })
     .limit(30);
 
-  const { data: receivedRows } = await db.supabase
+  const { data: receivedRowsRaw } = await db.supabase
     .from("messages")
-    .select("id, external_id, sender, subject, received_at")
+    .select("id, external_id, sender, source, subject_enc, received_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .ilike("mailbox", "inbox")
@@ -59,7 +61,20 @@ export async function POST(req: Request): Promise<NextResponse> {
     .order("received_at", { ascending: false })
     .limit(20);
 
-  const allRows = [...(sentRows ?? []), ...(receivedRows ?? [])];
+  const decryptRow = (r: any) => ({
+    id: r.id,
+    external_id: r.external_id,
+    sender: r.sender,
+    received_at: r.received_at,
+    subject: decryptColumn(
+      r.subject_enc,
+      aad.messagesSubject(workspaceId, userId, r.source, r.external_id)
+    ),
+  });
+
+  const sentRows = (sentRowsRaw ?? []).map(decryptRow);
+  const receivedRows = (receivedRowsRaw ?? []).map(decryptRow);
+  const allRows = [...sentRows, ...receivedRows];
 
   if (allRows.length === 0) {
     return NextResponse.json({ error: "No emails found in the last 90 days. Sync emails first." }, { status: 400 });

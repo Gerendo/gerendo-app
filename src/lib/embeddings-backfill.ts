@@ -1,8 +1,10 @@
 import { createServiceClient } from "./supabase-server";
-import { openAgencyDb, getGmailToken } from "./agency-db";
+import { getGmailToken } from "./agency-db";
 import { embedTexts } from "./embed";
 import { google } from "googleapis";
 import { extractBody } from "@/app/api/sync/gmail/route";
+import { encryptForBytea, decryptColumn } from "./crypto-storage";
+import { aad } from "./crypto-aad";
 
 const BATCH = 50;
 
@@ -12,9 +14,9 @@ export async function backfillEmbeddingsForUser(
 ): Promise<{ backfilled: number; remaining: number }> {
   const supabase = createServiceClient();
 
-  const { data: messages } = await supabase
+  const { data: messagesRaw } = await supabase
     .from("messages")
-    .select("id, external_id, subject, sender")
+    .select("id, external_id, source, subject_enc, sender")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .eq("source", "gmail")
@@ -22,9 +24,19 @@ export async function backfillEmbeddingsForUser(
     .order("received_at", { ascending: false })
     .limit(BATCH);
 
-  if (!messages?.length) {
+  if (!messagesRaw?.length) {
     return { backfilled: 0, remaining: 0 };
   }
+
+  const messages = messagesRaw.map((m) => ({
+    id: m.id,
+    external_id: m.external_id,
+    sender: m.sender,
+    subject: decryptColumn(
+      m.subject_enc,
+      aad.messagesSubject(workspaceId, userId, m.source, m.external_id)
+    ),
+  }));
 
   // Try to enrich with real body from Gmail
   let gmail: ReturnType<typeof google.gmail> | null = null;
@@ -66,7 +78,10 @@ export async function backfillEmbeddingsForUser(
       user_id: userId,
       message_id: messageIds[i],
       embedding: Array.from(embeddings[i]),
-      keyword_text: keywordTexts[i],
+      keyword_text_enc: encryptForBytea(
+        keywordTexts[i],
+        aad.embeddingsKeywordText(workspaceId, messageIds[i])
+      ),
       indexed_at: Date.now(),
     });
     if (!error) backfilled++;
