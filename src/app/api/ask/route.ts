@@ -388,6 +388,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   // Keeps the write tool out of reach when the LLM is just reading email context,
   // which limits the blast radius of a prompt injection in an email body.
   const hasWriteIntent = /\b(create|add|make|turn|convert|log|new task|asana task|add to asana|create task|put.*asana|schedule.*asana)\b/i.test(query);
+  const timeSensitive = /\b(overdue|deadline|due|today|this week|tomorrow|next week|currently|right now)\b/i.test(query);
 
   // Build tool list based on connected providers only
   const tools: Anthropic.Tool[] = [
@@ -485,16 +486,24 @@ export async function POST(req: NextRequest): Promise<Response> {
 
       const workspaceCtx = await getWorkspaceContext(db);
 
-      // Build connected tools description for dynamic system block
+      // Build connected tools description for dynamic system block.
+      // Format as "live access to" enumeration so the model treats live tools
+      // as the source of truth for time-sensitive questions.
       const connectedList = [
-        gmailConnected ? "Gmail - email search, summaries (get_email_details), full body fetch (get_email_body)" : null,
-        driveConnected ? "Google Drive - file listing (list_drive_files), full content (get_drive_file_content)" : null,
-        asanaConnected ? `Asana - live task queries (get_asana_tasks)${hasWriteIntent ? " AND task creation (create_asana_task)" : ""}` : null,
+        gmailConnected ? "Gmail. You can search messages, fetch pre-computed summaries (get_email_details), and pull the full raw body live (get_email_body)." : null,
+        driveConnected ? "Google Drive. You can list all indexed files (list_drive_files) and fetch full file content live (get_drive_file_content)." : null,
+        asanaConnected ? `Asana. You can query live task state with filters (get_asana_tasks: by project, by assignee, overdue, due-before, status)${hasWriteIntent ? " and create new tasks (create_asana_task)" : ""}.` : null,
       ].filter(Boolean);
 
+      // Time-sensitive query nudge: any of these keywords means the user wants
+      // current state, not a stale indexed snapshot. Force live tools.
+      const liveNudge = timeSensitive && asanaConnected
+        ? "\n\nTHIS QUERY IS TIME-SENSITIVE. The user asked about current state (overdue / deadline / due / today / this week / tomorrow). You MUST call get_asana_tasks with the appropriate filter. Do NOT answer from the indexed snippets above for this question. Do NOT say 'I only have X tasks indexed.'"
+        : "";
+
       const connectedToolsText = connectedList.length > 0
-        ? `CONNECTED TOOLS FOR THIS WORKSPACE:\n${connectedList.map(t => `- ${t}`).join("\n")}\n\nFor any Asana question about current state (overdue, assigned, due soon), always call get_asana_tasks.\nTo create tasks, call create_asana_task — extract name and details from emails or Drive files already in context, do not ask the user to repeat them.`
-        : `CONNECTED TOOLS FOR THIS WORKSPACE:\nNone connected. Tell the user to visit /connect to set up integrations.`;
+        ? `LIVE ACCESS FOR THIS WORKSPACE:\n${connectedList.map(t => `- ${t}`).join("\n")}\n\nFor any Asana question about current state (overdue, assigned, due soon, this week), always call get_asana_tasks. The indexed snippets in CONTEXT are stale and only meant for keyword discovery, not for authoritative answers about live state.${hasWriteIntent && asanaConnected ? "\nTo create tasks, call create_asana_task and pull name + details from emails or Drive files already in context. Do not ask the user to repeat information you can see." : ""}${liveNudge}`
+        : `LIVE ACCESS FOR THIS WORKSPACE:\nNone connected. Tell the user to visit /connect to set up integrations.`;
 
       const systemBlocks: Anthropic.TextBlockParam[] = [
         {

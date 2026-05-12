@@ -84,6 +84,8 @@ export default function AskPage() {
   const [streamingText, setStreamingText] = useState("");
   const [streamingSources, setStreamingSources] = useState<Source[]>([]);
   const [setupState, setSetupState] = useState<"checking" | "no-tools" | "no-data" | "ready">("checking");
+  const [missingTools, setMissingTools] = useState<string[]>([]);
+  const [suggestedChips, setSuggestedChips] = useState<string[]>([]);
   const [syncingInBackground, setSyncingInBackground] = useState(false);
   const [syncCount, setSyncCount] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -132,6 +134,11 @@ export default function AskPage() {
     ]).then(([status, syncStatus, info]) => {
       const anyConnected = status.connected || status.driveConnected || status.asanaConnected;
       const totalIndexed = (info.emailCount ?? 0) + (info.driveCount ?? 0) + (info.asanaCount ?? 0);
+      const missing: string[] = [];
+      if (!status.connected) missing.push("Gmail");
+      if (!status.driveConnected) missing.push("Drive");
+      if (!status.asanaConnected) missing.push("Asana");
+      setMissingTools(missing);
       if (!anyConnected) setSetupState("no-tools");
       else if (totalIndexed === 0) {
         setSetupState("no-data");
@@ -141,6 +148,12 @@ export default function AskPage() {
         if (syncStatus.status === "running") { setSyncingInBackground(true); setSyncCount(syncStatus.totalSynced); startSyncPoll(); }
       }
     });
+    fetch("/api/workspace/suggestions")
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data?.chips)) setSuggestedChips(data.chips);
+      })
+      .catch(() => {});
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, []);
 
@@ -378,38 +391,37 @@ export default function AskPage() {
               <div className="w-1 h-1 rounded-full bg-[oklch(0.45_0.01_60)] animate-pulse" />
             </div>
           )}
-          {messages.length === 0 && !loading && setupState === "no-tools" && (
-            <div className="mx-auto max-w-sm mt-10 flex flex-col items-center gap-3 text-center">
-              <p className="text-sm" style={{ color: "oklch(0.65 0.015 60)" }}>
-                No tools connected yet - or ask a general question.
-              </p>
-              <a
-                href="/connect"
-                className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-opacity hover:opacity-90"
-                style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
-              >
-                Connect Gmail, Drive, or Asana
+
+          {/* Inline non-blocking banner when at least one tool is missing. Replaces the old hard-gate empty state. */}
+          {messages.length === 0 && !loading && setupState !== "checking" && missingTools.length > 0 && (
+            <div className="mx-auto max-w-md mt-6 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm flex items-center justify-between gap-3 flex-wrap"
+              style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
+              <span>
+                Connect {missingTools.join(", ")} for richer answers. You can still ask now.
+              </span>
+              <a href="/connect" className="underline underline-offset-2 hover:opacity-80 whitespace-nowrap">
+                Connect
               </a>
             </div>
           )}
-          {messages.length === 0 && !loading && setupState === "no-data" && (
-            <div className="mx-auto max-w-sm mt-10 px-4 py-3 rounded-2xl border border-[oklch(0.78_0.14_65/_25%)] text-sm text-center"
-              style={{ background: "oklch(0.78 0.14 65 / 6%)", color: "oklch(0.78 0.14 65)" }}>
-              Tools connected but not synced yet.{" "}
-              <a href="/connect" className="underline underline-offset-2 hover:opacity-80">Sync your data</a>{" "}
-              for full answers — or ask anyway.
-            </div>
-          )}
-          {messages.length === 0 && !loading && (setupState === "ready" || setupState === "no-data") && (
-            <div className="flex flex-col gap-3 mt-8">
+
+          {/* Suggested question chips, always visible on empty state once setup check resolves. */}
+          {messages.length === 0 && !loading && setupState !== "checking" && (
+            <div className="flex flex-col gap-3 mt-6">
               <p className="text-[oklch(0.55_0.012_60)] text-sm">Try asking:</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {["What are my last 5 emails?", "What tasks are overdue in Asana?", "Any emails about invoices this week?", "Summarize what's happening with the Acme project"].map((s) => (
-                <button key={s} onClick={() => { setQuery(s); inputRef.current?.focus(); }}
-                  className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors line-clamp-2">
-                  {s}
-                </button>
-              ))}
+                {(suggestedChips.length > 0
+                  ? suggestedChips
+                  : ["What are my last 5 emails?", "What is overdue in Asana?", "Decisions made this week?", "Summarize what is happening with my clients"]
+                ).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => { setQuery(s); inputRef.current?.focus(); }}
+                    className="text-left text-sm text-[oklch(0.65_0.015_60)] hover:text-white border border-[oklch(1_0_0_/_8%)] hover:border-[oklch(1_0_0_/_18%)] rounded-2xl px-4 py-3 transition-colors line-clamp-2"
+                  >
+                    {s}
+                  </button>
+                ))}
               </div>
             </div>
           )}
