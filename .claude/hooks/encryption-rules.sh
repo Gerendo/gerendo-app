@@ -9,19 +9,20 @@ you MUST follow the pattern.
 
 WRITE: encryptForBytea(plaintext, aad.<builder>(...)) → goes into the _enc bytea column.
        NEVER pass raw encrypt() Buffer to Supabase JS — it JSON-wraps the bytes.
-       Both plaintext and _enc columns are populated during Phase 1.
-READ:  decryptOrFallback(row.column_enc, row.column, aad.<builder>(...))
-       NEVER read the plaintext column directly for sensitive data.
+       Plaintext columns were dropped in Phase 2. Write only the _enc column.
+READ:  decryptColumn(row.column_enc, aad.<builder>(...))
+       Throws on null. decryptOrFallback is the Phase 1 helper, kept for
+       backward compat but use decryptColumn in new code.
 
-Sensitive (table, column) pairs:
-  messages.subject               / subject_enc
-  embeddings.keyword_text        / keyword_text_enc
-  drive_embeddings.keyword_text  / keyword_text_enc
-  asana_embeddings.keyword_text  / keyword_text_enc
-  summaries.summary              / summary_enc
-  facts.detail                   / detail_enc
-  oauth_tokens.access_token      / access_token_enc
-  oauth_tokens.refresh_token     / refresh_token_enc
+Sensitive _enc columns (the only columns now — plaintext counterparts dropped):
+  messages.subject_enc
+  embeddings.keyword_text_enc
+  drive_embeddings.keyword_text_enc
+  asana_embeddings.keyword_text_enc
+  summaries.summary_enc
+  facts.detail_enc
+  oauth_tokens.access_token_enc
+  oauth_tokens.refresh_token_enc
 
 AAD builders are in src/lib/crypto-aad.ts. Write side and read side MUST use the
 same builder for the same (table, column). For free-form string fields in AAD
