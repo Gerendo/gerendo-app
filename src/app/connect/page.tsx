@@ -211,7 +211,12 @@ function ConnectPageInner() {
       });
 
     return () => { cancelled = true; };
-  }, [authChecked, connectedTools, toolStatus.asana, asanaPicker.status]);
+    // asanaPicker.status intentionally excluded: when this effect sets status to
+    // "loading", we don't want React to re-run the effect (which would fire the
+    // cleanup and cancel the in-flight fetch). The guard inside still reads the
+    // current status via closure for the entry decision.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, connectedTools, toolStatus.asana]);
 
   // Auto-open the modal once when picker becomes ready and there are no saved defaults.
   useEffect(() => {
