@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { createServiceClient } from "@/lib/supabase-server";
+import { decryptOrFallback } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
   const _ws = await requireWorkspace();
@@ -23,9 +25,11 @@ export async function GET(): Promise<NextResponse> {
   // Pull top Asana projects (recent activity) for personalization.
   let topProjectName: string | null = null;
   if (asanaConnected) {
+    // Phase 3a note: filter still uses plaintext project_name. Phase 3b drops
+    // plaintext and this needs to switch to a NOT-NULL check on project_name_enc.
     const { data: items } = await service
       .from("asana_items")
-      .select("project_name, modified_at")
+      .select("external_id, project_name, project_name_enc, modified_at")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userId)
       .not("project_name", "is", null)
@@ -34,7 +38,13 @@ export async function GET(): Promise<NextResponse> {
     if (items?.length) {
       const counts = new Map<string, number>();
       for (const r of items) {
-        const name = (r.project_name as string | null) ?? "";
+        const name = r.project_name_enc
+          ? decryptOrFallback(
+              r.project_name_enc as Buffer | string,
+              (r.project_name as string | null) ?? null,
+              aad.asanaItemsProjectName(workspaceId, userId, r.external_id as string)
+            )
+          : ((r.project_name as string | null) ?? "");
         if (!name) continue;
         counts.set(name, (counts.get(name) ?? 0) + 1);
       }

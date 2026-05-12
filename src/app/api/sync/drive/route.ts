@@ -87,6 +87,10 @@ async function syncFile(
       user_id: userId,
       external_id: file.id,
       name: file.name,
+      name_enc: encryptForBytea(
+        file.name,
+        aad.driveFilesName(workspaceId, userId, file.id)
+      ),
       mime_type: file.mimeType,
       parent_id: file.parents?.[0] ?? null,
       web_view_link: file.webViewLink ?? null,

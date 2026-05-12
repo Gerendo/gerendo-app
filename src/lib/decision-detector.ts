@@ -3,7 +3,7 @@ import { createServiceClient } from "./supabase-server";
 import { webpush } from "./push";
 import { hybridAsanaSearch, type AsanaSearchResult } from "./search";
 import type { AgencyDb } from "./agency-db";
-import { decryptColumn } from "./crypto-storage";
+import { decryptColumn, decryptOrFallback, encryptForBytea } from "./crypto-storage";
 import { aad } from "./crypto-aad";
 
 const client = new Anthropic();
@@ -141,7 +141,7 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
 
   const { data: messagesRaw } = await supabase
     .from("messages")
-    .select("id, external_id, source, subject_enc, sender")
+    .select("id, external_id, source, subject_enc, sender, sender_enc")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .gte("synced_at", fourMinsAgo)
@@ -153,7 +153,11 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
   const messages = messagesRaw.map((m) => ({
     id: m.id,
     external_id: m.external_id,
-    sender: m.sender,
+    sender: decryptOrFallback(
+      m.sender_enc,
+      m.sender,
+      aad.messagesSender(workspaceId, userId, m.source, m.external_id)
+    ),
     subject: decryptColumn(
       m.subject_enc,
       aad.messagesSubject(workspaceId, userId, m.source, m.external_id)
@@ -239,7 +243,15 @@ export async function detectDecisionsForUser(workspaceId: string, userId: string
         source: "gmail",
         source_external_id: message.external_id,
         decision_summary: extracted.summary,
+        decision_summary_enc: encryptForBytea(
+          extracted.summary,
+          aad.driftFindingsDecisionSummary(workspaceId, userId, "gmail", message.external_id)
+        ),
         draft_update: extracted.draftUpdate,
+        draft_update_enc: encryptForBytea(
+          extracted.draftUpdate,
+          aad.driftFindingsDraftUpdate(workspaceId, userId, "gmail", message.external_id)
+        ),
         asana_item_id: extracted.asanaItemId,
         status: "pending",
       })

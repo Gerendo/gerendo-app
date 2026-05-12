@@ -4,6 +4,8 @@ import { asana as asanaActions } from "@/lib/actions";
 import { findProjectByName } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
+import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 function gmailUrlForExternal(externalId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${externalId}`;
@@ -47,7 +49,7 @@ export async function POST(
   const { data: finding } = await service
     .from("drift_findings")
     .select(
-      "id, workspace_id, user_id, decision_summary, draft_update, asana_item_id, status, source, source_external_id"
+      "id, workspace_id, user_id, decision_summary, decision_summary_enc, draft_update, draft_update_enc, asana_item_id, status, source, source_external_id"
     )
     .eq("id", findingId)
     .maybeSingle();
@@ -61,6 +63,19 @@ export async function POST(
   }
 
   const workspaceId = finding.workspace_id as string;
+  const findingUserId = finding.user_id as string;
+  const findingSource = finding.source as string;
+  const findingSourceExternalId = finding.source_external_id as string;
+  const decisionSummary = decryptOrFallback(
+    finding.decision_summary_enc as Buffer | null | undefined,
+    finding.decision_summary as string | null,
+    aad.driftFindingsDecisionSummary(workspaceId, findingUserId, findingSource, findingSourceExternalId)
+  );
+  const draftUpdate = decryptOrFallback(
+    finding.draft_update_enc as Buffer | null | undefined,
+    finding.draft_update as string | null,
+    aad.driftFindingsDraftUpdate(workspaceId, findingUserId, findingSource, findingSourceExternalId)
+  );
 
   const { data: settings } = await service
     .from("workspace_settings")
@@ -118,10 +133,7 @@ export async function POST(
     };
   } else {
     try {
-      const shape = await extractProjectShape(
-        finding.decision_summary as string,
-        finding.draft_update as string
-      );
+      const shape = await extractProjectShape(decisionSummary, draftUpdate);
       extracted = {
         projectName: bodyProjectName ?? shape.projectName,
         sectionName: bodySectionName ?? shape.sectionName,
@@ -208,9 +220,9 @@ export async function POST(
     await asanaActions.addComment(
       ctx,
       taskGid,
-      finding.draft_update as string,
-      finding.source === "gmail"
-        ? gmailUrlForExternal(finding.source_external_id as string)
+      draftUpdate,
+      findingSource === "gmail"
+        ? gmailUrlForExternal(findingSourceExternalId)
         : undefined
     );
   } catch (err: unknown) {
@@ -228,10 +240,32 @@ export async function POST(
         external_id: taskGid,
         type: "task",
         name: taskName,
+        name_enc: encryptForBytea(
+          taskName,
+          aad.asanaItemsName(workspaceId, user.id, taskGid)
+        ),
         project_name: projectName,
+        project_name_enc: projectName
+          ? encryptForBytea(
+              projectName,
+              aad.asanaItemsProjectName(workspaceId, user.id, taskGid)
+            )
+          : null,
         due_date: extracted.dueOn,
+        due_date_enc: extracted.dueOn
+          ? encryptForBytea(
+              extracted.dueOn,
+              aad.asanaItemsDueDate(workspaceId, user.id, taskGid)
+            )
+          : null,
         status: "open",
         permalink_url: taskPermalink,
+        permalink_url_enc: taskPermalink
+          ? encryptForBytea(
+              taskPermalink,
+              aad.asanaItemsPermalinkUrl(workspaceId, user.id, taskGid)
+            )
+          : null,
         modified_at: Date.now(),
         synced_at: Date.now(),
       },
@@ -248,18 +282,23 @@ export async function POST(
   }
 
   // Resolve the drift finding.
+  const resolutionNote = "created_new_project";
   await service
     .from("drift_findings")
     .update({
       asana_item_id: itemRow.id as number,
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: "created_new_project",
+      resolution_note: resolutionNote,
+      resolution_note_enc: encryptForBytea(
+        resolutionNote,
+        aad.driftFindingsResolutionNote(workspaceId, findingUserId, findingSource, findingSourceExternalId)
+      ),
     })
     .eq("id", findingId);
 
   // Best-effort team broadcast — no participant narrowing on a brand-new task.
-  broadcastToTeam(workspaceId, user.id, finding.decision_summary as string, taskName).catch((err) =>
+  broadcastToTeam(workspaceId, user.id, decisionSummary, taskName).catch((err) =>
     console.error("[drift create-project] broadcast error:", err)
   );
 

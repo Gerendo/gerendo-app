@@ -4,6 +4,8 @@ import { asana as asanaActions } from "@/lib/actions";
 import { getTaskParticipantEmails } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
+import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 const MONTHS = [
   "january", "february", "march", "april", "may", "june",
@@ -58,7 +60,7 @@ export async function POST(
 
   const { data: finding } = await service
     .from("drift_findings")
-    .select("id, workspace_id, user_id, decision_summary, draft_update, asana_item_id, status, source, source_external_id")
+    .select("id, workspace_id, user_id, decision_summary, decision_summary_enc, draft_update, draft_update_enc, asana_item_id, status, source, source_external_id")
     .eq("id", findingId)
     .maybeSingle();
 
@@ -69,6 +71,21 @@ export async function POST(
   if (finding.status !== "pending") {
     return NextResponse.json({ status: "already-resolved", finding_status: finding.status });
   }
+
+  const findingWsId = finding.workspace_id as string;
+  const findingUserId = finding.user_id as string;
+  const findingSource = finding.source as string;
+  const findingSourceExternalId = finding.source_external_id as string;
+  const decisionSummary = decryptOrFallback(
+    finding.decision_summary_enc as Buffer | null | undefined,
+    finding.decision_summary as string | null,
+    aad.driftFindingsDecisionSummary(findingWsId, findingUserId, findingSource, findingSourceExternalId)
+  );
+  const draftUpdate = decryptOrFallback(
+    finding.draft_update_enc as Buffer | null | undefined,
+    finding.draft_update as string | null,
+    aad.driftFindingsDraftUpdate(findingWsId, findingUserId, findingSource, findingSourceExternalId)
+  );
 
   const ctx = {
     workspaceId: finding.workspace_id as string,
@@ -83,11 +100,17 @@ export async function POST(
   if (finding.asana_item_id) {
     const { data: asanaItem } = await service
       .from("asana_items")
-      .select("external_id, name")
+      .select("user_id, external_id, name, name_enc")
       .eq("id", finding.asana_item_id)
       .maybeSingle();
     taskGid = asanaItem?.external_id ?? null;
-    taskName = asanaItem?.name ?? null;
+    taskName = asanaItem
+      ? decryptOrFallback(
+          asanaItem.name_enc as Buffer | null | undefined,
+          asanaItem.name as string | null,
+          aad.asanaItemsName(findingWsId, asanaItem.user_id as string, asanaItem.external_id as string)
+        )
+      : null;
   }
 
   // No match found at detect time. Run Sonnet to suggest a project shape so the SW
@@ -96,10 +119,7 @@ export async function POST(
   if (!taskGid) {
     let shape;
     try {
-      shape = await extractProjectShape(
-        finding.decision_summary as string,
-        finding.draft_update as string
-      );
+      shape = await extractProjectShape(decisionSummary, draftUpdate);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       return NextResponse.json(
@@ -124,7 +144,7 @@ export async function POST(
   }
 
   if (taskGid) {
-    const detectedDate = extractDateFromText(finding.decision_summary as string);
+    const detectedDate = extractDateFromText(decisionSummary);
     if (detectedDate) {
       try {
         const r = await asanaActions.updateTask(ctx, taskGid, { due_on: detectedDate });
@@ -142,8 +162,8 @@ export async function POST(
       const r = await asanaActions.addComment(
         ctx,
         taskGid,
-        finding.draft_update as string,
-        finding.source === "gmail" ? gmailUrlForExternal(finding.source_external_id as string) : undefined
+        draftUpdate,
+        finding.source === "gmail" ? gmailUrlForExternal(findingSourceExternalId) : undefined
       );
       results.push({ action: "asana.add_comment", logId: r.logId, ok: true });
     } catch (err: unknown) {
@@ -155,12 +175,19 @@ export async function POST(
     }
   }
 
+  const resolutionNote = taskGid ? null : "no_asana_task_linked";
   await service
     .from("drift_findings")
     .update({
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: taskGid ? null : "no_asana_task_linked",
+      resolution_note: resolutionNote,
+      resolution_note_enc: resolutionNote
+        ? encryptForBytea(
+            resolutionNote,
+            aad.driftFindingsResolutionNote(findingWsId, findingUserId, findingSource, findingSourceExternalId)
+          )
+        : null,
     })
     .eq("id", findingId);
 
@@ -168,7 +195,7 @@ export async function POST(
   broadcastToTeam(
     ctx.workspaceId,
     user.id,
-    finding.decision_summary as string,
+    decisionSummary,
     taskName,
     taskGid
   ).catch((err) => console.error("[drift accept] broadcast error:", err));

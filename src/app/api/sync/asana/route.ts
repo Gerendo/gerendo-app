@@ -48,6 +48,11 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
 
   const modifiedAt = new Date(task.modified_at ?? Date.now()).getTime();
 
+  const assignee = task.assignee?.name ?? null;
+  const dueDate = task.due_on ?? null;
+  const notes = task.notes ?? null;
+  const permalinkUrl = task.permalink_url ?? null;
+
   const { data: itemRow } = await supabase
     .from("asana_items")
     .upsert({
@@ -56,12 +61,46 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
       external_id: task.gid,
       type: "task",
       name: task.name,
+      name_enc: encryptForBytea(
+        task.name,
+        aad.asanaItemsName(workspaceId, userId, task.gid)
+      ),
       project_name: projectName,
-      assignee: task.assignee?.name ?? null,
-      due_date: task.due_on ?? null,
+      project_name_enc: projectName
+        ? encryptForBytea(
+            projectName,
+            aad.asanaItemsProjectName(workspaceId, userId, task.gid)
+          )
+        : null,
+      assignee,
+      assignee_enc: assignee
+        ? encryptForBytea(
+            assignee,
+            aad.asanaItemsAssignee(workspaceId, userId, task.gid)
+          )
+        : null,
+      due_date: dueDate,
+      due_date_enc: dueDate
+        ? encryptForBytea(
+            dueDate,
+            aad.asanaItemsDueDate(workspaceId, userId, task.gid)
+          )
+        : null,
       status: task.completed ? "completed" : "open",
-      notes: task.notes ?? null,
-      permalink_url: task.permalink_url ?? null,
+      notes,
+      notes_enc: notes
+        ? encryptForBytea(
+            notes,
+            aad.asanaItemsNotes(workspaceId, userId, task.gid)
+          )
+        : null,
+      permalink_url: permalinkUrl,
+      permalink_url_enc: permalinkUrl
+        ? encryptForBytea(
+            permalinkUrl,
+            aad.asanaItemsPermalinkUrl(workspaceId, userId, task.gid)
+          )
+        : null,
       modified_at: modifiedAt,
       synced_at: Date.now(),
     }, { onConflict: "workspace_id,user_id,external_id" })
@@ -149,6 +188,12 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
             comments ? `Comments:\n${comments}` : null,
           ].filter(Boolean).join("\n");
 
+          const assignee = task.assignee?.name ?? null;
+          const dueDate = task.due_on ?? null;
+          const notes = task.notes ?? null;
+          const permalinkUrl = task.permalink_url ?? null;
+          const projectName = project.name as string;
+
           const { data: itemRow, error: itemErr } = await supabase
             .from("asana_items")
             .upsert({
@@ -157,12 +202,46 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
               external_id: task.gid,
               type: "task",
               name: task.name,
-              project_name: project.name,
-              assignee: task.assignee?.name ?? null,
-              due_date: task.due_on ?? null,
+              name_enc: encryptForBytea(
+                task.name,
+                aad.asanaItemsName(workspaceId, userId, task.gid)
+              ),
+              project_name: projectName,
+              project_name_enc: projectName
+                ? encryptForBytea(
+                    projectName,
+                    aad.asanaItemsProjectName(workspaceId, userId, task.gid)
+                  )
+                : null,
+              assignee,
+              assignee_enc: assignee
+                ? encryptForBytea(
+                    assignee,
+                    aad.asanaItemsAssignee(workspaceId, userId, task.gid)
+                  )
+                : null,
+              due_date: dueDate,
+              due_date_enc: dueDate
+                ? encryptForBytea(
+                    dueDate,
+                    aad.asanaItemsDueDate(workspaceId, userId, task.gid)
+                  )
+                : null,
               status: task.completed ? "completed" : "open",
-              notes: task.notes ?? null,
-              permalink_url: task.permalink_url ?? null,
+              notes,
+              notes_enc: notes
+                ? encryptForBytea(
+                    notes,
+                    aad.asanaItemsNotes(workspaceId, userId, task.gid)
+                  )
+                : null,
+              permalink_url: permalinkUrl,
+              permalink_url_enc: permalinkUrl
+                ? encryptForBytea(
+                    permalinkUrl,
+                    aad.asanaItemsPermalinkUrl(workspaceId, userId, task.gid)
+                  )
+                : null,
               modified_at: modifiedAt,
               synced_at: Date.now(),
             }, { onConflict: "workspace_id,user_id,external_id" })

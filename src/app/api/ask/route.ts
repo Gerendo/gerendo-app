@@ -8,7 +8,7 @@ import { google } from "googleapis";
 import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, checkAndIncrementQuota, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
-import { decryptColumn } from "@/lib/crypto-storage";
+import { decryptColumn, decryptOrFallback } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -48,9 +48,11 @@ async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows
     return { rows: [], count: count ?? 0 };
   }
 
+  // Phase 3a note: sender ilike filters below still hit the plaintext column.
+  // Phase 3b will need an app-layer post-filter once the plaintext column is dropped.
   let query = db.supabase
     .from("messages")
-    .select("id, external_id, thread_id, sender, source, subject_enc, mailbox, received_at")
+    .select("id, external_id, thread_id, thread_id_enc, sender, sender_enc, source, subject_enc, mailbox, received_at")
     .eq("workspace_id", db.workspaceId)
     .eq("user_id", db.userId);
 
@@ -68,18 +70,32 @@ async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows
 
   const { data } = await query;
   return {
-    rows: (data ?? []).map((r) => ({
-      id: r.id,
-      externalId: r.external_id,
-      threadId: r.thread_id ?? null,
-      sender: r.sender,
-      subject: decryptColumn(
-        r.subject_enc,
-        aad.messagesSubject(db.workspaceId, db.userId, r.source, r.external_id)
-      ),
-      mailbox: r.mailbox ?? "inbox",
-      receivedAt: r.received_at,
-    })),
+    rows: (data ?? []).map((r) => {
+      const threadIdPlain = r.thread_id ?? null;
+      const threadId = r.thread_id_enc
+        ? decryptOrFallback(
+            r.thread_id_enc,
+            threadIdPlain,
+            aad.messagesThreadId(db.workspaceId, db.userId, r.source, r.external_id)
+          )
+        : threadIdPlain;
+      return {
+        id: r.id,
+        externalId: r.external_id,
+        threadId: threadId || null,
+        sender: decryptOrFallback(
+          r.sender_enc,
+          r.sender,
+          aad.messagesSender(db.workspaceId, db.userId, r.source, r.external_id)
+        ),
+        subject: decryptColumn(
+          r.subject_enc,
+          aad.messagesSubject(db.workspaceId, db.userId, r.source, r.external_id)
+        ),
+        mailbox: r.mailbox ?? "inbox",
+        receivedAt: r.received_at,
+      };
+    }),
   };
 }
 
@@ -595,7 +611,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             } else if (toolUse.name === "list_drive_files") {
               const { data: driveFiles } = await db.supabase
                 .from("drive_files")
-                .select("id, name, mime_type, web_view_link, modified_at")
+                .select("id, user_id, external_id, name, name_enc, mime_type, web_view_link, modified_at")
                 .eq("workspace_id", db.workspaceId)
                 .order("modified_at", { ascending: false });
 
@@ -608,13 +624,18 @@ export async function POST(req: NextRequest): Promise<Response> {
                     : f.mime_type.includes("document") ? "Doc"
                     : f.mime_type.includes("presentation") ? "Slides"
                     : "File";
+                  const fileName = decryptOrFallback(
+                    f.name_enc,
+                    f.name,
+                    aad.driveFilesName(db.workspaceId, f.user_id, f.external_id)
+                  );
                   if (f.web_view_link) {
                     writer.write(encoder.encode(`data: ${JSON.stringify({
                       type: "source",
-                      source: { ref, label: f.name, sublabel: type, url: f.web_view_link, kind: "drive" },
+                      source: { ref, label: fileName, sublabel: type, url: f.web_view_link, kind: "drive" },
                     })}\n\n`));
                   }
-                  return `[${ref}] id:${f.id} | ${f.name} (${type}) | ${f.web_view_link ?? "no link"} | Modified: ${new Date(f.modified_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
+                  return `[${ref}] id:${f.id} | ${fileName} (${type}) | ${f.web_view_link ?? "no link"} | Modified: ${new Date(f.modified_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
                 }).join("\n");
               }
 

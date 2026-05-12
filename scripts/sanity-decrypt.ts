@@ -23,9 +23,11 @@ function asBuf(v: unknown): Buffer {
 }
 
 async function checkMessages(): Promise<Check[]> {
+  // Post-Phase-2: plaintext `subject` column is gone. Only verify that
+  // subject_enc decrypts to something non-empty without throwing.
   const { data, error } = await sb
     .from("messages")
-    .select("id, workspace_id, user_id, source, external_id, subject, subject_enc")
+    .select("id, workspace_id, user_id, source, external_id, subject_enc")
     .not("subject_enc", "is", null)
     .limit(3);
   if (error) throw error;
@@ -33,13 +35,12 @@ async function checkMessages(): Promise<Check[]> {
     try {
       const aadStr = aad.messagesSubject(r.workspace_id, r.user_id, r.source, r.external_id);
       const decrypted = decrypt(asBuf(r.subject_enc), aadStr);
-      const ok = decrypted === r.subject;
       return {
         table: "messages",
         column: "subject",
         row_id: String(r.id),
-        ok,
-        detail: ok ? `"${r.subject.slice(0, 40)}..."` : `MISMATCH plaintext="${r.subject?.slice(0, 30)}" decrypted="${decrypted.slice(0, 30)}"`,
+        ok: true,
+        detail: `decrypted "${decrypted.slice(0, 40)}${decrypted.length > 40 ? "..." : ""}"`,
       };
     } catch (e) {
       return { table: "messages", column: "subject", row_id: String(r.id), ok: false, detail: `THREW: ${(e as Error).message}` };
@@ -48,9 +49,10 @@ async function checkMessages(): Promise<Check[]> {
 }
 
 async function checkEmbeddings(): Promise<Check[]> {
+  // Post-Phase-2: plaintext keyword_text column gone. Decrypt-only check.
   const { data, error } = await sb
     .from("embeddings")
-    .select("id, workspace_id, message_id, keyword_text, keyword_text_enc")
+    .select("id, workspace_id, message_id, keyword_text_enc")
     .not("keyword_text_enc", "is", null)
     .limit(3);
   if (error) throw error;
@@ -58,13 +60,12 @@ async function checkEmbeddings(): Promise<Check[]> {
     try {
       const aadStr = aad.embeddingsKeywordText(r.workspace_id, r.message_id);
       const decrypted = decrypt(asBuf(r.keyword_text_enc), aadStr);
-      const ok = decrypted === r.keyword_text;
       return {
         table: "embeddings",
         column: "keyword_text",
         row_id: String(r.id),
-        ok,
-        detail: ok ? `${r.keyword_text.length} bytes match` : `MISMATCH plaintext_len=${r.keyword_text?.length} decrypted_len=${decrypted.length}`,
+        ok: true,
+        detail: `${decrypted.length} bytes decrypted`,
       };
     } catch (e) {
       return { table: "embeddings", column: "keyword_text", row_id: String(r.id), ok: false, detail: `THREW: ${(e as Error).message}` };
@@ -73,22 +74,22 @@ async function checkEmbeddings(): Promise<Check[]> {
 }
 
 async function checkTokens(): Promise<Check[]> {
+  // Post-Phase-2: plaintext access_token column gone. Decrypt-only check.
   const { data, error } = await sb
     .from("oauth_tokens")
-    .select("id, workspace_id, user_id, provider, access_token, access_token_enc")
+    .select("id, workspace_id, user_id, provider, access_token_enc")
     .not("access_token_enc", "is", null);
   if (error) throw error;
   return (data ?? []).map((r) => {
     try {
       const aadStr = aad.oauthTokensAccessToken(r.workspace_id, r.user_id, r.provider);
       const decrypted = decrypt(asBuf(r.access_token_enc), aadStr);
-      const ok = decrypted === r.access_token;
       return {
         table: "oauth_tokens",
         column: "access_token",
         row_id: `${r.provider}/${r.user_id.slice(0, 8)}`,
-        ok,
-        detail: ok ? `${r.access_token.length} bytes match` : `MISMATCH plaintext_len=${r.access_token?.length} decrypted_len=${decrypted.length}`,
+        ok: true,
+        detail: `${decrypted.length} bytes decrypted`,
       };
     } catch (e) {
       return { table: "oauth_tokens", column: "access_token", row_id: `${r.provider}/${r.user_id.slice(0, 8)}`, ok: false, detail: `THREW: ${(e as Error).message}` };

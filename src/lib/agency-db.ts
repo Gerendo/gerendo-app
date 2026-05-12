@@ -1,6 +1,6 @@
 import { createServiceClient } from "./supabase-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
+import { encryptForBytea, decryptColumn, decryptOrFallback } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export type AgencyDb = {
@@ -31,7 +31,17 @@ export async function batchUpsertMessages(
     source: msg.source,
     external_id: msg.externalId,
     thread_id: msg.threadId,
+    thread_id_enc: msg.threadId
+      ? encryptForBytea(
+          msg.threadId,
+          aad.messagesThreadId(db.workspaceId, db.userId, msg.source, msg.externalId)
+        )
+      : null,
     sender: msg.sender,
+    sender_enc: encryptForBytea(
+      msg.sender,
+      aad.messagesSender(db.workspaceId, db.userId, msg.source, msg.externalId)
+    ),
     subject_enc: encryptForBytea(
       msg.subject,
       aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -106,7 +116,17 @@ export async function upsertMessage(
       source: msg.source,
       external_id: msg.externalId,
       thread_id: msg.threadId,
+      thread_id_enc: msg.threadId
+        ? encryptForBytea(
+            msg.threadId,
+            aad.messagesThreadId(db.workspaceId, db.userId, msg.source, msg.externalId)
+          )
+        : null,
       sender: msg.sender,
+      sender_enc: encryptForBytea(
+        msg.sender,
+        aad.messagesSender(db.workspaceId, db.userId, msg.source, msg.externalId)
+      ),
       subject_enc: encryptForBytea(
         msg.subject,
         aad.messagesSubject(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -356,28 +376,38 @@ export async function getMessagesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("embeddings")
-    .select("id, message_id, messages(user_id, source, external_id, thread_id, sender, subject_enc, received_at, mailbox)")
+    .select("id, message_id, messages(user_id, source, external_id, thread_id, thread_id_enc, sender, sender_enc, subject_enc, received_at, mailbox)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
-  return (data ?? []).map((r: any) => ({
-    embeddingId: r.id,
-    source: r.messages.source,
-    externalId: r.messages.external_id,
-    threadId: r.messages.thread_id,
-    sender: r.messages.sender,
-    subject: decryptColumn(
-      r.messages.subject_enc,
-      aad.messagesSubject(
-        db.workspaceId,
-        r.messages.user_id,
-        r.messages.source,
-        r.messages.external_id
-      )
-    ),
-    receivedAt: r.messages.received_at,
-    mailbox: r.messages.mailbox,
-  }));
+  return (data ?? []).map((r: any) => {
+    const m = r.messages;
+    const threadIdPlain = m.thread_id ?? null;
+    const threadId = m.thread_id_enc
+      ? decryptOrFallback(
+          m.thread_id_enc,
+          threadIdPlain,
+          aad.messagesThreadId(db.workspaceId, m.user_id, m.source, m.external_id)
+        )
+      : threadIdPlain;
+    return {
+      embeddingId: r.id,
+      source: m.source,
+      externalId: m.external_id,
+      threadId: threadId || null,
+      sender: decryptOrFallback(
+        m.sender_enc,
+        m.sender,
+        aad.messagesSender(db.workspaceId, m.user_id, m.source, m.external_id)
+      ),
+      subject: decryptColumn(
+        m.subject_enc,
+        aad.messagesSubject(db.workspaceId, m.user_id, m.source, m.external_id)
+      ),
+      receivedAt: m.received_at,
+      mailbox: m.mailbox,
+    };
+  });
 }
 
 export async function upsertWorkspaceContext(
@@ -390,6 +420,10 @@ export async function upsertWorkspaceContext(
     {
       workspace_id: db.workspaceId,
       context_text: contextText,
+      context_text_enc: encryptForBytea(
+        contextText,
+        aad.workspaceContextsContextText(db.workspaceId)
+      ),
       built_at: Date.now(),
       sources_used: sourcesUsed,
       token_count: tokenCount,
@@ -403,11 +437,16 @@ export async function getWorkspaceContext(
 ): Promise<{ contextText: string; builtAt: number; sourcesUsed: number } | null> {
   const { data } = await db.supabase
     .from("workspace_contexts")
-    .select("context_text, built_at, sources_used")
+    .select("context_text, context_text_enc, built_at, sources_used")
     .eq("workspace_id", db.workspaceId)
     .maybeSingle();
   if (!data) return null;
-  return { contextText: data.context_text, builtAt: data.built_at, sourcesUsed: data.sources_used };
+  const contextText = decryptOrFallback(
+    data.context_text_enc,
+    data.context_text,
+    aad.workspaceContextsContextText(db.workspaceId)
+  );
+  return { contextText, builtAt: data.built_at, sourcesUsed: data.sources_used };
 }
 
 export async function ftsDriveSearch(
@@ -457,22 +496,29 @@ export async function getDriveFilesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("drive_embeddings")
-    .select("id, chunk_index, keyword_text_enc, file_id, drive_files(name, mime_type, web_view_link)")
+    .select("id, chunk_index, keyword_text_enc, file_id, drive_files(user_id, external_id, name, name_enc, mime_type, web_view_link)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
-  return (data ?? []).map((r: any) => ({
-    embeddingId: r.id,
-    fileId: r.file_id,
-    name: r.drive_files.name,
-    mimeType: r.drive_files.mime_type,
-    webViewLink: r.drive_files.web_view_link,
-    chunkIndex: r.chunk_index,
-    keywordText: decryptColumn(
-      r.keyword_text_enc,
-      aad.driveEmbeddingsKeywordText(db.workspaceId, r.file_id, r.chunk_index)
-    ),
-  }));
+  return (data ?? []).map((r: any) => {
+    const f = r.drive_files;
+    return {
+      embeddingId: r.id,
+      fileId: r.file_id,
+      name: decryptOrFallback(
+        f.name_enc,
+        f.name,
+        aad.driveFilesName(db.workspaceId, f.user_id, f.external_id)
+      ),
+      mimeType: f.mime_type,
+      webViewLink: f.web_view_link,
+      chunkIndex: r.chunk_index,
+      keywordText: decryptColumn(
+        r.keyword_text_enc,
+        aad.driveEmbeddingsKeywordText(db.workspaceId, r.file_id, r.chunk_index)
+      ),
+    };
+  });
 }
 
 export async function ftsAsanaSearch(
@@ -520,24 +566,55 @@ export async function getAsanaItemsByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("asana_embeddings")
-    .select("id, chunk_index, keyword_text_enc, item_id, asana_items(name, project_name, assignee, due_date, status, permalink_url)")
+    .select("id, chunk_index, keyword_text_enc, item_id, asana_items(user_id, external_id, name, name_enc, project_name, project_name_enc, assignee, assignee_enc, due_date, due_date_enc, status, permalink_url, permalink_url_enc)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
-  return (data ?? []).map((r: any) => ({
-    embeddingId: r.id,
-    itemId: r.item_id,
-    name: r.asana_items.name,
-    projectName: r.asana_items.project_name,
-    assignee: r.asana_items.assignee,
-    dueDate: r.asana_items.due_date,
-    status: r.asana_items.status,
-    permalinkUrl: r.asana_items.permalink_url,
-    keywordText: decryptColumn(
-      r.keyword_text_enc,
-      aad.asanaEmbeddingsKeywordText(db.workspaceId, r.item_id, r.chunk_index)
-    ),
-  }));
+  return (data ?? []).map((r: any) => {
+    const it = r.asana_items;
+    return {
+      embeddingId: r.id,
+      itemId: r.item_id,
+      name: decryptOrFallback(
+        it.name_enc,
+        it.name,
+        aad.asanaItemsName(db.workspaceId, it.user_id, it.external_id)
+      ),
+      projectName: it.project_name_enc
+        ? decryptOrFallback(
+            it.project_name_enc,
+            it.project_name,
+            aad.asanaItemsProjectName(db.workspaceId, it.user_id, it.external_id)
+          )
+        : it.project_name,
+      assignee: it.assignee_enc
+        ? decryptOrFallback(
+            it.assignee_enc,
+            it.assignee,
+            aad.asanaItemsAssignee(db.workspaceId, it.user_id, it.external_id)
+          )
+        : it.assignee,
+      dueDate: it.due_date_enc
+        ? decryptOrFallback(
+            it.due_date_enc,
+            it.due_date,
+            aad.asanaItemsDueDate(db.workspaceId, it.user_id, it.external_id)
+          )
+        : it.due_date,
+      status: it.status,
+      permalinkUrl: it.permalink_url_enc
+        ? decryptOrFallback(
+            it.permalink_url_enc,
+            it.permalink_url,
+            aad.asanaItemsPermalinkUrl(db.workspaceId, it.user_id, it.external_id)
+          )
+        : it.permalink_url,
+      keywordText: decryptColumn(
+        r.keyword_text_enc,
+        aad.asanaEmbeddingsKeywordText(db.workspaceId, r.item_id, r.chunk_index)
+      ),
+    };
+  });
 }
 
 export async function getDriveFileContent(workspaceId: string, userId: string, fileId: string): Promise<string> {

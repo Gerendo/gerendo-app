@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-server";
+import { encryptForBytea } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export async function POST(
   _request: Request,
@@ -19,7 +21,7 @@ export async function POST(
 
   const { data: finding } = await service
     .from("drift_findings")
-    .select("id, user_id, status")
+    .select("id, workspace_id, user_id, status, source, source_external_id")
     .eq("id", findingId)
     .maybeSingle();
 
@@ -31,12 +33,22 @@ export async function POST(
     return NextResponse.json({ status: "already-resolved", finding_status: finding.status });
   }
 
+  const resolutionNote = "skipped";
   await service
     .from("drift_findings")
     .update({
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: "skipped",
+      resolution_note: resolutionNote,
+      resolution_note_enc: encryptForBytea(
+        resolutionNote,
+        aad.driftFindingsResolutionNote(
+          finding.workspace_id as string,
+          finding.user_id as string,
+          finding.source as string,
+          finding.source_external_id as string
+        )
+      ),
     })
     .eq("id", findingId);
 

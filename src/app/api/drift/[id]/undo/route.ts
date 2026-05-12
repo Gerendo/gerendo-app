@@ -101,7 +101,7 @@ export async function POST(
 
   await service
     .from("drift_findings")
-    .update({ status: "pending", resolved_at: null, resolution_note: null })
+    .update({ status: "pending", resolved_at: null, resolution_note: null, resolution_note_enc: null })
     .eq("id", findingId);
 
   return NextResponse.json({ status: "undone", undone, failed });

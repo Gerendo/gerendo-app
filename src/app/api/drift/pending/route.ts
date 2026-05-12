@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-server";
+import { decryptOrFallback } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
@@ -9,7 +11,7 @@ export async function GET(): Promise<NextResponse> {
   const service = createServiceClient();
   const { data, error } = await service
     .from("drift_findings")
-    .select("id, decision_summary, draft_update, source, source_external_id, detected_at")
+    .select("id, workspace_id, user_id, decision_summary, decision_summary_enc, draft_update, draft_update_enc, source, source_external_id, detected_at")
     .eq("user_id", user.id)
     .eq("status", "pending")
     .is("asana_item_id", null)
@@ -20,5 +22,22 @@ export async function GET(): Promise<NextResponse> {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ findings: data ?? [] });
+  const findings = (data ?? []).map((f: any) => ({
+    id: f.id,
+    decision_summary: decryptOrFallback(
+      f.decision_summary_enc,
+      f.decision_summary,
+      aad.driftFindingsDecisionSummary(f.workspace_id, f.user_id, f.source, f.source_external_id)
+    ),
+    draft_update: decryptOrFallback(
+      f.draft_update_enc,
+      f.draft_update,
+      aad.driftFindingsDraftUpdate(f.workspace_id, f.user_id, f.source, f.source_external_id)
+    ),
+    source: f.source,
+    source_external_id: f.source_external_id,
+    detected_at: f.detected_at,
+  }));
+
+  return NextResponse.json({ findings });
 }
