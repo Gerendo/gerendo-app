@@ -13,7 +13,7 @@ Read at session start. Update at session end. Keep this short - history goes to 
 
 ## Open
 
-1. **Rotate Resend API key.** A full-access key was pasted in chat earlier (in conversation logs) and commit `4a9fd3a` suggests an env file was committed at some point. Revoke the current key, issue a new sending-scoped key, update Vercel + `.env.local` + the Gmail "Send mail as" SMTP configs. Optionally rewrite git history.
+1. ~~Rotate Resend API key.~~ **Rotated 2026-05-12.** Old "WaitingList" full-access key (`re_C7KX34rb...`) revoked. New sending-scoped key in place. Stop flagging this in future agent prompts.
 2. **Outreach.** Build 15-20 agency contact list. Draft `docs/INTERVIEW_SCRIPT.md` and `docs/OUTREACH_TEMPLATES.md`. Fill the four `[GINO: ...]` markers in `docs/BRIEF.md` (now likely `[ANDREI/ERMINA: ...]`).
 3. **`terms.tsx` references Slack/Notion/Linear** as integrations - not on the v1/v2 roadmap. Prune or label "planned" before any enterprise call.
 4. **Romanian-lawyer pass on `terms.tsx` + `privacy.tsx`** before signing first enterprise customer. Substance plausible but not vetted.
