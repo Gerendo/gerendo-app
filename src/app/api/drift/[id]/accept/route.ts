@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-
 import { asana as asanaActions } from "@/lib/actions";
 import { getTaskParticipantEmails } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
+import { extractProjectShape } from "@/lib/extract-project-shape";
 
 const MONTHS = [
   "january", "february", "march", "april", "may", "june",
@@ -87,6 +88,38 @@ export async function POST(
       .maybeSingle();
     taskGid = asanaItem?.external_id ?? null;
     taskName = asanaItem?.name ?? null;
+  }
+
+  // No match found at detect time. Run Sonnet to suggest a project shape so the SW
+  // can prompt the user to create a new project — without leaving the notification.
+  // Leave status as "pending" so missed prompts still appear in /drift/pending.
+  if (!taskGid) {
+    let shape;
+    try {
+      shape = await extractProjectShape(
+        finding.decision_summary as string,
+        finding.draft_update as string
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json(
+        { error: `Sonnet extraction failed: ${message}` },
+        { status: 502 }
+      );
+    }
+
+    return NextResponse.json({
+      status: "no_match_pending",
+      task_linked: false,
+      finding_id: findingId,
+      suggested: {
+        project_name: shape.projectName,
+        task_name: shape.taskName,
+        due_on: shape.dueOn,
+      },
+      create_url: `/api/drift/${findingId}/create-project`,
+      skip_url: `/api/drift/${findingId}/skip`,
+    });
   }
 
   if (taskGid) {

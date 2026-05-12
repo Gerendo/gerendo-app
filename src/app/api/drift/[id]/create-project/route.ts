@@ -1,59 +1,35 @@
 import { NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
 import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-server";
 import { asana as asanaActions } from "@/lib/actions";
 import { findProjectByName } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
-
-const client = new Anthropic();
-
-const SYSTEM = `You are helping an agency tool create a new Asana project from a detected decision in an email.
-
-Given the decision summary and draft update, extract:
-- project_name: short, capitalized client or project name (1 to 4 words). Examples: "Acme", "Acme Launch", "Skull Tattoo Brand"
-- task_name: short task description (2 to 5 words). Examples: "Launch", "Brand identity v2", "Kickoff meeting"
-- due_date: ISO date YYYY-MM-DD if a date is mentioned, else null. Examples: "2026-05-25"
-
-Return JSON only, no markdown:
-{
-  "project_name": "...",
-  "task_name": "...",
-  "due_date": "YYYY-MM-DD or null"
-}`;
-
-async function extractProjectShape(
-  decisionSummary: string,
-  draftUpdate: string
-): Promise<{ projectName: string; taskName: string; dueOn: string | null }> {
-  const userText = `Decision: ${decisionSummary}\n\nDraft update: ${draftUpdate}`;
-  const response = await client.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 200,
-    system: [{ type: "text", text: SYSTEM, cache_control: { type: "ephemeral" } }],
-    messages: [{ role: "user", content: userText }],
-  });
-  const raw = response.content[0].type === "text" ? response.content[0].text.trim() : "{}";
-  try {
-    const parsed = JSON.parse(raw);
-    return {
-      projectName: typeof parsed.project_name === "string" ? parsed.project_name.trim() : "New project",
-      taskName: typeof parsed.task_name === "string" ? parsed.task_name.trim() : "Decision logged",
-      dueOn:
-        typeof parsed.due_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(parsed.due_date)
-          ? parsed.due_date
-          : null,
-    };
-  } catch {
-    return { projectName: "New project", taskName: "Decision logged", dueOn: null };
-  }
-}
+import { extractProjectShape } from "@/lib/extract-project-shape";
 
 function gmailUrlForExternal(externalId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${externalId}`;
 }
 
+function pickString(...values: unknown[]): string | undefined {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim().length > 0) return v.trim();
+  }
+  return undefined;
+}
+
+function pickDueOn(...values: unknown[]): string | null | undefined {
+  for (const v of values) {
+    if (v === null) return null;
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      if (trimmed.length === 0) continue;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    }
+  }
+  return undefined;
+}
+
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id } = await params;
@@ -109,16 +85,50 @@ export async function POST(
     executedBy: user.id,
   };
 
-  let extracted: { projectName: string; taskName: string; dueOn: string | null };
+  // Parse optional body — SW passes pre-extracted suggestion to skip the second Sonnet call.
+  // Accept both snake_case (SW) and camelCase keys.
+  let body: Record<string, unknown> = {};
   try {
-    extracted = await extractProjectShape(
-      finding.decision_summary as string,
-      finding.draft_update as string
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: `Sonnet extraction failed: ${message}` }, { status: 502 });
+    const text = await request.text();
+    if (text.trim().length > 0) {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed === "object") body = parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Ignore malformed body; fall through to Sonnet.
   }
+
+  const bodyProjectName = pickString(body.project_name, body.projectName);
+  const bodyTaskName = pickString(body.task_name, body.taskName);
+  const bodyDueOn = pickDueOn(body.due_on, body.dueOn);
+
+  let extracted: { projectName: string; taskName: string; dueOn: string | null };
+  if (bodyProjectName && bodyTaskName && bodyDueOn !== undefined) {
+    extracted = {
+      projectName: bodyProjectName,
+      taskName: bodyTaskName,
+      dueOn: bodyDueOn,
+    };
+  } else {
+    try {
+      const shape = await extractProjectShape(
+        finding.decision_summary as string,
+        finding.draft_update as string
+      );
+      extracted = {
+        projectName: bodyProjectName ?? shape.projectName,
+        taskName: bodyTaskName ?? shape.taskName,
+        dueOn: bodyDueOn !== undefined ? bodyDueOn : shape.dueOn,
+      };
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: `Sonnet extraction failed: ${message}` }, { status: 502 });
+    }
+  }
+
+  // Defensive: ensure required strings are never empty.
+  if (!extracted.projectName) extracted.projectName = "New project";
+  if (!extracted.taskName) extracted.taskName = "Decision logged";
 
   // Dedup: see if a project with this name already exists in the team.
   let projectGid: string;
