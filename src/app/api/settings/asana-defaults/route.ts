@@ -6,19 +6,41 @@ import { getAsanaToken, asanaGet } from "@/lib/agency-db";
 type Team = { gid: string; name: string };
 type Workspace = { gid: string; name: string; teams: Team[] };
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
+  ]);
+}
+
 async function fetchAsanaWorkspaces(token: string): Promise<Workspace[]> {
-  const workspaces = await asanaGet(token, "/workspaces");
-  const out: Workspace[] = [];
-  for (const ws of workspaces ?? []) {
-    let teams: Team[] = [];
-    try {
-      const t = await asanaGet(token, `/workspaces/${ws.gid}/teams?opt_fields=gid,name`);
-      teams = (t ?? []).map((row: { gid: string; name: string }) => ({ gid: row.gid, name: row.name }));
-    } catch {
-      teams = [];
-    }
-    out.push({ gid: ws.gid, name: ws.name, teams });
-  }
+  const workspaces = await withTimeout(asanaGet(token, "/workspaces"), 8000, "Asana /workspaces");
+  const list: Array<{ gid: string; name: string }> = workspaces ?? [];
+
+  const out = await Promise.all(
+    list.map(async (ws) => {
+      try {
+        const t = await withTimeout(
+          asanaGet(token, `/workspaces/${ws.gid}/teams?opt_fields=gid,name`),
+          6000,
+          `Asana teams for ${ws.gid}`
+        );
+        const teams: Team[] = (t ?? []).map((row: { gid: string; name: string }) => ({
+          gid: row.gid,
+          name: row.name,
+        }));
+        return { gid: ws.gid, name: ws.name, teams };
+      } catch (err) {
+        // 403 on personal workspaces and per-workspace timeouts both land here.
+        // Workspace stays in the list but with zero teams.
+        console.warn(`[asana-defaults] teams fetch failed for ${ws.gid}:`, err instanceof Error ? err.message : err);
+        return { gid: ws.gid, name: ws.name, teams: [] as Team[] };
+      }
+    })
+  );
+
   return out;
 }
 
