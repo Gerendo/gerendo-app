@@ -129,7 +129,6 @@ export async function createProject(
       name: args.name,
       team: args.teamGid,
       workspace: args.workspaceGid,
-      public: args.isPublic,
     });
     const logId = await logAction(ctx, {
       actionType: "asana.create_project",
