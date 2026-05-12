@@ -136,6 +136,7 @@ export async function upsertEmbedding(
   } else {
     const { error } = await db.supabase.from("embeddings").insert({
       workspace_id: db.workspaceId,
+      user_id: db.userId,
       message_id: messageId,
       embedding: vec,
       keyword_text: keywordText,
