@@ -29,7 +29,7 @@ self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   const { action } = event;
-  const { findingId, confirmUrl, dismissUrl } = event.notification.data ?? {};
+  const { findingId, confirmUrl, dismissUrl, targetUrl: dataTargetUrl } = event.notification.data ?? {};
 
   // Background-action: POST and show a follow-up notification with the result.
   if (action === "confirm" && confirmUrl) {
@@ -40,12 +40,18 @@ self.addEventListener("notificationclick", (event) => {
           try { payload = await res.json(); } catch {}
           const ok = res.ok && (payload.status === "accepted" || payload.status === "already-resolved");
           const taskLinked = payload.task_linked !== false;
+          if (ok && !taskLinked) {
+            return self.registration.showNotification("Decision recorded, no match", {
+              body: "No matching Asana task. Tap to create a new project.",
+              icon: "/Gerendo-Favicon.png",
+              tag: `gerendo-result-${findingId}`,
+              data: { targetUrl: "/drift/pending" },
+            });
+          }
           return self.registration.showNotification(
             ok ? "Updated" : "Could not update",
             {
-              body: ok
-                ? (taskLinked ? "Asana task updated and team notified." : "Decision recorded. Link an Asana task to push the update.")
-                : "Open Gerendo to retry.",
+              body: ok ? "Asana task updated and team notified." : "Open Gerendo to retry.",
               icon: "/Gerendo-Favicon.png",
               tag: `gerendo-result-${findingId}`,
             }
@@ -70,7 +76,7 @@ self.addEventListener("notificationclick", (event) => {
   }
 
   // Default: focus or open the app at a target URL.
-  let targetUrl = "/ask";
+  let targetUrl = dataTargetUrl || "/ask";
   if (action === "edit" && findingId) {
     targetUrl = `/ask?finding=${findingId}`;
   }

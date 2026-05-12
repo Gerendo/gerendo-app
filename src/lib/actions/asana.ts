@@ -119,6 +119,108 @@ export async function addComment(
   }
 }
 
+export async function createProject(
+  ctx: ActionContext,
+  args: { teamGid: string; workspaceGid: string; name: string; isPublic: boolean }
+): Promise<{ logId: number; projectGid: string; projectName: string; permalinkUrl: string | null }> {
+  const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+  try {
+    const data = await asanaPost(token, "/projects", {
+      name: args.name,
+      team: args.teamGid,
+      workspace: args.workspaceGid,
+      public: args.isPublic,
+    });
+    const logId = await logAction(ctx, {
+      actionType: "asana.create_project",
+      targetId: (data.gid as string) ?? null,
+      payloadBefore: null,
+      payloadAfter: data,
+      status: "success",
+    });
+    return {
+      logId,
+      projectGid: data.gid as string,
+      projectName: (data.name as string) ?? args.name,
+      permalinkUrl: (data.permalink_url as string | undefined) ?? null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await logAction(ctx, {
+      actionType: "asana.create_project",
+      targetId: null,
+      payloadBefore: null,
+      payloadAfter: { error: message, args },
+      status: "failed",
+    });
+    throw err;
+  }
+}
+
+export async function createTask(
+  ctx: ActionContext,
+  args: { projectGid: string; name: string; dueOn: string | null; notes?: string }
+): Promise<{ logId: number; taskGid: string; taskName: string; permalinkUrl: string | null }> {
+  const token = await getAsanaToken(ctx.workspaceId, ctx.executedBy);
+  const body: Record<string, unknown> = {
+    name: args.name,
+    projects: [args.projectGid],
+  };
+  if (args.dueOn) body.due_on = args.dueOn;
+  if (args.notes) body.notes = args.notes;
+  try {
+    const data = await asanaPost(token, "/tasks", body);
+    const logId = await logAction(ctx, {
+      actionType: "asana.create_task",
+      targetId: (data.gid as string) ?? null,
+      payloadBefore: null,
+      payloadAfter: data,
+      status: "success",
+    });
+    return {
+      logId,
+      taskGid: data.gid as string,
+      taskName: (data.name as string) ?? args.name,
+      permalinkUrl: (data.permalink_url as string | undefined) ?? null,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    await logAction(ctx, {
+      actionType: "asana.create_task",
+      targetId: null,
+      payloadBefore: null,
+      payloadAfter: { error: message, args },
+      status: "failed",
+    });
+    throw err;
+  }
+}
+
+// Look up an existing project in a team by name (case-insensitive). Not logged.
+export async function findProjectByName(
+  workspaceId: string,
+  executedBy: string,
+  teamGid: string,
+  name: string
+): Promise<{ gid: string; name: string; permalinkUrl: string | null } | null> {
+  const token = await getAsanaToken(workspaceId, executedBy);
+  const target = name.toLowerCase().trim();
+  try {
+    const projects = await asanaGet(
+      token,
+      `/projects?team=${teamGid}&opt_fields=gid,name,permalink_url`
+    );
+    for (const p of (projects ?? []) as Array<{ gid: string; name: string; permalink_url?: string }>) {
+      if (typeof p.name === "string" && p.name.toLowerCase().trim() === target) {
+        return { gid: p.gid, name: p.name, permalinkUrl: p.permalink_url ?? null };
+      }
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Fetch task assignee + followers (with emails) for team broadcast matching.
 export async function getTaskParticipantEmails(
   workspaceId: string,
