@@ -192,7 +192,7 @@ export default function Sidebar({ currentConversationId, onSelectConversation, o
               {[
                 { label: "Connect tools", href: "/connect" },
                 { label: "Settings", href: "/settings" },
-                { label: "Privacy policy", href: "/privacy", external: true },
+                { label: "Privacy policy", href: "https://gerendo.com/privacy", external: true },
               ].map(item => (
                 <a
                   key={item.href}

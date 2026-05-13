@@ -85,8 +85,9 @@ export default function UserMenu() {
           {/* Legal links */}
           <div className="py-1">
             <a
-              href="/privacy"
+              href="https://gerendo.com/privacy"
               target="_blank"
+              rel="noopener noreferrer"
               onClick={() => setOpen(false)}
               className="flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:opacity-80"
               style={{ color: "oklch(0.55 0.012 60)" }}

@@ -67,10 +67,14 @@ function Privacy() {
           </section>
 
           <section>
-            <h2 className="font-display text-2xl text-foreground">5. AI model training</h2>
+            <h2 className="font-display text-2xl text-foreground">5. AI processing</h2>
             <p className="mt-3">
-              <strong className="text-foreground">We never train AI models on your data.</strong> When you ask Gerendo a question today, relevant snippets are decrypted in our application and sent over TLS to Anthropic (Claude) for inference. Anthropic does not train models on inputs sent through its API. Per Anthropic's standard commercial terms, prompts may be retained for up to 30 days for abuse monitoring and are then deleted.
+              <strong className="text-foreground">We never train AI models on your data.</strong> Gerendo uses two AI services to power search and chat:
             </p>
+            <ul className="mt-3 list-disc pl-5 space-y-2">
+              <li><strong className="text-foreground">Voyage AI</strong> generates the vector embeddings that make semantic search work. Text from your synced Gmail, Drive, and Asana content is sent to Voyage over TLS to produce embeddings; Voyage does not retain inputs or train on them per their commercial terms.</li>
+              <li><strong className="text-foreground">Anthropic (Claude)</strong> answers your questions. When you ask Gerendo something, relevant snippets are decrypted in our application and sent over TLS to Anthropic for inference. Anthropic does not train models on inputs sent through its API. Per Anthropic's standard commercial terms, prompts may be retained for up to 30 days for abuse monitoring and are then deleted.</li>
+            </ul>
             <p className="mt-3">
               Bring-your-own-key support and additional model providers (OpenAI, Gemini, Mistral) are on the roadmap and are not yet available. When they ship, this section will be updated and existing customers will be notified.
             </p>
@@ -186,11 +190,14 @@ function Privacy() {
               To deliver the service, we work with the following trusted sub-processors:
             </p>
             <ul className="mt-3 list-disc pl-5 space-y-2">
-              <li><strong className="text-foreground">Supabase</strong> - database and authentication infrastructure.</li>
-              <li><strong className="text-foreground">Vercel</strong> - application hosting and deployment.</li>
-              <li><strong className="text-foreground">Cloudflare</strong> - DNS, security, and content delivery.</li>
-              <li><strong className="text-foreground">Resend</strong> - transactional email delivery.</li>
-              <li><strong className="text-foreground">Anthropic, OpenAI, Google, Mistral</strong> - AI inference, via zero-retention endpoints where available.</li>
+              <li><strong className="text-foreground">Supabase</strong> - managed Postgres database (EU region) and authentication infrastructure.</li>
+              <li><strong className="text-foreground">Vercel</strong> - application hosting and deployment for the product app.</li>
+              <li><strong className="text-foreground">Cloudflare</strong> - DNS, security, content delivery, and web analytics (anonymised, no cookies).</li>
+              <li><strong className="text-foreground">Anthropic</strong> - AI inference for chat and decision detection (Claude). Inputs not used for training; see Section 5.</li>
+              <li><strong className="text-foreground">Voyage AI</strong> - vector embeddings for semantic search. Inputs not used for training; see Section 5.</li>
+              <li><strong className="text-foreground">Resend</strong> - transactional email delivery (sign-in links, notifications).</li>
+              <li><strong className="text-foreground">Google APIs</strong> - reading your connected Gmail and Drive content under the scopes you authorise. Use is governed by the Google API Services User Data Policy; see Section 7.</li>
+              <li><strong className="text-foreground">Asana API</strong> - reading your connected Asana workspace under the scopes you authorise.</li>
             </ul>
             <p className="mt-3">
               All processors are required to handle your data in compliance with GDPR.
