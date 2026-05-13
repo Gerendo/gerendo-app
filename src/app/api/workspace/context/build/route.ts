@@ -4,7 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
 import { openAgencyDb, upsertWorkspaceContext, getWorkspaceContext, getGmailToken } from "@/lib/agency-db";
 import { extractBody } from "@/app/api/sync/gmail/route";
-import { decryptColumn, decryptOrFallback } from "@/lib/crypto-storage";
+import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export const maxDuration = 300;
@@ -43,7 +43,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const { data: sentRowsRaw } = await db.supabase
     .from("messages")
-    .select("id, external_id, sender, sender_enc, source, subject_enc, received_at")
+    .select("id, external_id, sender_enc, source, subject_enc, received_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .ilike("mailbox", "sent")
@@ -53,7 +53,7 @@ export async function POST(req: Request): Promise<NextResponse> {
 
   const { data: receivedRowsRaw } = await db.supabase
     .from("messages")
-    .select("id, external_id, sender, sender_enc, source, subject_enc, received_at")
+    .select("id, external_id, sender_enc, source, subject_enc, received_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", userId)
     .ilike("mailbox", "inbox")
@@ -64,9 +64,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   const decryptRow = (r: any) => ({
     id: r.id,
     external_id: r.external_id,
-    sender: decryptOrFallback(
+    sender: decryptColumn(
       r.sender_enc,
-      r.sender,
       aad.messagesSender(workspaceId, userId, r.source, r.external_id)
     ),
     received_at: r.received_at,

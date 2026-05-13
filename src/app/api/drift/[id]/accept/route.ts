@@ -4,7 +4,7 @@ import { asana as asanaActions } from "@/lib/actions";
 import { getTaskParticipantEmails } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
-import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 const MONTHS = [
@@ -76,14 +76,12 @@ export async function POST(
   const findingUserId = finding.user_id as string;
   const findingSource = finding.source as string;
   const findingSourceExternalId = finding.source_external_id as string;
-  const decisionSummary = decryptOrFallback(
+  const decisionSummary = decryptColumn(
     finding.decision_summary_enc as Buffer | null | undefined,
-    finding.decision_summary as string | null,
     aad.driftFindingsDecisionSummary(findingWsId, findingUserId, findingSource, findingSourceExternalId)
   );
-  const draftUpdate = decryptOrFallback(
+  const draftUpdate = decryptColumn(
     finding.draft_update_enc as Buffer | null | undefined,
-    finding.draft_update as string | null,
     aad.driftFindingsDraftUpdate(findingWsId, findingUserId, findingSource, findingSourceExternalId)
   );
 
@@ -100,14 +98,13 @@ export async function POST(
   if (finding.asana_item_id) {
     const { data: asanaItem } = await service
       .from("asana_items")
-      .select("user_id, external_id, name, name_enc")
+      .select("user_id, external_id, name_enc")
       .eq("id", finding.asana_item_id)
       .maybeSingle();
     taskGid = asanaItem?.external_id ?? null;
     taskName = asanaItem
-      ? decryptOrFallback(
+      ? decryptColumn(
           asanaItem.name_enc as Buffer | null | undefined,
-          asanaItem.name as string | null,
           aad.asanaItemsName(findingWsId, asanaItem.user_id as string, asanaItem.external_id as string)
         )
       : null;
@@ -181,7 +178,6 @@ export async function POST(
     .update({
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: resolutionNote,
       resolution_note_enc: resolutionNote
         ? encryptForBytea(
             resolutionNote,

@@ -4,7 +4,7 @@ import { asana as asanaActions } from "@/lib/actions";
 import { findProjectByName } from "@/lib/actions/asana";
 import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
-import { encryptForBytea, decryptOrFallback } from "@/lib/crypto-storage";
+import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 function gmailUrlForExternal(externalId: string): string {
@@ -66,14 +66,12 @@ export async function POST(
   const findingUserId = finding.user_id as string;
   const findingSource = finding.source as string;
   const findingSourceExternalId = finding.source_external_id as string;
-  const decisionSummary = decryptOrFallback(
+  const decisionSummary = decryptColumn(
     finding.decision_summary_enc as Buffer | null | undefined,
-    finding.decision_summary as string | null,
     aad.driftFindingsDecisionSummary(workspaceId, findingUserId, findingSource, findingSourceExternalId)
   );
-  const draftUpdate = decryptOrFallback(
+  const draftUpdate = decryptColumn(
     finding.draft_update_enc as Buffer | null | undefined,
-    finding.draft_update as string | null,
     aad.driftFindingsDraftUpdate(workspaceId, findingUserId, findingSource, findingSourceExternalId)
   );
 
@@ -239,19 +237,16 @@ export async function POST(
         user_id: user.id,
         external_id: taskGid,
         type: "task",
-        name: taskName,
         name_enc: encryptForBytea(
           taskName,
           aad.asanaItemsName(workspaceId, user.id, taskGid)
         ),
-        project_name: projectName,
         project_name_enc: projectName
           ? encryptForBytea(
               projectName,
               aad.asanaItemsProjectName(workspaceId, user.id, taskGid)
             )
           : null,
-        due_date: extracted.dueOn,
         due_date_enc: extracted.dueOn
           ? encryptForBytea(
               extracted.dueOn,
@@ -259,7 +254,6 @@ export async function POST(
             )
           : null,
         status: "open",
-        permalink_url: taskPermalink,
         permalink_url_enc: taskPermalink
           ? encryptForBytea(
               taskPermalink,
@@ -289,7 +283,6 @@ export async function POST(
       asana_item_id: itemRow.id as number,
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: resolutionNote,
       resolution_note_enc: encryptForBytea(
         resolutionNote,
         aad.driftFindingsResolutionNote(workspaceId, findingUserId, findingSource, findingSourceExternalId)

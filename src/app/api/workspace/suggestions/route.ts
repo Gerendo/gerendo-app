@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { createServiceClient } from "@/lib/supabase-server";
-import { decryptOrFallback } from "@/lib/crypto-storage";
+import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
@@ -25,26 +25,21 @@ export async function GET(): Promise<NextResponse> {
   // Pull top Asana projects (recent activity) for personalization.
   let topProjectName: string | null = null;
   if (asanaConnected) {
-    // Phase 3a note: filter still uses plaintext project_name. Phase 3b drops
-    // plaintext and this needs to switch to a NOT-NULL check on project_name_enc.
     const { data: items } = await service
       .from("asana_items")
-      .select("external_id, project_name, project_name_enc, modified_at")
+      .select("external_id, project_name_enc, modified_at")
       .eq("workspace_id", workspaceId)
       .eq("user_id", userId)
-      .not("project_name", "is", null)
+      .not("project_name_enc", "is", null)
       .order("modified_at", { ascending: false })
       .limit(50);
     if (items?.length) {
       const counts = new Map<string, number>();
       for (const r of items) {
-        const name = r.project_name_enc
-          ? decryptOrFallback(
-              r.project_name_enc as Buffer | string,
-              (r.project_name as string | null) ?? null,
-              aad.asanaItemsProjectName(workspaceId, userId, r.external_id as string)
-            )
-          : ((r.project_name as string | null) ?? "");
+        const name = decryptColumn(
+          r.project_name_enc as Buffer | string,
+          aad.asanaItemsProjectName(workspaceId, userId, r.external_id as string)
+        );
         if (!name) continue;
         counts.set(name, (counts.get(name) ?? 0) + 1);
       }

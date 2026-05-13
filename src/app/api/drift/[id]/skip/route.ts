@@ -39,7 +39,6 @@ export async function POST(
     .update({
       status: "accepted",
       resolved_at: new Date().toISOString(),
-      resolution_note: resolutionNote,
       resolution_note_enc: encryptForBytea(
         resolutionNote,
         aad.driftFindingsResolutionNote(

@@ -86,7 +86,6 @@ async function syncFile(
       workspace_id: workspaceId,
       user_id: userId,
       external_id: file.id,
-      name: file.name,
       name_enc: encryptForBytea(
         file.name,
         aad.driveFilesName(workspaceId, userId, file.id)

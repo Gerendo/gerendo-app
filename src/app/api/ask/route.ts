@@ -8,7 +8,7 @@ import { google } from "googleapis";
 import { openAgencyDb, getSyncState, getSummariesByMessageIds, getWorkspaceContext, getGmailToken, getDriveFileContent, getAsanaToken, asanaGet, asanaPost, checkAndIncrementQuota, type AgencyDb } from "@/lib/agency-db";
 import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search";
 import { extractBody } from "@/app/api/sync/gmail/route";
-import { decryptColumn, decryptOrFallback } from "@/lib/crypto-storage";
+import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -35,33 +35,53 @@ interface MetadataRow {
   receivedAt: number;
 }
 
+// Phase 3b: sender is now encrypted at rest, so SQL-level ilike("sender", ...)
+// is no longer possible. We fetch a wider candidate set (mailbox + ordering still
+// happen at the SQL layer) and post-filter in the app after decrypt. Acceptable
+// at Gerendo's data size; widen the candidate cap when we grow past it.
+const SENDER_FILTER_CANDIDATE_LIMIT = 500;
+
 async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows: MetadataRow[]; count?: number }> {
   if (filter.kind === "count") {
+    // Was: a single head: true count with ilike("sender", ...). With sender
+    // encrypted, we must fetch + decrypt + count in app. Mailbox filter still
+    // narrows at the SQL layer.
     let query = db.supabase
       .from("messages")
-      .select("id", { count: "exact", head: true })
+      .select("source, external_id, sender_enc")
       .eq("workspace_id", db.workspaceId)
       .eq("user_id", db.userId);
-    if (filter.name) query = query.ilike("sender", `%${filter.name}%`);
     if (filter.mailbox) query = query.ilike("mailbox", filter.mailbox);
-    const { count } = await query;
-    return { rows: [], count: count ?? 0 };
+    if (filter.name) query = query.limit(SENDER_FILTER_CANDIDATE_LIMIT);
+    const { data, count } = await query;
+    if (!filter.name) return { rows: [], count: count ?? data?.length ?? 0 };
+    const needle = filter.name.toLowerCase();
+    const matched = (data ?? []).filter((r) => {
+      const sender = decryptColumn(
+        r.sender_enc,
+        aad.messagesSender(db.workspaceId, db.userId, r.source, r.external_id)
+      );
+      return sender.toLowerCase().includes(needle);
+    });
+    return { rows: [], count: matched.length };
   }
 
-  // Phase 3a note: sender ilike filters below still hit the plaintext column.
-  // Phase 3b will need an app-layer post-filter once the plaintext column is dropped.
   let query = db.supabase
     .from("messages")
-    .select("id, external_id, thread_id, thread_id_enc, sender, sender_enc, source, subject_enc, mailbox, received_at")
+    .select("id, external_id, thread_id_enc, sender_enc, source, subject_enc, mailbox, received_at")
     .eq("workspace_id", db.workspaceId)
     .eq("user_id", db.userId);
+
+  let postDecryptSenderFilter: string | null = null;
 
   if (filter.kind === "recent") {
     query = query.in("mailbox", ["inbox", "sent"]).order("received_at", { ascending: false }).limit(filter.limit);
   } else if (filter.kind === "sender") {
-    if (filter.name) query = query.ilike("sender", `%${filter.name}%`);
+    // sender ilike moves to app layer (Phase 3b). Mailbox filter still SQL.
     if (filter.mailbox) query = query.ilike("mailbox", filter.mailbox);
-    query = query.order("received_at", { ascending: false }).limit(50);
+    // Widen the candidate set so the post-decrypt filter has rows to match.
+    query = query.order("received_at", { ascending: false }).limit(SENDER_FILTER_CANDIDATE_LIMIT);
+    postDecryptSenderFilter = filter.name ? filter.name.toLowerCase() : null;
   } else {
     const from = new Date(filter.from).getTime();
     const to = new Date(filter.to).getTime() + 86400000;
@@ -69,34 +89,40 @@ async function queryLayer1(db: AgencyDb, filter: MetadataFilter): Promise<{ rows
   }
 
   const { data } = await query;
-  return {
-    rows: (data ?? []).map((r) => {
-      const threadIdPlain = r.thread_id ?? null;
-      const threadId = r.thread_id_enc
-        ? decryptOrFallback(
-            r.thread_id_enc,
-            threadIdPlain,
-            aad.messagesThreadId(db.workspaceId, db.userId, r.source, r.external_id)
-          )
-        : threadIdPlain;
-      return {
-        id: r.id,
-        externalId: r.external_id,
-        threadId: threadId || null,
-        sender: decryptOrFallback(
-          r.sender_enc,
-          r.sender,
-          aad.messagesSender(db.workspaceId, db.userId, r.source, r.external_id)
-        ),
-        subject: decryptColumn(
-          r.subject_enc,
-          aad.messagesSubject(db.workspaceId, db.userId, r.source, r.external_id)
-        ),
-        mailbox: r.mailbox ?? "inbox",
-        receivedAt: r.received_at,
-      };
-    }),
-  };
+  const rows = (data ?? []).map((r) => {
+    // thread_id is legitimately nullable, so guard the decrypt.
+    const threadId = r.thread_id_enc
+      ? decryptColumn(
+          r.thread_id_enc,
+          aad.messagesThreadId(db.workspaceId, db.userId, r.source, r.external_id)
+        )
+      : null;
+    return {
+      id: r.id,
+      externalId: r.external_id,
+      threadId,
+      sender: decryptColumn(
+        r.sender_enc,
+        aad.messagesSender(db.workspaceId, db.userId, r.source, r.external_id)
+      ),
+      subject: decryptColumn(
+        r.subject_enc,
+        aad.messagesSubject(db.workspaceId, db.userId, r.source, r.external_id)
+      ),
+      mailbox: r.mailbox ?? "inbox",
+      receivedAt: r.received_at,
+    };
+  });
+
+  if (postDecryptSenderFilter) {
+    const needle = postDecryptSenderFilter;
+    const filtered = rows
+      .filter((r) => r.sender.toLowerCase().includes(needle))
+      .slice(0, 50);
+    return { rows: filtered };
+  }
+
+  return { rows };
 }
 
 async function getLayer2(db: AgencyDb, messageIds: number[]): Promise<Map<number, string>> {
@@ -611,7 +637,7 @@ export async function POST(req: NextRequest): Promise<Response> {
             } else if (toolUse.name === "list_drive_files") {
               const { data: driveFiles } = await db.supabase
                 .from("drive_files")
-                .select("id, user_id, external_id, name, name_enc, mime_type, web_view_link, modified_at")
+                .select("id, user_id, external_id, name_enc, mime_type, web_view_link, modified_at")
                 .eq("workspace_id", db.workspaceId)
                 .order("modified_at", { ascending: false });
 
@@ -624,9 +650,8 @@ export async function POST(req: NextRequest): Promise<Response> {
                     : f.mime_type.includes("document") ? "Doc"
                     : f.mime_type.includes("presentation") ? "Slides"
                     : "File";
-                  const fileName = decryptOrFallback(
+                  const fileName = decryptColumn(
                     f.name_enc,
-                    f.name,
                     aad.driveFilesName(db.workspaceId, f.user_id, f.external_id)
                   );
                   if (f.web_view_link) {

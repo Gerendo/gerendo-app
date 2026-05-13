@@ -1,6 +1,6 @@
 import { createServiceClient } from "./supabase-server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { encryptForBytea, decryptColumn, decryptOrFallback } from "@/lib/crypto-storage";
+import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export type AgencyDb = {
@@ -30,14 +30,12 @@ export async function batchUpsertMessages(
     user_id: db.userId,
     source: msg.source,
     external_id: msg.externalId,
-    thread_id: msg.threadId,
     thread_id_enc: msg.threadId
       ? encryptForBytea(
           msg.threadId,
           aad.messagesThreadId(db.workspaceId, db.userId, msg.source, msg.externalId)
         )
       : null,
-    sender: msg.sender,
     sender_enc: encryptForBytea(
       msg.sender,
       aad.messagesSender(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -115,14 +113,12 @@ export async function upsertMessage(
       user_id: db.userId,
       source: msg.source,
       external_id: msg.externalId,
-      thread_id: msg.threadId,
       thread_id_enc: msg.threadId
         ? encryptForBytea(
             msg.threadId,
             aad.messagesThreadId(db.workspaceId, db.userId, msg.source, msg.externalId)
           )
         : null,
-      sender: msg.sender,
       sender_enc: encryptForBytea(
         msg.sender,
         aad.messagesSender(db.workspaceId, db.userId, msg.source, msg.externalId)
@@ -376,28 +372,27 @@ export async function getMessagesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("embeddings")
-    .select("id, message_id, messages(user_id, source, external_id, thread_id, thread_id_enc, sender, sender_enc, subject_enc, received_at, mailbox)")
+    .select("id, message_id, messages(user_id, source, external_id, thread_id_enc, sender_enc, subject_enc, received_at, mailbox)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
   return (data ?? []).map((r: any) => {
     const m = r.messages;
-    const threadIdPlain = m.thread_id ?? null;
+    // thread_id is legitimately nullable (some message sources don't expose it),
+    // so decrypt only when an encrypted blob is present.
     const threadId = m.thread_id_enc
-      ? decryptOrFallback(
+      ? decryptColumn(
           m.thread_id_enc,
-          threadIdPlain,
           aad.messagesThreadId(db.workspaceId, m.user_id, m.source, m.external_id)
         )
-      : threadIdPlain;
+      : null;
     return {
       embeddingId: r.id,
       source: m.source,
       externalId: m.external_id,
-      threadId: threadId || null,
-      sender: decryptOrFallback(
+      threadId,
+      sender: decryptColumn(
         m.sender_enc,
-        m.sender,
         aad.messagesSender(db.workspaceId, m.user_id, m.source, m.external_id)
       ),
       subject: decryptColumn(
@@ -419,7 +414,6 @@ export async function upsertWorkspaceContext(
   await db.supabase.from("workspace_contexts").upsert(
     {
       workspace_id: db.workspaceId,
-      context_text: contextText,
       context_text_enc: encryptForBytea(
         contextText,
         aad.workspaceContextsContextText(db.workspaceId)
@@ -437,13 +431,12 @@ export async function getWorkspaceContext(
 ): Promise<{ contextText: string; builtAt: number; sourcesUsed: number } | null> {
   const { data } = await db.supabase
     .from("workspace_contexts")
-    .select("context_text, context_text_enc, built_at, sources_used")
+    .select("context_text_enc, built_at, sources_used")
     .eq("workspace_id", db.workspaceId)
     .maybeSingle();
   if (!data) return null;
-  const contextText = decryptOrFallback(
+  const contextText = decryptColumn(
     data.context_text_enc,
-    data.context_text,
     aad.workspaceContextsContextText(db.workspaceId)
   );
   return { contextText, builtAt: data.built_at, sourcesUsed: data.sources_used };
@@ -496,7 +489,7 @@ export async function getDriveFilesByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("drive_embeddings")
-    .select("id, chunk_index, keyword_text_enc, file_id, drive_files(user_id, external_id, name, name_enc, mime_type, web_view_link)")
+    .select("id, chunk_index, keyword_text_enc, file_id, drive_files(user_id, external_id, name_enc, mime_type, web_view_link)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -505,9 +498,8 @@ export async function getDriveFilesByEmbeddingIds(
     return {
       embeddingId: r.id,
       fileId: r.file_id,
-      name: decryptOrFallback(
+      name: decryptColumn(
         f.name_enc,
-        f.name,
         aad.driveFilesName(db.workspaceId, f.user_id, f.external_id)
       ),
       mimeType: f.mime_type,
@@ -566,7 +558,7 @@ export async function getAsanaItemsByEmbeddingIds(
   if (embeddingIds.length === 0) return [];
   const { data } = await db.supabase
     .from("asana_embeddings")
-    .select("id, chunk_index, keyword_text_enc, item_id, asana_items(user_id, external_id, name, name_enc, project_name, project_name_enc, assignee, assignee_enc, due_date, due_date_enc, status, permalink_url, permalink_url_enc)")
+    .select("id, chunk_index, keyword_text_enc, item_id, asana_items(user_id, external_id, name_enc, project_name_enc, assignee_enc, due_date_enc, status, permalink_url_enc)")
     .eq("workspace_id", db.workspaceId)
     .in("id", embeddingIds);
 
@@ -575,40 +567,36 @@ export async function getAsanaItemsByEmbeddingIds(
     return {
       embeddingId: r.id,
       itemId: r.item_id,
-      name: decryptOrFallback(
+      name: decryptColumn(
         it.name_enc,
-        it.name,
         aad.asanaItemsName(db.workspaceId, it.user_id, it.external_id)
       ),
+      // project_name, assignee, due_date, permalink_url are legitimately nullable.
       projectName: it.project_name_enc
-        ? decryptOrFallback(
+        ? decryptColumn(
             it.project_name_enc,
-            it.project_name,
             aad.asanaItemsProjectName(db.workspaceId, it.user_id, it.external_id)
           )
-        : it.project_name,
+        : null,
       assignee: it.assignee_enc
-        ? decryptOrFallback(
+        ? decryptColumn(
             it.assignee_enc,
-            it.assignee,
             aad.asanaItemsAssignee(db.workspaceId, it.user_id, it.external_id)
           )
-        : it.assignee,
+        : null,
       dueDate: it.due_date_enc
-        ? decryptOrFallback(
+        ? decryptColumn(
             it.due_date_enc,
-            it.due_date,
             aad.asanaItemsDueDate(db.workspaceId, it.user_id, it.external_id)
           )
-        : it.due_date,
+        : null,
       status: it.status,
       permalinkUrl: it.permalink_url_enc
-        ? decryptOrFallback(
+        ? decryptColumn(
             it.permalink_url_enc,
-            it.permalink_url,
             aad.asanaItemsPermalinkUrl(db.workspaceId, it.user_id, it.external_id)
           )
-        : it.permalink_url,
+        : null,
       keywordText: decryptColumn(
         r.keyword_text_enc,
         aad.asanaEmbeddingsKeywordText(db.workspaceId, r.item_id, r.chunk_index)

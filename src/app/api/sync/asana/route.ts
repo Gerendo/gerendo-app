@@ -60,26 +60,22 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
       user_id: userId,
       external_id: task.gid,
       type: "task",
-      name: task.name,
       name_enc: encryptForBytea(
         task.name,
         aad.asanaItemsName(workspaceId, userId, task.gid)
       ),
-      project_name: projectName,
       project_name_enc: projectName
         ? encryptForBytea(
             projectName,
             aad.asanaItemsProjectName(workspaceId, userId, task.gid)
           )
         : null,
-      assignee,
       assignee_enc: assignee
         ? encryptForBytea(
             assignee,
             aad.asanaItemsAssignee(workspaceId, userId, task.gid)
           )
         : null,
-      due_date: dueDate,
       due_date_enc: dueDate
         ? encryptForBytea(
             dueDate,
@@ -87,14 +83,12 @@ export async function syncSingleAsanaTask(workspaceId: string, userId: string, t
           )
         : null,
       status: task.completed ? "completed" : "open",
-      notes,
       notes_enc: notes
         ? encryptForBytea(
             notes,
             aad.asanaItemsNotes(workspaceId, userId, task.gid)
           )
         : null,
-      permalink_url: permalinkUrl,
       permalink_url_enc: permalinkUrl
         ? encryptForBytea(
             permalinkUrl,
@@ -201,26 +195,22 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
               user_id: userId,
               external_id: task.gid,
               type: "task",
-              name: task.name,
               name_enc: encryptForBytea(
                 task.name,
                 aad.asanaItemsName(workspaceId, userId, task.gid)
               ),
-              project_name: projectName,
               project_name_enc: projectName
                 ? encryptForBytea(
                     projectName,
                     aad.asanaItemsProjectName(workspaceId, userId, task.gid)
                   )
                 : null,
-              assignee,
               assignee_enc: assignee
                 ? encryptForBytea(
                     assignee,
                     aad.asanaItemsAssignee(workspaceId, userId, task.gid)
                   )
                 : null,
-              due_date: dueDate,
               due_date_enc: dueDate
                 ? encryptForBytea(
                     dueDate,
@@ -228,14 +218,12 @@ export async function runAsanaSyncForUser(workspaceId: string, userId: string): 
                   )
                 : null,
               status: task.completed ? "completed" : "open",
-              notes,
               notes_enc: notes
                 ? encryptForBytea(
                     notes,
                     aad.asanaItemsNotes(workspaceId, userId, task.gid)
                   )
                 : null,
-              permalink_url: permalinkUrl,
               permalink_url_enc: permalinkUrl
                 ? encryptForBytea(
                     permalinkUrl,

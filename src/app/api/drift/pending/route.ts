@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-server";
-import { decryptOrFallback } from "@/lib/crypto-storage";
+import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
@@ -11,7 +11,7 @@ export async function GET(): Promise<NextResponse> {
   const service = createServiceClient();
   const { data, error } = await service
     .from("drift_findings")
-    .select("id, workspace_id, user_id, decision_summary, decision_summary_enc, draft_update, draft_update_enc, source, source_external_id, detected_at")
+    .select("id, workspace_id, user_id, decision_summary_enc, draft_update_enc, source, source_external_id, detected_at")
     .eq("user_id", user.id)
     .eq("status", "pending")
     .is("asana_item_id", null)
@@ -24,14 +24,12 @@ export async function GET(): Promise<NextResponse> {
 
   const findings = (data ?? []).map((f: any) => ({
     id: f.id,
-    decision_summary: decryptOrFallback(
+    decision_summary: decryptColumn(
       f.decision_summary_enc,
-      f.decision_summary,
       aad.driftFindingsDecisionSummary(f.workspace_id, f.user_id, f.source, f.source_external_id)
     ),
-    draft_update: decryptOrFallback(
+    draft_update: decryptColumn(
       f.draft_update_enc,
-      f.draft_update,
       aad.driftFindingsDraftUpdate(f.workspace_id, f.user_id, f.source, f.source_external_id)
     ),
     source: f.source,
