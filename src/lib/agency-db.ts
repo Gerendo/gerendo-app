@@ -611,7 +611,7 @@ export async function getDriveFileContent(workspaceId: string, userId: string, f
   // Get file record
   const { data: file } = await supabase
     .from("drive_files")
-    .select("external_id, name, mime_type")
+    .select("external_id, mime_type")
     .eq("workspace_id", workspaceId)
     .eq("id", parseInt(fileId))
     .maybeSingle();

@@ -49,7 +49,7 @@ export async function POST(
   const { data: finding } = await service
     .from("drift_findings")
     .select(
-      "id, workspace_id, user_id, decision_summary, decision_summary_enc, draft_update, draft_update_enc, asana_item_id, status, source, source_external_id"
+      "id, workspace_id, user_id, decision_summary_enc, draft_update_enc, asana_item_id, status, source, source_external_id"
     )
     .eq("id", findingId)
     .maybeSingle();
