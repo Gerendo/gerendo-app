@@ -24,6 +24,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .from("conversation_messages")
     .select("id, role, content_enc, created_at")
     .eq("conversation_id", id)
+    .not("content_enc", "is", null)
     .order("created_at", { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -61,24 +62,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     .maybeSingle();
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Set created_at explicitly so it is part of the AAD identity tuple. Space
-  // them 1ms apart within the batch so each row's AAD is unique even if the
-  // insert happens in the same millisecond.
+  // Two-step insert so the AAD is built from the DB-canonical created_at.
+  // Postgres normalises Date.toISOString() ("...Z") to "...+00:00" with
+  // trailing zeros trimmed; if we hashed the JS form on write the GET path
+  // would mis-authenticate when it reads the DB form back. Spacing rows 1ms
+  // apart inside the batch keeps each row's AAD unique.
   const baseTime = Date.now();
-  const rows = messages.map((m, idx) => {
-    const ts = new Date(baseTime + idx).toISOString();
-    return {
-      conversation_id: id,
-      role: m.role,
-      content_enc: encryptForBytea(
-        m.content,
-        aad.conversationMessagesContent(id, m.role, ts)
-      ),
-      created_at: ts,
-    };
-  });
-  const { error } = await supabase.from("conversation_messages").insert(rows);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const stubs = messages.map((m, idx) => ({
+    conversation_id: id,
+    role: m.role,
+    created_at: new Date(baseTime + idx).toISOString(),
+  }));
+  const { data: inserted, error: insErr } = await supabase
+    .from("conversation_messages")
+    .insert(stubs)
+    .select("id, role, created_at")
+    .order("id", { ascending: true });
+  if (insErr || !inserted) {
+    return NextResponse.json({ error: insErr?.message ?? "insert failed" }, { status: 500 });
+  }
+
+  const updates = inserted.map((r, idx) => ({
+    id: r.id as number,
+    content_enc: encryptForBytea(
+      messages[idx].content,
+      aad.conversationMessagesContent(id, r.role as string, r.created_at as string)
+    ),
+  }));
+  const updateResults = await Promise.all(
+    updates.map((u) =>
+      supabase.from("conversation_messages").update({ content_enc: u.content_enc }).eq("id", u.id)
+    )
+  );
+  const firstUpdErr = updateResults.find((r) => r.error)?.error;
+  if (firstUpdErr) {
+    return NextResponse.json({ error: firstUpdErr.message }, { status: 500 });
+  }
 
   // Auto-title from first user message if conversation is still untitled.
   // After Phase 4 the title is encrypted, so we have to decrypt to check.
