@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { createServiceClient } from "@/lib/supabase-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { decryptColumn } from "@/lib/crypto-storage";
+import { decryptColumn, encryptForBytea } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
@@ -20,13 +20,26 @@ export async function GET(): Promise<NextResponse> {
     .select("id, name_enc, created_at")
     .eq("id", workspaceId)
     .single();
-  const workspace = workspaceRow
-    ? {
+  let workspace: { id: string; name: string; created_at: string } | null = null;
+  if (workspaceRow) {
+    if (workspaceRow.name_enc === null || workspaceRow.name_enc === undefined) {
+      // Half-written from a failed two-step insert. Self-heal so the
+      // endpoint never 500s on a recoverable row.
+      const fallback = "My Workspace";
+      const blob = encryptForBytea(fallback, aad.workspacesName(workspaceRow.id));
+      await supabase
+        .from("workspaces")
+        .update({ name_enc: blob })
+        .eq("id", workspaceRow.id);
+      workspace = { id: workspaceRow.id, name: fallback, created_at: workspaceRow.created_at };
+    } else {
+      workspace = {
         id: workspaceRow.id,
         name: decryptColumn(workspaceRow.name_enc, aad.workspacesName(workspaceRow.id)),
         created_at: workspaceRow.created_at,
-      }
-    : null;
+      };
+    }
+  }
 
   const { data: members } = await supabase
     .from("workspace_members")

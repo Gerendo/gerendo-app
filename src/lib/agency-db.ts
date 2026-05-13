@@ -323,26 +323,6 @@ export async function setSyncState(
   );
 }
 
-export async function ftsSearch(
-  db: AgencyDb,
-  query: string,
-  limit = 20
-): Promise<Array<{ id: number; rank: number }>> {
-  const terms = query
-    .split(/\s+/)
-    .map((t) => t.replace(/['"*^(){}[\]|!]/g, "").trim())
-    .filter((t) => t.length > 2);
-  if (terms.length === 0) return [];
-
-  const tsQuery = terms.join(" | ");
-  const { data } = await db.supabase.rpc("fts_search_embeddings", {
-    p_workspace_id: db.workspaceId,
-    p_query: tsQuery,
-    p_limit: limit,
-  });
-  return (data ?? []).map((r: { id: number; rank: number }) => ({ id: r.id, rank: r.rank }));
-}
-
 export async function semanticSearch(
   db: AgencyDb,
   queryEmbedding: number[],
@@ -442,24 +422,6 @@ export async function getWorkspaceContext(
   return { contextText, builtAt: data.built_at, sourcesUsed: data.sources_used };
 }
 
-export async function ftsDriveSearch(
-  db: AgencyDb,
-  query: string,
-  limit = 20
-): Promise<Array<{ id: number; rank: number }>> {
-  const terms = query
-    .split(/\s+/)
-    .map((t) => t.replace(/['"*^(){}[\]|!]/g, "").trim())
-    .filter((t) => t.length > 2);
-  if (terms.length === 0) return [];
-  const tsQuery = terms.join(" | ");
-  const { data } = await db.supabase.rpc("fts_search_drive", {
-    p_workspace_id: db.workspaceId,
-    p_query: tsQuery,
-    p_limit: limit,
-  });
-  return (data ?? []).map((r: { id: number; rank: number }) => ({ id: r.id, rank: r.rank }));
-}
 
 export async function semanticDriveSearch(
   db: AgencyDb,
@@ -511,21 +473,6 @@ export async function getDriveFilesByEmbeddingIds(
       ),
     };
   });
-}
-
-export async function ftsAsanaSearch(
-  db: AgencyDb,
-  query: string,
-  limit = 20
-): Promise<Array<{ id: number; rank: number }>> {
-  const terms = query.split(/\s+/).map((t) => t.replace(/['"*^(){}[\]|!]/g, "").trim()).filter((t) => t.length > 2);
-  if (terms.length === 0) return [];
-  const { data } = await db.supabase.rpc("fts_search_asana", {
-    p_workspace_id: db.workspaceId,
-    p_query: terms.join(" | "),
-    p_limit: limit,
-  });
-  return (data ?? []).map((r: { id: number; rank: number }) => ({ id: r.id, rank: r.rank }));
 }
 
 export async function semanticAsanaSearch(

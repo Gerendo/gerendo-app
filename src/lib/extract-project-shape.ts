@@ -67,8 +67,8 @@ export async function extractProjectShape(
     messages: [{ role: "user", content: userText }],
   });
   const raw = response.content[0].type === "text" ? response.content[0].text : "";
-  // Log raw output before parsing so Vercel logs show what came back when things break.
-  console.log("[extract-project-shape] raw sonnet output:", raw.slice(0, 500));
+  // Don't log raw text — it echoes the decrypted decisionSummary + draftUpdate
+  // back to Vercel function logs. Log length + parse status instead.
 
   const cleaned = stripCodeFences(raw);
   let parsed: Record<string, unknown> = {};

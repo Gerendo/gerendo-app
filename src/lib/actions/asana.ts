@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase-server";
 import { getAsanaToken, asanaGet, asanaPost } from "@/lib/agency-db";
+import { encryptForBytea } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export type ActionContext = {
   workspaceId: string;
@@ -15,9 +17,13 @@ type LogArgs = {
   status: "success" | "failed";
 };
 
+// Two-step insert: write the operational fields first to get a row id,
+// then encrypt the JSON payloads with that id in the AAD and UPDATE.
+// Keeps the AAD identity stable and prevents payload plaintext from
+// touching the database.
 async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  const { data: row, error: insErr } = await supabase
     .from("action_log")
     .insert({
       workspace_id: ctx.workspaceId,
@@ -25,15 +31,35 @@ async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
       action_type: args.actionType,
       target_system: "asana",
       target_id: args.targetId,
-      payload_before: args.payloadBefore,
-      payload_after: args.payloadAfter,
       executed_by: ctx.executedBy,
       status: args.status,
     })
     .select("id")
     .single();
-  if (error || !data) throw new Error(`logAction: ${error?.message ?? "unknown"}`);
-  return data.id as number;
+  if (insErr || !row) throw new Error(`logAction insert: ${insErr?.message ?? "unknown"}`);
+  const id = row.id as number;
+
+  const updates: { payload_before_enc?: string; payload_after_enc?: string } = {};
+  if (args.payloadBefore !== null && args.payloadBefore !== undefined) {
+    updates.payload_before_enc = encryptForBytea(
+      JSON.stringify(args.payloadBefore),
+      aad.actionLogPayloadBefore(id)
+    );
+  }
+  if (args.payloadAfter !== null && args.payloadAfter !== undefined) {
+    updates.payload_after_enc = encryptForBytea(
+      JSON.stringify(args.payloadAfter),
+      aad.actionLogPayloadAfter(id)
+    );
+  }
+  if (Object.keys(updates).length > 0) {
+    const { error: updErr } = await supabase
+      .from("action_log")
+      .update(updates)
+      .eq("id", id);
+    if (updErr) throw new Error(`logAction update: ${updErr.message}`);
+  }
+  return id;
 }
 
 // Asana update uses PUT, which is not exported from agency-db. Define inline.

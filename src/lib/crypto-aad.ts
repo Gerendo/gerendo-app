@@ -180,4 +180,16 @@ export const aad = {
     createdAt: string
   ): string =>
     `conversation_messages:content:${conversationId}:${role}:${createdAt}`,
+
+  // ── Operational: action_log payloads ─────────────────────────────────
+  // The audit-log row that records each Asana write-back. Its JSONB
+  // payloads contained plaintext Asana task names, notes, and the
+  // decrypted draftUpdate comment text — the same PII Phase 3b encrypts
+  // on the source rows. Encrypt with row.id in AAD so payload-before and
+  // payload-after of the same log entry are unambiguously bound to it.
+  actionLogPayloadBefore: (id: number): string =>
+    `action_log:payload_before:${id}`,
+
+  actionLogPayloadAfter: (id: number): string =>
+    `action_log:payload_after:${id}`,
 };

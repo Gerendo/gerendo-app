@@ -14,6 +14,9 @@ export async function GET(): Promise<NextResponse> {
     .from("conversations")
     .select("id, workspace_id, title_enc, created_at, updated_at")
     .eq("user_id", userId)
+    // Skip half-written rows from a failed two-step insert; otherwise one
+    // null title_enc would 500 the entire list via decryptColumn.
+    .not("title_enc", "is", null)
     .order("updated_at", { ascending: false })
     .limit(100);
 

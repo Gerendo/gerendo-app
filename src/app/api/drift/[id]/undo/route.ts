@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-server";
 import { getAsanaToken } from "@/lib/agency-db";
+import { decryptColumn } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 type AsanaBeforePayload = {
   due_on?: string | null;
@@ -38,7 +40,7 @@ export async function POST(
 
   const { data: logs } = await service
     .from("action_log")
-    .select("id, action_type, target_system, target_id, payload_before")
+    .select("id, action_type, target_system, target_id, payload_before_enc")
     .eq("drift_finding_id", findingId)
     .eq("status", "success")
     .order("executed_at", { ascending: false });
@@ -54,8 +56,13 @@ export async function POST(
   for (const log of logs) {
     if (log.target_system !== "asana" || !log.target_id) continue;
     try {
-      if (log.action_type === "asana.update_task" && log.payload_before) {
-        const before = log.payload_before as AsanaBeforePayload;
+      if (log.action_type === "asana.update_task" && log.payload_before_enc) {
+        const before = JSON.parse(
+          decryptColumn(
+            log.payload_before_enc,
+            aad.actionLogPayloadBefore(log.id as number)
+          )
+        ) as AsanaBeforePayload;
         const res = await fetch(`https://app.asana.com/api/1.0/tasks/${log.target_id}`, {
           method: "PUT",
           headers: {

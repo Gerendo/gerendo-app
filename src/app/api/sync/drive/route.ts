@@ -100,7 +100,7 @@ async function syncFile(
     .single();
 
   if (fileErr || !fileRow) {
-    console.error(`[drive] upsert failed for ${file.name}:`, fileErr?.message);
+    console.error(`[drive] upsert failed for file id=${file.id}:`, fileErr?.message);
     return "skipped";
   }
 
@@ -168,7 +168,7 @@ export async function runDriveSyncForUser(
           const outcome = await syncFile(supabase, drive, change.file, workspaceId, userId);
           outcome === "synced" ? synced++ : skipped++;
         } catch (err: any) {
-          console.error(`[drive] incremental sync failed for ${change.file.name}:`, err?.message);
+          console.error(`[drive] incremental sync failed for file id=${change.file.id}:`, err?.message);
           skipped++;
         }
       }
@@ -205,7 +205,7 @@ export async function runDriveSyncForUser(
           const outcome = await syncFile(supabase, drive, file, workspaceId, userId);
           outcome === "synced" ? synced++ : skipped++;
         } catch (err: any) {
-          console.error(`[drive] full sync failed for ${file.name}:`, err?.message);
+          console.error(`[drive] full sync failed for file id=${file.id}:`, err?.message);
           skipped++;
         }
       }
