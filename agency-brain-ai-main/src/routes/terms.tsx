@@ -13,9 +13,6 @@ export const Route = createFileRoute("/terms")({
 
 const AI_SUBPROCESSORS = [
   { name: "Anthropic", model: "Claude", privacy: "https://www.anthropic.com/privacy" },
-  { name: "OpenAI", model: "GPT-4", privacy: "https://openai.com/policies/privacy-policy" },
-  { name: "Google", model: "Gemini", privacy: "https://policies.google.com/privacy" },
-  { name: "Mistral AI", model: "Mistral", privacy: "https://mistral.ai/privacy" },
 ];
 
 function Terms() {
@@ -29,7 +26,7 @@ function Terms() {
       <main className="mx-auto max-w-3xl px-6 pb-24 pt-8">
         <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ember">Legal</p>
         <h1 className="mt-4 font-display text-5xl tracking-tight">Terms of Use</h1>
-        <p className="mt-3 text-sm text-muted-foreground">Last updated: April 2026</p>
+        <p className="mt-3 text-sm text-muted-foreground">Last updated: May 2026</p>
 
         <div className="mt-12 space-y-10 text-[15px] leading-relaxed text-muted-foreground">
 
@@ -130,11 +127,11 @@ function Terms() {
           <section>
             <h2 className="font-display text-2xl text-foreground">7. AI subprocessors</h2>
             <p className="mt-3">
-              Gerendo allows you to choose which AI model powers your workspace. When you submit a
-              query, relevant context from your connected sources is routed to the AI provider you
-              have selected. We use zero-retention API endpoints wherever available, meaning your
-              data is not stored or used to train models by these providers. The current AI
-              providers available are:
+              When you submit a query, relevant context from your connected sources is decrypted in
+              our application and sent over TLS to our AI provider for inference. Anthropic does
+              not train its models on inputs sent through its API. Per Anthropic's standard
+              commercial terms, prompts may be retained for up to 30 days for abuse monitoring and
+              are then deleted. The current AI provider is:
             </p>
 
             {/* Mobile cards */}
@@ -179,9 +176,9 @@ function Terms() {
             </div>
 
             <p className="mt-4">
-              By selecting an AI provider, you acknowledge that your query data will be processed
-              by that provider under their terms. You can switch providers at any time from your
-              workspace settings.
+              By using Gerendo, you acknowledge that your query data will be processed by Anthropic
+              under their terms. Bring-your-own-key support and additional providers (OpenAI,
+              Gemini, Mistral) are on the roadmap and not yet available.
             </p>
           </section>
 
