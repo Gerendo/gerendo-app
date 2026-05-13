@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { createServiceClient } from "@/lib/supabase-server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { decryptColumn } from "@/lib/crypto-storage";
+import { aad } from "@/lib/crypto-aad";
 
 export async function GET(): Promise<NextResponse> {
   const _ws = await requireWorkspace();
@@ -13,11 +15,18 @@ export async function GET(): Promise<NextResponse> {
 
   const { data: { user } } = await authSupabase.auth.getUser();
 
-  const { data: workspace } = await supabase
+  const { data: workspaceRow } = await supabase
     .from("workspaces")
-    .select("id, name, created_at")
+    .select("id, name_enc, created_at")
     .eq("id", workspaceId)
     .single();
+  const workspace = workspaceRow
+    ? {
+        id: workspaceRow.id,
+        name: decryptColumn(workspaceRow.name_enc, aad.workspacesName(workspaceRow.id)),
+        created_at: workspaceRow.created_at,
+      }
+    : null;
 
   const { data: members } = await supabase
     .from("workspace_members")

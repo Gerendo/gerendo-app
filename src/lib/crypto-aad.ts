@@ -160,4 +160,24 @@ export const aad = {
     sourceExternalId: string
   ): string =>
     `drift_findings:resolution_note:${workspaceId}:${userId}:${source}:${sourceExternalId}`,
+
+  // ── Phase 4: workspace name + chat history ───────────────────────────────
+  // The workspace name (agency identity) and chat content (titles + every
+  // user prompt + every AI answer). All free-form, all sensitive.
+
+  workspacesName: (id: string): string => `workspaces:name:${id}`,
+
+  conversationsTitle: (workspaceId: string, id: string): string =>
+    `conversations:title:${workspaceId}:${id}`,
+
+  // AAD uses conversation_id (uuid, globally unique) + role (enum) +
+  // created_at ISO string set explicitly at insert. The triple is unique
+  // because no two messages share the same created_at within a single
+  // conversation; we set createdAt ourselves so collisions are impossible.
+  conversationMessagesContent: (
+    conversationId: string,
+    role: string,
+    createdAt: string
+  ): string =>
+    `conversation_messages:content:${conversationId}:${role}:${createdAt}`,
 };

@@ -840,13 +840,20 @@ export async function getOrCreateDefaultWorkspace(): Promise<{ workspaceId: stri
   // No workspace yet — create a placeholder linked to a synthetic user id
   const PLACEHOLDER_USER_ID = "00000000-0000-0000-0000-000000000001";
 
+  // Insert workspace with placeholder name first to get the id, then
+  // update with encrypted name_enc using id as part of the AAD.
   const { data: ws, error: wsError } = await supabase
     .from("workspaces")
-    .insert({ name: "My Workspace" })
+    .insert({})
     .select("id")
     .single();
 
   if (!ws) throw new Error(`Failed to create default workspace: ${wsError?.message ?? "unknown"}`);
+
+  await supabase
+    .from("workspaces")
+    .update({ name_enc: encryptForBytea("My Workspace", aad.workspacesName(ws.id)) })
+    .eq("id", ws.id);
 
   await supabase.from("workspace_members").insert({
     workspace_id: ws.id,
@@ -907,10 +914,14 @@ export async function createWorkspaceForUser(
   const supabase = createServiceClient();
   const { data: ws, error } = await supabase
     .from("workspaces")
-    .insert({ name })
+    .insert({})
     .select("id")
     .single();
   if (!ws) throw new Error(`Failed to create workspace: ${error?.message}`);
+  await supabase
+    .from("workspaces")
+    .update({ name_enc: encryptForBytea(name, aad.workspacesName(ws.id)) })
+    .eq("id", ws.id);
   await supabase.from("workspace_members").insert({
     workspace_id: ws.id,
     user_id: userId,
