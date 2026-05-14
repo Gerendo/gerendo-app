@@ -615,6 +615,46 @@ function ConnectPageInner() {
           )}
         </div>
 
+        {/* Heads up: Google's unverified-app warning */}
+        <div
+          className="flex flex-col gap-3 px-5 py-4 rounded-2xl"
+          style={{
+            background: "oklch(0.78 0.14 65 / 6%)",
+            border: "1px solid oklch(0.78 0.14 65 / 20%)",
+          }}
+        >
+          <h3 className="text-sm font-semibold" style={{ fontFamily: "var(--font-display)", color: "oklch(0.96 0.012 80)" }}>
+            Quick heads up before you connect
+          </h3>
+          <p className="text-xs leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
+            When you click Connect Gmail or Connect Drive, Google will show a screen that says{" "}
+            <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>&quot;Google hasn&apos;t verified this app.&quot;</span>{" "}
+            That&apos;s expected. We&apos;re in the validation phase. Google&apos;s verification takes weeks and we&apos;re waiting until we know Gerendo is the right fit for enough agencies before we commit to it. The product on the other side of the screen is the same.
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
+            To get through: click <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Advanced</span> at the bottom-left, then <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>&quot;Go to app.gerendo.com (unsafe)&quot;</span>.
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
+            What we read: Gmail messages and Drive files, for answering your questions. What we never do: send, modify, share, or delete anything. Everything we index is encrypted at rest, and no AI model is trained on your data. Full details at{" "}
+            <a
+              href="https://gerendo.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline"
+              style={{ color: "oklch(0.78 0.14 65)" }}
+            >
+              gerendo.com/privacy
+            </a>
+            .
+          </p>
+          <p className="text-xs leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
+            If anything here feels off, reply to the welcome email and I&apos;ll answer directly to help you.
+          </p>
+          <p className="text-xs" style={{ color: "oklch(0.55 0.012 60)" }}>
+            Ermina, founder
+          </p>
+        </div>
+
         {/* Category filter - horizontal scroll on mobile, wraps on desktop */}
         <div className="flex gap-2 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden flex-nowrap md:flex-wrap">
           {categories.map(cat => (
