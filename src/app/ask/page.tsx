@@ -293,6 +293,16 @@ export default function AskPage() {
 
           if (data.type === "source") { sources = [...sources, data.source]; setStreamingSources([...sources]); }
           if (data.type === "token") { fullAnswer += data.text; setStreamingText(fullAnswer); }
+          if (data.type === "needs_reauth") {
+            // Provider token expired and could not be refreshed. Show a toast
+            // so the user knows the partial answer below is missing that
+            // provider's data, with a deep-link to the connect page.
+            const providerName = data.provider === "google-gmail" ? "Gmail"
+              : data.provider === "google-drive" ? "Google Drive"
+              : data.provider === "asana" ? "Asana"
+              : data.provider;
+            setToast(`${providerName} access expired — reconnect at /connect`);
+          }
           if (data.type === "done") {
             setMessages((prev) => [...prev, { role: "assistant", content: fullAnswer, sources: sources.length > 0 ? sources : undefined }]);
             setStreamingText("");

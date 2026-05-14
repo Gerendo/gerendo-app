@@ -6,6 +6,7 @@ import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
 import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
+import { isReauthError, reauthErrorToResponse } from "@/lib/oauth-errors";
 
 function gmailUrlForExternal(externalId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${externalId}`;
@@ -173,6 +174,7 @@ export async function POST(
       projectPermalink = created.permalinkUrl;
     }
   } catch (err: unknown) {
+    if (isReauthError(err)) return reauthErrorToResponse(err)!;
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }
@@ -189,6 +191,7 @@ export async function POST(
     sectionGid = s.sectionGid;
     sectionName = s.sectionName;
   } catch (err: unknown) {
+    if (isReauthError(err)) return reauthErrorToResponse(err)!;
     const message = err instanceof Error ? err.message : String(err);
     console.error("[drift create-project] createSection failed, continuing without section:", message);
   }
@@ -209,6 +212,7 @@ export async function POST(
     taskName = t.taskName;
     taskPermalink = t.permalinkUrl;
   } catch (err: unknown) {
+    if (isReauthError(err)) return reauthErrorToResponse(err)!;
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }
@@ -224,6 +228,7 @@ export async function POST(
         : undefined
     );
   } catch (err: unknown) {
+    if (isReauthError(err)) return reauthErrorToResponse(err)!;
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 502 });
   }

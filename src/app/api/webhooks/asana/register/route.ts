@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { getAsanaToken } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { safeEqual } from "@/lib/crypto";
 
 export const maxDuration = 60;
@@ -28,7 +29,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   let token: string;
   try {
     token = await getAsanaToken(workspaceId, userId);
-  } catch {
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: "Asana not connected" }, { status: 401 });
   }
 

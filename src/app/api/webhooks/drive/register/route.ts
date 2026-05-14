@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { getDriveToken } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { google } from "googleapis";
 import { safeEqual } from "@/lib/crypto";
 import { randomUUID } from "crypto";
@@ -34,7 +35,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   let token: string;
   try {
     token = await getDriveToken(workspaceId, userId);
-  } catch {
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: "Google Drive not connected" }, { status: 401 });
   }
 

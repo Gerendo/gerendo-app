@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { getGmailToken } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { safeEqual } from "@/lib/crypto";
 
 export const maxDuration = 60;
@@ -36,7 +37,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   let token: string;
   try {
     token = await getGmailToken(workspaceId, userId);
-  } catch {
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: "Gmail not connected" }, { status: 401 });
   }
 

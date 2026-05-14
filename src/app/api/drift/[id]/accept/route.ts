@@ -6,6 +6,7 @@ import { webpush } from "@/lib/push";
 import { extractProjectShape } from "@/lib/extract-project-shape";
 import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
+import { isReauthError, reauthErrorToResponse } from "@/lib/oauth-errors";
 
 const MONTHS = [
   "january", "february", "march", "april", "may", "june",
@@ -147,6 +148,10 @@ export async function POST(
         const r = await asanaActions.updateTask(ctx, taskGid, { due_on: detectedDate });
         results.push({ action: "asana.update_task", logId: r.logId, ok: true });
       } catch (err: unknown) {
+        // Short-circuit on reauth: the same token will fail every subsequent
+        // call in this request, and the UI can render a single Reconnect CTA
+        // instead of parsing english out of results[].error.
+        if (isReauthError(err)) return reauthErrorToResponse(err)!;
         results.push({
           action: "asana.update_task",
           ok: false,
@@ -164,6 +169,7 @@ export async function POST(
       );
       results.push({ action: "asana.add_comment", logId: r.logId, ok: true });
     } catch (err: unknown) {
+      if (isReauthError(err)) return reauthErrorToResponse(err)!;
       results.push({
         action: "asana.add_comment",
         ok: false,
