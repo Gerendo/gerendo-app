@@ -1,5 +1,82 @@
 # Gerendo - Changelog
 
+## 2026-05-14 (Security hardening — 8 audits + idempotency, encryption rollout closed)
+
+Two-day cycle that took 4 phases of column encryption from "shipped and mostly tested" to "audited eight times by independent agents and verified clean." Full narrative in [docs/SECURITY_HARDENING_LOG.md](SECURITY_HARDENING_LOG.md) — the canonical reference for the next session.
+
+**Encryption surface at close of cycle**
+- **26 sensitive columns encrypted at rest** with AES-256-GCM, AAD-bound ciphertext, master key in Vercel env. Plaintext counterparts dropped from schema.
+- Final additions today: `action_log.payload_before_enc` + `payload_after_enc` (audit 3 CRITICAL — Asana task names + decrypted draftUpdate comment text were leaking through the audit log JSONB).
+
+**OAuth observability (audits 4-6)**
+- New `ReauthorizeRequiredError` class thrown by `getGmailToken`/`getDriveToken`/`getAsanaToken` when refresh fails. Previously the routes silently returned the stale token and the user got generic 401s with no signal to reconnect.
+- New `src/lib/oauth-errors.ts` with `reauthErrorToResponse` (401 + `{ error: "reauthorize_required", provider }`) and `logReauthNeeded` (structured `[oauth-reauth-needed]` line for webhooks). Wired into 17+ routes including drift accept, drift create-project, all sync routes, all 3 webhook handlers, all 3 webhook register routes, /api/settings/asana-defaults, /api/sync/summaries, /api/workspace/context/build, /api/drift/[id]/undo.
+- `/api/ask` emits SSE `needs_reauth` events from the gmail init block and Asana tool handlers; chat client at `src/app/ask/page.tsx` maps them to toast notifications with provider names ("Gmail" / "Google Drive" / "Asana").
+- Webhook handlers (asana/drive/gmail) detect `ReauthorizeRequiredError`, log structured signal, break out of the per-record loop to avoid log spam.
+
+**Operational fixes (audits 3-5)**
+- `workspaces.name_enc` self-heals when null — `/api/workspace/info` no longer 500s on a half-written 2-step insert.
+- `conversations` GET filters `.not("title_enc", "is", null)` so one orphan can't poison the whole list.
+- `instrumentation.ts` boot check validates `GERENDO_MASTER_KEY` at function cold-start; misconfigured deploys fail fast instead of 500'ing on first DB request.
+- `action_log` rows insert with `status="pending"` and flip to `success`/`failed` only after the encrypted payload UPDATE lands. Inline sweep flips stale pending rows (>5min) to `failed`. No cron needed.
+- `POST /conversations/[id]/messages` whitelists `role` to `{user, assistant, system}`. New migration `20260517` adds `CHECK (role IN ('user','assistant','system'))` at the DB level for defense-in-depth.
+- Chat-message AAD now built from DB-canonical `created_at` (Postgres normalizes JS `Z`-form to `+00:00`-form, which broke the AAD on read). 2-step insert + read-back pattern.
+
+**Drift idempotency (post-audit-7 commit c12047e)**
+- `src/lib/action-log-idempotency.ts` with `getExistingActionTargetId` + `hasActionSucceeded`. Looks up action_log before each Asana mutation; reuses gids on retry. Both `drift/[id]/create-project` (4 checks: project / section / task / comment) and `drift/[id]/accept` (2 checks: update_task / comment) are now forward-only-idempotent. Partial-failure retries don't create duplicate Asana resources.
+
+**Bug fixes triggered by the audits**
+- Three routes silently 404'd on dropped plaintext columns (audit 2): drift accept, drift create-project, getDriveFileContent. All selected columns that Phase 3a/3b had dropped; `.maybeSingle()` swallowed PostgREST 42703 into null. Fixed.
+- `extract-project-shape.ts` was logging 500 chars of raw Sonnet output to Vercel logs, leaking decrypted decisionSummary + draftUpdate. Removed.
+- Drive sync error logs were echoing `file.name` (Phase 3a encrypted at rest). Replaced with `file.id`.
+- Three dead `fts*` exports in `agency-db.ts` deleted (referenced RPCs that targeted dropped plaintext columns).
+
+**Smoke test suite (durable, run before any encryption-touching change)**
+- `scripts/verify-final.ts` — 24/24 plaintext columns confirmed dropped + Phase 4 round-trip.
+- `scripts/test-app-encryption.ts` — full write/read round-trip for 12 column families.
+- `scripts/test-action-log-enc.ts` — payload encryption + AAD tamper rejection.
+- `scripts/test-idempotency-lookup.ts` — action_log idempotency lookups including undone-row exclusion.
+- `scripts/sanity-decrypt.ts` — random-row decrypt across messages/embeddings/oauth_tokens.
+- `scripts/check-prod-conv-msg.ts` — every conversation_message decrypts cleanly.
+
+**Hooks refreshed**
+- `.claude/hooks/encryption-rules.sh` (SessionStart): rewritten with current 26-column inventory + WRITE/READ patterns. Replaces the stale Phase 1+2 version.
+- `.claude/hooks/check-encryption.sh` (PostToolUse): Pattern B now covers every dropped plaintext column with the correct `_enc` companion warning. Lookback tightened to stop at function boundaries — kills false positives that bled across `upsertSummary` / `getSummariesByMessageIds`.
+
+**Audit commits**
+- 1: 61901aa → 61701aa (chat-message AAD timestamp fix)
+- 2: 745a8b2 (3 dropped-column-select routes)
+- 3: 0d73fae (action_log enc + null self-heal + boot check + log leakage + dead exports)
+- 4: 86dd909 (OAuth refresh + action_log status race + undo gap + role whitelist)
+- 5: 2d15607 (oauth-errors helpers + SSE needs_reauth + 14 route mappings + role CHECK + sweep)
+- 6: c79aa8b (chat client SSE handler + drift routes + webhook register)
+- 7: explicit STOP recommendation; user shipped c12047e (idempotency) anyway
+- 8: zero findings, confirmed clean
+
+**Deferred (will not fix unless symptoms appear)**
+1. `cachedKey` rotation runbook (audit 7 L1) — no code change; redeploy after rotating master key.
+2. Chat double-submit cosmetic (audit 7 L2) — form already disabled while loading; triple-protected.
+3. Idempotency reusing a manually-deleted-in-Asana gid (audit 8 L3) — surfaces as 502, no data corruption.
+
+**Privacy claim now defensible**
+- `/privacy` and `/security` pages already updated in c56009a. Google OAuth verification submission can now truthfully claim AES-256-GCM at-rest with operator-isolation (encryption enforces it, not just RLS).
+
+## 2026-05-13 (Prompt engineering playbook expanded with eval pipeline + dataset rules)
+
+**Prompt engineering playbook ([docs/PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md))**
+- New section 7: 5-step eval pipeline mapped to our TS stack (datasets under `evals/<feature>/dataset.json`, runner scripts under `scripts/eval-<feature>.ts`, runs archived to `evals/<feature>/runs/<ts>.json`).
+- New section 8: rules for building an eval dataset. Size and growth (2-3 cases dev, ~20 hand-crafted baseline, datasets only grow), hand-curate before generating, required schema (id/input/expected/notes), distribution rules (cover every class, language, length band, failure mode, no leakage with prompt examples), real-data anonymisation, when to start a new dataset, and an 8-item pre-flight checklist.
+- New section 9: three grader types with rules for which to apply where. Code graders for classifiers + JSON output, Sonnet model graders for subjective quality (always asking strengths/weaknesses/reasoning/score together to avoid 6/10 default), human graders only for grader calibration and pre-launch sanity.
+- New section 10: rollout plan. decision-detector Haiku classifier first, ask endpoint second, other four prompts adopt the harness later.
+- TL;DR rewritten to cover both engineering and evaluation halves.
+
+**No eval datasets created yet.** Datasets will be built per-feature following section 8 rules when each prompt is ready for evaluation.
+
+**Enforcement wired in**
+- New "Prompts (mandatory)" section in [CLAUDE.md](../CLAUDE.md) - any new or modified LLM prompt must follow the playbook (scaffold, iteration checklist, eval dataset rules, graders).
+- Subagent delegation rule added to the same section: orchestrators must explicitly cite `docs/PROMPT_ENGINEERING.md` in any subagent prompt that could involve prompt-writing, so the playbook propagates through agent chains.
+- Memory pointer in `~/.claude/projects/-Users-mingw-gerendo-app/memory/reference_prompt_engineering.md` tightened to mark the playbook as MANDATORY, so future sessions surface it before touching any prompt.
+
 ## 2026-05-11 (Push notifications + decision detection pipeline + embeddings fix)
 
 **Push notification layer (full stack)**
