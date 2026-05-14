@@ -49,12 +49,31 @@ export async function POST(
     return NextResponse.json({ status: "nothing-to-undo" });
   }
 
+  // Actions Gerendo cannot reverse via Asana API (no destructive endpoints
+  // wired up; deletion of created projects/tasks/sections is a manual
+  // operation the user must do in Asana). If any of these were logged, the
+  // drift finding stays resolved — we don't pretend it's "pending" again.
+  const NON_UNDOABLE: ReadonlySet<string> = new Set([
+    "asana.create_project",
+    "asana.create_section",
+    "asana.create_task",
+  ]);
+
   const token = await getAsanaToken(finding.workspace_id as string, user.id);
   const undone: number[] = [];
   const failed: Array<{ id: number; error: string }> = [];
+  const nonUndoable: Array<{ id: number; action_type: string; target_id: string | null }> = [];
 
   for (const log of logs) {
     if (log.target_system !== "asana" || !log.target_id) continue;
+    if (NON_UNDOABLE.has(log.action_type as string)) {
+      nonUndoable.push({
+        id: log.id as number,
+        action_type: log.action_type as string,
+        target_id: log.target_id as string,
+      });
+      continue;
+    }
     try {
       if (log.action_type === "asana.update_task" && log.payload_before_enc) {
         const before = JSON.parse(
@@ -106,10 +125,23 @@ export async function POST(
     }
   }
 
-  await service
-    .from("drift_findings")
-    .update({ status: "pending", resolved_at: null, resolution_note_enc: null })
-    .eq("id", findingId);
-
-  return NextResponse.json({ status: "undone", undone, failed });
+  // Only revert the finding to "pending" when we actually undid the Asana
+  // side-effect. If every log was non-undoable (create_*) or every undo
+  // failed, the finding stays resolved so the user doesn't re-accept and
+  // create duplicate projects/tasks.
+  if (undone.length > 0) {
+    await service
+      .from("drift_findings")
+      .update({ status: "pending", resolved_at: null, resolution_note_enc: null })
+      .eq("id", findingId);
+    return NextResponse.json({ status: "undone", undone, failed, nonUndoable });
+  }
+  if (nonUndoable.length > 0 && failed.length === 0) {
+    return NextResponse.json({
+      status: "no-op",
+      reason: "Asana side-effects from create_* actions cannot be reverted automatically. Delete the created project/task/section in Asana if you want to roll back.",
+      nonUndoable,
+    });
+  }
+  return NextResponse.json({ status: "undone", undone, failed, nonUndoable });
 }

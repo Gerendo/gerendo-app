@@ -51,6 +51,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!Array.isArray(messages) || messages.length === 0) {
     return NextResponse.json({ error: "Messages required" }, { status: 400 });
   }
+  // role is part of the conversationMessagesContent AAD identity tuple and
+  // is rendered in chat history + filtered by downstream consumers
+  // (system prompts, role==="user" guards). Whitelist it before insert so a
+  // crafted client cannot inject an arbitrary string and confuse downstream
+  // rendering or filters. AAD round-trips are self-consistent regardless,
+  // so this is hygiene rather than encryption-correctness.
+  const ALLOWED_ROLES = new Set(["user", "assistant", "system"]);
+  for (const m of messages) {
+    if (typeof m.role !== "string" || !ALLOWED_ROLES.has(m.role)) {
+      return NextResponse.json(
+        { error: `Invalid role "${m.role}". Must be one of: ${[...ALLOWED_ROLES].join(", ")}` },
+        { status: 400 }
+      );
+    }
+    if (typeof m.content !== "string") {
+      return NextResponse.json({ error: "content must be a string" }, { status: 400 });
+    }
+  }
 
   const supabase = createServiceClient();
 

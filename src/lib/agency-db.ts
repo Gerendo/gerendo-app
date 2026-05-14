@@ -608,6 +608,19 @@ export async function getDriveFileContent(workspaceId: string, userId: string, f
   }
 }
 
+/**
+ * Thrown when an OAuth access token is expired and the refresh path cannot
+ * recover it (missing refresh_token, provider rejected the refresh, network
+ * error). Callers should map this to a 401 with a "reconnect" CTA — never
+ * fall back to the stale token, which silently 401s downstream.
+ */
+export class ReauthorizeRequiredError extends Error {
+  constructor(public provider: string, public reason: string) {
+    super(`Reauthorize required: ${provider} (${reason})`);
+    this.name = "ReauthorizeRequiredError";
+  }
+}
+
 export async function getGmailToken(workspaceId: string, userId: string): Promise<string> {
   const supabase = createServiceClient();
   const { data } = await supabase
@@ -629,7 +642,11 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
       )
     : null;
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
+  const isExpired = !!(data.expires_at && Date.now() > data.expires_at - 60000);
+  if (isExpired) {
+    if (!refreshToken) {
+      throw new ReauthorizeRequiredError("google-gmail", "no_refresh_token");
+    }
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -651,6 +668,9 @@ export async function getGmailToken(workspaceId: string, userId: string): Promis
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-gmail");
       return tokens.access_token;
     }
+    const reason = typeof tokens.error === "string" ? tokens.error : "no_access_token";
+    console.error(`[oauth] google-gmail refresh failed: ${reason}`);
+    throw new ReauthorizeRequiredError("google-gmail", reason);
   }
 
   return decryptColumn(
@@ -680,7 +700,11 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
       )
     : null;
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
+  const isExpired = !!(data.expires_at && Date.now() > data.expires_at - 60000);
+  if (isExpired) {
+    if (!refreshToken) {
+      throw new ReauthorizeRequiredError("google-drive", "no_refresh_token");
+    }
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -702,6 +726,9 @@ export async function getDriveToken(workspaceId: string, userId: string): Promis
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "google-drive");
       return tokens.access_token;
     }
+    const reason = typeof tokens.error === "string" ? tokens.error : "no_access_token";
+    console.error(`[oauth] google-drive refresh failed: ${reason}`);
+    throw new ReauthorizeRequiredError("google-drive", reason);
   }
 
   return decryptColumn(
@@ -731,7 +758,11 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
       )
     : null;
 
-  if (data.expires_at && Date.now() > data.expires_at - 60000 && refreshToken) {
+  const isExpired = !!(data.expires_at && Date.now() > data.expires_at - 60000);
+  if (isExpired) {
+    if (!refreshToken) {
+      throw new ReauthorizeRequiredError("asana", "no_refresh_token");
+    }
     const res = await fetch("https://app.asana.com/-/oauth_token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -753,6 +784,9 @@ export async function getAsanaToken(workspaceId: string, userId: string): Promis
       }).eq("workspace_id", workspaceId).eq("user_id", userId).eq("provider", "asana");
       return tokens.access_token;
     }
+    const reason = typeof tokens.error === "string" ? tokens.error : "no_access_token";
+    console.error(`[oauth] asana refresh failed: ${reason}`);
+    throw new ReauthorizeRequiredError("asana", reason);
   }
 
   return decryptColumn(

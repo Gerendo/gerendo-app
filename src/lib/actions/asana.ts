@@ -17,10 +17,12 @@ type LogArgs = {
   status: "success" | "failed";
 };
 
-// Two-step insert: write the operational fields first to get a row id,
-// then encrypt the JSON payloads with that id in the AAD and UPDATE.
-// Keeps the AAD identity stable and prevents payload plaintext from
-// touching the database.
+// Two-step insert: write the operational fields with status="pending" first
+// to get a row id, then encrypt the JSON payloads using that id in the AAD,
+// UPDATE the row with payloads, and finally flip status to the caller's
+// terminal value. If encryption or the second UPDATE fails the row stays
+// "pending" — undo skips it cleanly and the orphan is identifiable for
+// cleanup rather than presenting as a successful action with no payload.
 async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
   const supabase = createServiceClient();
   const { data: row, error: insErr } = await supabase
@@ -32,14 +34,18 @@ async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
       target_system: "asana",
       target_id: args.targetId,
       executed_by: ctx.executedBy,
-      status: args.status,
+      status: "pending",
     })
     .select("id")
     .single();
   if (insErr || !row) throw new Error(`logAction insert: ${insErr?.message ?? "unknown"}`);
   const id = row.id as number;
 
-  const updates: { payload_before_enc?: string; payload_after_enc?: string } = {};
+  const updates: {
+    payload_before_enc?: string;
+    payload_after_enc?: string;
+    status: "success" | "failed";
+  } = { status: args.status };
   if (args.payloadBefore !== null && args.payloadBefore !== undefined) {
     updates.payload_before_enc = encryptForBytea(
       JSON.stringify(args.payloadBefore),
@@ -52,13 +58,11 @@ async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
       aad.actionLogPayloadAfter(id)
     );
   }
-  if (Object.keys(updates).length > 0) {
-    const { error: updErr } = await supabase
-      .from("action_log")
-      .update(updates)
-      .eq("id", id);
-    if (updErr) throw new Error(`logAction update: ${updErr.message}`);
-  }
+  const { error: updErr } = await supabase
+    .from("action_log")
+    .update(updates)
+    .eq("id", id);
+  if (updErr) throw new Error(`logAction update: ${updErr.message}`);
   return id;
 }
 
