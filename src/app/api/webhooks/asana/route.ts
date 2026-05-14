@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { syncSingleAsanaTask } from "@/app/api/sync/asana/route";
 import { safeEqual } from "@/lib/crypto";
+import { logReauthNeeded } from "@/lib/oauth-errors";
 
 const DEBOUNCE_MS = 15_000;
 
@@ -133,6 +134,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     try {
       await syncSingleAsanaTask(workspaceId, userId, taskGid);
     } catch (err: any) {
+      // If the user revoked OAuth, every event in this batch will fail the
+      // same way. Log a single structured reauth signal and break the loop
+      // so we don't spam logs on every batch member with the same provider
+      // error. The webhook still returns 200 so Asana doesn't retry-storm.
+      if (logReauthNeeded(err, `webhook/asana task=${taskGid}`)) break;
       console.error(`[webhook/asana] task sync failed ${taskGid}:`, err?.message);
     }
   }

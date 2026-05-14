@@ -3,6 +3,7 @@ import { google } from "googleapis";
 import { createServiceClient } from "@/lib/supabase-server";
 import { runGmailSyncForUser } from "@/app/api/sync/gmail/route";
 import { detectDecisionsForUser } from "@/lib/decision-detector";
+import { logReauthNeeded } from "@/lib/oauth-errors";
 
 export const maxDuration = 300;
 
@@ -103,7 +104,9 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     await runGmailSyncForUser(workspaceId, userId, { labelsOnly: ["INBOX", "SENT"] });
   } catch (err: any) {
-    console.error("[webhook/gmail] gmail sync failed:", err?.message);
+    if (!logReauthNeeded(err, `webhook/gmail workspace=${workspaceId}`)) {
+      console.error("[webhook/gmail] gmail sync failed:", err?.message);
+    }
   }
 
   // Run decision detection synchronously — webhook has 300s maxDuration, plenty of time

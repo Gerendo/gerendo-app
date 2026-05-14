@@ -2,6 +2,7 @@ import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { openAgencyDb, upsertMessage, upsertEmbedding, getSyncState, setSyncState, getGmailToken } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { embedTexts } from "@/lib/embed";
 
 export const maxDuration = 300;
@@ -283,6 +284,8 @@ export async function POST(): Promise<NextResponse> {
     const result = await runGmailSyncForUser(workspaceId, userId);
     return NextResponse.json(result);
   } catch (err: any) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: err.message ?? "Sync failed" }, { status: 500 });
   }
 }

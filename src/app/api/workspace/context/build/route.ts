@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { google } from "googleapis";
 import { openAgencyDb, upsertWorkspaceContext, getWorkspaceContext, getGmailToken } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { extractBody } from "@/app/api/sync/gmail/route";
 import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
@@ -35,7 +36,9 @@ export async function POST(req: Request): Promise<NextResponse> {
     const auth = new google.auth.OAuth2();
     auth.setCredentials({ access_token: token });
     gmail = google.gmail({ version: "v1", auth });
-  } catch {
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: "Gmail not connected" }, { status: 401 });
   }
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase-server";
 import { runDriveSyncForUser } from "@/app/api/sync/drive/route";
+import { logReauthNeeded } from "@/lib/oauth-errors";
 
 export const maxDuration = 300;
 
@@ -60,6 +61,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   // Fire incremental sync - uses the changes.list cursor stored from previous run
   runDriveSyncForUser(workspaceId, userId).catch((err: any) => {
+    if (logReauthNeeded(err, `webhook/drive workspace=${workspaceId}`)) return;
     console.error("[webhook/drive] sync failed:", err?.message);
   });
 

@@ -2,6 +2,7 @@ import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 import { getGmailToken, openAgencyDb, getSyncState, setSyncState } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 import { createServiceClient } from "@/lib/supabase-server";
 
 // Only exclude true system internals that are never useful to index
@@ -32,7 +33,9 @@ export async function GET(): Promise<NextResponse> {
   let token: string;
   try {
     token = await getGmailToken(workspaceId, userId);
-  } catch {
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     return NextResponse.json({ error: "Gmail not connected" }, { status: 401 });
   }
 

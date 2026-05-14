@@ -17,6 +17,20 @@ type LogArgs = {
   status: "success" | "failed";
 };
 
+// Sweep stale "pending" action_log rows older than 5 minutes — anything that
+// old is the carcass of a function that died between the stub insert and the
+// payload update. Vercel's max function duration is 300s, so 5 minutes is a
+// safe horizon. Runs inline before each new logAction so no cron is needed.
+async function sweepStaleActionLog(supabase: ReturnType<typeof createServiceClient>, workspaceId: string): Promise<void> {
+  const cutoffIso = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  await supabase
+    .from("action_log")
+    .update({ status: "failed" })
+    .eq("workspace_id", workspaceId)
+    .eq("status", "pending")
+    .lt("executed_at", cutoffIso);
+}
+
 // Two-step insert: write the operational fields with status="pending" first
 // to get a row id, then encrypt the JSON payloads using that id in the AAD,
 // UPDATE the row with payloads, and finally flip status to the caller's
@@ -25,6 +39,8 @@ type LogArgs = {
 // cleanup rather than presenting as a successful action with no payload.
 async function logAction(ctx: ActionContext, args: LogArgs): Promise<number> {
   const supabase = createServiceClient();
+  // Fire-and-forget sweep — failures here must not block the new write.
+  sweepStaleActionLog(supabase, ctx.workspaceId).catch(() => {});
   const { data: row, error: insErr } = await supabase
     .from("action_log")
     .insert({

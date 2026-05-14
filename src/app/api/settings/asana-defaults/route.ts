@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireWorkspace, isErrorResponse } from "@/lib/get-workspace";
 import { createServiceClient } from "@/lib/supabase-server";
 import { getAsanaToken, asanaGet } from "@/lib/agency-db";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 
 type Team = { gid: string; name: string };
 type Workspace = { gid: string; name: string; teams: Team[] };
@@ -53,6 +54,8 @@ export async function GET(): Promise<NextResponse> {
   try {
     token = await getAsanaToken(workspaceId, userId);
   } catch (err: unknown) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     const message = err instanceof Error ? err.message : "Asana not connected";
     return NextResponse.json({ error: message }, { status: 400 });
   }
@@ -107,6 +110,8 @@ export async function POST(req: Request): Promise<NextResponse> {
   try {
     token = await getAsanaToken(workspaceId, userId);
   } catch (err: unknown) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
     const message = err instanceof Error ? err.message : "Asana not connected";
     return NextResponse.json({ error: message }, { status: 400 });
   }

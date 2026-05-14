@@ -3,6 +3,7 @@ import { createServerSupabaseClient, createServiceClient } from "@/lib/supabase-
 import { getAsanaToken } from "@/lib/agency-db";
 import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
+import { reauthErrorToResponse } from "@/lib/oauth-errors";
 
 type AsanaBeforePayload = {
   due_on?: string | null;
@@ -59,7 +60,14 @@ export async function POST(
     "asana.create_task",
   ]);
 
-  const token = await getAsanaToken(finding.workspace_id as string, user.id);
+  let token: string;
+  try {
+    token = await getAsanaToken(finding.workspace_id as string, user.id);
+  } catch (err) {
+    const reauthRes = reauthErrorToResponse(err);
+    if (reauthRes) return reauthRes;
+    throw err;
+  }
   const undone: number[] = [];
   const failed: Array<{ id: number; error: string }> = [];
   const nonUndoable: Array<{ id: number; action_type: string; target_id: string | null }> = [];

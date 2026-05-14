@@ -10,6 +10,7 @@ import { hybridSearch, hybridDriveSearch, hybridAsanaSearch } from "@/lib/search
 import { extractBody } from "@/app/api/sync/gmail/route";
 import { decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
+import { isReauthError } from "@/lib/oauth-errors";
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -418,6 +419,12 @@ export async function POST(req: NextRequest): Promise<Response> {
   const driveConnected = connectedProviders.has("google-drive");
   const asanaConnected = connectedProviders.has("asana");
 
+  // Track providers whose access token is expired and cannot be refreshed.
+  // Each entry is surfaced as an SSE `needs_reauth` event before the stream
+  // starts producing chunks, so the UI can show a Reconnect CTA without the
+  // user discovering the issue only when a tool result comes back empty.
+  const needsReauth: Array<{ provider: string; reason: string }> = [];
+
   // Initialize Gmail client only if connected
   let gmail: any = null;
   if (gmailConnected) {
@@ -426,8 +433,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       const auth = new google.auth.OAuth2();
       auth.setCredentials({ access_token: token });
       gmail = google.gmail({ version: "v1", auth });
-    } catch {
-      // Token fetch failed — gmail stays null, get_email_body will return a soft error
+    } catch (err) {
+      if (isReauthError(err)) {
+        needsReauth.push({ provider: err.provider, reason: err.reason });
+      }
+      // gmail stays null either way; get_email_body returns a soft error.
     }
   }
 
@@ -517,6 +527,13 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   async function run() {
     try {
+      // Surface any provider whose token couldn't be refreshed during init so
+      // the client can render a Reconnect CTA before showing the (limited)
+      // answer. Emitted as a single event up-front.
+      for (const r of needsReauth) {
+        writer.write(encoder.encode(`data: ${JSON.stringify({ type: "needs_reauth", provider: r.provider })}\n\n`));
+      }
+
       const messages: Anthropic.MessageParam[] = [
         ...history.slice(-4).map((m) => ({
           role: m.role as "user" | "assistant",
@@ -786,7 +803,12 @@ export async function POST(req: NextRequest): Promise<Response> {
                     ? `LIVE ASANA TASKS — EXACT TOTAL: ${totalCount}. Showing tasks ${offset + 1}–${offset + displayTasks.length}${remaining > 0 ? `. ${remaining} more — call again with offset=${offset + pageSize} for next page, or show_all=true for everything` : " (end of list)"}:\n` + displayTasks.join("\n")
                     : "(No tasks found matching the given filters.)";
                 } catch (err: any) {
-                  result = `(Asana API error: ${err?.message ?? "unknown"})`;
+                  if (isReauthError(err)) {
+                    writer.write(encoder.encode(`data: ${JSON.stringify({ type: "needs_reauth", provider: err.provider })}\n\n`));
+                    result = "(Asana access expired. Please reconnect Asana in Settings.)";
+                  } else {
+                    result = `(Asana API error: ${err?.message ?? "unknown"})`;
+                  }
                 }
               }
             } else if (toolUse.name === "create_asana_task") {
@@ -836,7 +858,12 @@ export async function POST(req: NextRequest): Promise<Response> {
                   const task = await asanaPost(token, "/tasks", taskBody);
                   result = `Task created successfully.\nName: ${task.name}\nURL: ${task.permalink_url ?? "https://app.asana.com"}${input.project_name && taskBody.projects ? `\nProject: ${input.project_name}` : ""}${input.due_on ? `\nDue: ${input.due_on}` : ""}`;
                 } catch (err: any) {
-                  result = `(Failed to create Asana task: ${err?.message ?? "unknown error"})`;
+                  if (isReauthError(err)) {
+                    writer.write(encoder.encode(`data: ${JSON.stringify({ type: "needs_reauth", provider: err.provider })}\n\n`));
+                    result = "(Asana access expired. Please reconnect Asana in Settings.)";
+                  } else {
+                    result = `(Failed to create Asana task: ${err?.message ?? "unknown error"})`;
+                  }
                 }
               }
             }
