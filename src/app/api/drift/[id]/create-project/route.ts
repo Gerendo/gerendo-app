@@ -7,6 +7,7 @@ import { extractProjectShape } from "@/lib/extract-project-shape";
 import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 import { isReauthError, reauthErrorToResponse } from "@/lib/oauth-errors";
+import { getExistingActionTargetId, hasActionSucceeded } from "@/lib/action-log-idempotency";
 
 function gmailUrlForExternal(externalId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${externalId}`;
@@ -150,87 +151,113 @@ export async function POST(
   if (!extracted.sectionName) extracted.sectionName = "Decisions";
   if (!extracted.taskName) extracted.taskName = "Decision logged";
 
-  // Dedup: see if a project with this name already exists in the team.
+  // Forward-only idempotency. If a prior attempt on this finding already
+  // succeeded at any step, reuse the Asana gids from action_log instead of
+  // re-creating. Partial-failure retries are safe.
   let projectGid: string;
   let projectName: string;
   let projectPermalink: string | null = null;
   let wasExistingProject = false;
-  try {
-    const existing = await findProjectByName(workspaceId, user.id, asanaTeamGid, extracted.projectName);
-    if (existing) {
-      projectGid = existing.gid;
-      projectName = existing.name;
-      projectPermalink = existing.permalinkUrl;
-      wasExistingProject = true;
-    } else {
-      const created = await asanaActions.createProject(ctx, {
-        teamGid: asanaTeamGid,
-        workspaceGid: asanaWorkspaceGid,
-        name: extracted.projectName,
-        isPublic: defaultPrivacy !== "private",
-      });
-      projectGid = created.projectGid;
-      projectName = created.projectName;
-      projectPermalink = created.permalinkUrl;
+  const loggedProjectGid = await getExistingActionTargetId(service, findingId, "asana.create_project");
+  if (loggedProjectGid) {
+    projectGid = loggedProjectGid;
+    projectName = extracted.projectName;
+    wasExistingProject = true;
+  } else {
+    // Dedup: see if a project with this name already exists in the team.
+    try {
+      const existing = await findProjectByName(workspaceId, user.id, asanaTeamGid, extracted.projectName);
+      if (existing) {
+        projectGid = existing.gid;
+        projectName = existing.name;
+        projectPermalink = existing.permalinkUrl;
+        wasExistingProject = true;
+      } else {
+        const created = await asanaActions.createProject(ctx, {
+          teamGid: asanaTeamGid,
+          workspaceGid: asanaWorkspaceGid,
+          name: extracted.projectName,
+          isPublic: defaultPrivacy !== "private",
+        });
+        projectGid = created.projectGid;
+        projectName = created.projectName;
+        projectPermalink = created.permalinkUrl;
+      }
+    } catch (err: unknown) {
+      if (isReauthError(err)) return reauthErrorToResponse(err)!;
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 502 });
     }
-  } catch (err: unknown) {
-    if (isReauthError(err)) return reauthErrorToResponse(err)!;
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   // Create a section inside the project. Tolerant: if Asana rejects (free-plan
   // quirks, transient API errors) we log + swallow and continue without a section.
   let sectionGid: string | null = null;
   let sectionName: string | null = null;
-  try {
-    const s = await asanaActions.createSection(ctx, {
-      projectGid,
-      name: extracted.sectionName,
-    });
-    sectionGid = s.sectionGid;
-    sectionName = s.sectionName;
-  } catch (err: unknown) {
-    if (isReauthError(err)) return reauthErrorToResponse(err)!;
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[drift create-project] createSection failed, continuing without section:", message);
+  const loggedSectionGid = await getExistingActionTargetId(service, findingId, "asana.create_section");
+  if (loggedSectionGid) {
+    sectionGid = loggedSectionGid;
+    sectionName = extracted.sectionName;
+  } else {
+    try {
+      const s = await asanaActions.createSection(ctx, {
+        projectGid,
+        name: extracted.sectionName,
+      });
+      sectionGid = s.sectionGid;
+      sectionName = s.sectionName;
+    } catch (err: unknown) {
+      if (isReauthError(err)) return reauthErrorToResponse(err)!;
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[drift create-project] createSection failed, continuing without section:", message);
+    }
   }
 
   // Create the task in that project (placed in the section if we got one).
   let taskGid: string;
   let taskName: string;
   let taskPermalink: string | null = null;
-  try {
-    const t = await asanaActions.createTask(ctx, {
-      projectGid,
-      name: extracted.taskName,
-      dueOn: extracted.dueOn,
-      notes: undefined,
-      sectionGid,
-    });
-    taskGid = t.taskGid;
-    taskName = t.taskName;
-    taskPermalink = t.permalinkUrl;
-  } catch (err: unknown) {
-    if (isReauthError(err)) return reauthErrorToResponse(err)!;
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 502 });
+  const loggedTaskGid = await getExistingActionTargetId(service, findingId, "asana.create_task");
+  if (loggedTaskGid) {
+    taskGid = loggedTaskGid;
+    taskName = extracted.taskName;
+  } else {
+    try {
+      const t = await asanaActions.createTask(ctx, {
+        projectGid,
+        name: extracted.taskName,
+        dueOn: extracted.dueOn,
+        notes: undefined,
+        sectionGid,
+      });
+      taskGid = t.taskGid;
+      taskName = t.taskName;
+      taskPermalink = t.permalinkUrl;
+    } catch (err: unknown) {
+      if (isReauthError(err)) return reauthErrorToResponse(err)!;
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
   }
 
-  // Add the draft update as a comment on the new task.
-  try {
-    await asanaActions.addComment(
-      ctx,
-      taskGid,
-      draftUpdate,
-      findingSource === "gmail"
-        ? gmailUrlForExternal(findingSourceExternalId)
-        : undefined
-    );
-  } catch (err: unknown) {
-    if (isReauthError(err)) return reauthErrorToResponse(err)!;
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ error: message }, { status: 502 });
+  // Add the draft update as a comment on the new task. Skip if a prior retry
+  // already commented on this finding — Asana stories are not deduped server-
+  // side so re-commenting would create spam.
+  if (!(await hasActionSucceeded(service, findingId, "asana.add_comment"))) {
+    try {
+      await asanaActions.addComment(
+        ctx,
+        taskGid,
+        draftUpdate,
+        findingSource === "gmail"
+          ? gmailUrlForExternal(findingSourceExternalId)
+          : undefined
+      );
+    } catch (err: unknown) {
+      if (isReauthError(err)) return reauthErrorToResponse(err)!;
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
   }
 
   // Persist the new task as an asana_items row (idempotent via upsert).

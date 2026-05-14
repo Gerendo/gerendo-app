@@ -7,6 +7,7 @@ import { extractProjectShape } from "@/lib/extract-project-shape";
 import { encryptForBytea, decryptColumn } from "@/lib/crypto-storage";
 import { aad } from "@/lib/crypto-aad";
 import { isReauthError, reauthErrorToResponse } from "@/lib/oauth-errors";
+import { hasActionSucceeded } from "@/lib/action-log-idempotency";
 
 const MONTHS = [
   "january", "february", "march", "april", "may", "june",
@@ -143,7 +144,7 @@ export async function POST(
 
   if (taskGid) {
     const detectedDate = extractDateFromText(decisionSummary);
-    if (detectedDate) {
+    if (detectedDate && !(await hasActionSucceeded(service, findingId, "asana.update_task"))) {
       try {
         const r = await asanaActions.updateTask(ctx, taskGid, { due_on: detectedDate });
         results.push({ action: "asana.update_task", logId: r.logId, ok: true });
@@ -160,21 +161,25 @@ export async function POST(
       }
     }
 
-    try {
-      const r = await asanaActions.addComment(
-        ctx,
-        taskGid,
-        draftUpdate,
-        finding.source === "gmail" ? gmailUrlForExternal(findingSourceExternalId) : undefined
-      );
-      results.push({ action: "asana.add_comment", logId: r.logId, ok: true });
-    } catch (err: unknown) {
-      if (isReauthError(err)) return reauthErrorToResponse(err)!;
-      results.push({
-        action: "asana.add_comment",
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
+    // Skip add_comment if a prior retry on this finding already commented;
+    // Asana stories aren't deduped server-side so re-commenting spams the task.
+    if (!(await hasActionSucceeded(service, findingId, "asana.add_comment"))) {
+      try {
+        const r = await asanaActions.addComment(
+          ctx,
+          taskGid,
+          draftUpdate,
+          finding.source === "gmail" ? gmailUrlForExternal(findingSourceExternalId) : undefined
+        );
+        results.push({ action: "asana.add_comment", logId: r.logId, ok: true });
+      } catch (err: unknown) {
+        if (isReauthError(err)) return reauthErrorToResponse(err)!;
+        results.push({
+          action: "asana.add_comment",
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   }
 
