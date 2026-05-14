@@ -14,6 +14,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      { source: "/privacy", destination: "https://gerendo.com/privacy", permanent: true },
+      { source: "/security", destination: "https://gerendo.com/security", permanent: true },
+      { source: "/terms", destination: "https://gerendo.com/terms", permanent: true },
+    ];
+  },
 };
 
 export default nextConfig;

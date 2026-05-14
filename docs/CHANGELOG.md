@@ -65,6 +65,12 @@ Two-day cycle that took 4 phases of column encryption from "shipped and mostly t
 - Asana defaults picker no longer auto-opens on entering `/connect`. Removed the auto-open `useEffect` and the now-unused `asanaModalAutoOpenedRef`. Modal opens only when the user clicks **Manage projects** on the Asana row.
 - Heads-up notice ("Quick heads up before you connect") was unreadably small on desktop. Heading bumped from `text-sm` to `text-base md:text-lg`, body paragraphs from `text-xs` to `text-sm md:text-base`, signature from `text-xs` to `text-xs md:text-sm`. Mobile sizing roughly preserved.
 - Founder contact moved from "reply to the welcome email" to a direct `ermina@gerendo.com` mailto link inside the same notice.
+- Removed the "To get through" paragraph from the heads-up notice. The actual Google warning text and button labels differ between Gmail and Drive (and between Google's UI revisions), so prescriptive instructions were wrong half the time.
+
+**`app.gerendo.com/{privacy,security,terms}` now redirect to marketing site**
+- Previously: hitting these URLs on the app subdomain bounced unauthenticated users to `/login` because the auth proxy intercepted before the page-level `permanentRedirect` could fire. `/security` and `/terms` were missing entirely.
+- Fix: moved the redirect from `src/app/privacy/page.tsx` (deleted) into `next.config.ts` `redirects()`, which runs **before** the proxy/middleware per Next 16 execution order. Single source of truth, all three URLs now 308 to `gerendo.com/{privacy,security,terms}` regardless of auth state.
+- Note for future cleanup: project still uses `middleware.ts` (Next 15 convention) instead of `proxy.ts` (Next 16 convention). Works for now; rename when convenient. Also: `src/middleware.ts` is dead code because root `middleware.ts` takes precedence when both exist.
 
 ## 2026-05-13 (Prompt engineering playbook expanded with eval pipeline + dataset rules)
 
