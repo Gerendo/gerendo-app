@@ -617,10 +617,7 @@ function ConnectPageInner() {
           <p className="text-sm md:text-base leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
             When you click Connect Gmail or Connect Drive, Google will show a screen that says{" "}
             <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>&quot;Google hasn&apos;t verified this app.&quot;</span>{" "}
-            That&apos;s expected. We&apos;re in the validation phase. Google&apos;s verification takes weeks and we&apos;re waiting until we know Gerendo is the right fit for enough agencies before we commit to it. The product on the other side of the screen is the same.
-          </p>
-          <p className="text-sm md:text-base leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
-            To get through: click <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>Advanced</span> at the bottom-left, then <span className="font-medium" style={{ color: "oklch(0.96 0.012 80)" }}>&quot;Go to app.gerendo.com (unsafe)&quot;</span>.
+            That&apos;s expected. Google&apos;s review takes several weeks and a lot of paperwork, and we&apos;d rather spend that time making Gerendo better for early agencies first. The warning has nothing to do with whether Gerendo is safe, only with whether we&apos;ve finished Google&apos;s process yet.
           </p>
           <p className="text-sm md:text-base leading-relaxed" style={{ color: "oklch(0.72 0.012 60)" }}>
             What we read: Gmail messages and Drive files, for answering your questions. What we never do: send, modify, share, or delete anything. Everything we index is encrypted at rest, and no AI model is trained on your data. Full details at{" "}
