@@ -61,6 +61,11 @@ Two-day cycle that took 4 phases of column encryption from "shipped and mostly t
 **Privacy claim now defensible**
 - `/privacy` and `/security` pages already updated in c56009a. Google OAuth verification submission can now truthfully claim AES-256-GCM at-rest with operator-isolation (encryption enforces it, not just RLS).
 
+**Connect page bug fixes**
+- Asana defaults picker no longer auto-opens on entering `/connect`. Removed the auto-open `useEffect` and the now-unused `asanaModalAutoOpenedRef`. Modal opens only when the user clicks **Manage projects** on the Asana row.
+- Heads-up notice ("Quick heads up before you connect") was unreadably small on desktop. Heading bumped from `text-sm` to `text-base md:text-lg`, body paragraphs from `text-xs` to `text-sm md:text-base`, signature from `text-xs` to `text-xs md:text-sm`. Mobile sizing roughly preserved.
+- Founder contact moved from "reply to the welcome email" to a direct `ermina@gerendo.com` mailto link inside the same notice.
+
 ## 2026-05-13 (Prompt engineering playbook expanded with eval pipeline + dataset rules)
 
 **Prompt engineering playbook ([docs/PROMPT_ENGINEERING.md](PROMPT_ENGINEERING.md))**
