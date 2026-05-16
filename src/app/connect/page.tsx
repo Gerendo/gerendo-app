@@ -96,6 +96,11 @@ function ConnectPageInner() {
   const [reindexResult, setReindexResult] = useState<{ backfilled: number; remaining: number } | null>(null);
   const [pendingDeleteLabel, setPendingDeleteLabel] = useState<string | null>(null);
   const [deletingLabel, setDeletingLabel] = useState(false);
+  // Tracks which labels the server reported as currently synced when the picker was last opened.
+  // Used to compute which labels to DELETE before starting a new sync run.
+  const [serverSyncedLabels, setServerSyncedLabels] = useState<Set<string>>(new Set());
+  // "removing" = DELETE in flight, "syncing" = stream in flight, null = idle
+  const [syncPhase, setSyncPhase] = useState<"removing" | "syncing" | null>(null);
 
   // Asana defaults picker modal
   const [asanaPicker, setAsanaPicker] = useState<AsanaPickerState>({
@@ -371,12 +376,17 @@ function ConnectPageInner() {
             const validIds = new Set(body.labels.map((l: any) => l.id));
             // Use synced labels from backend as the source of truth for current selection
             if (body.syncedLabelIds?.length) {
-              setSelectedLabels(new Set(
+              const synced = new Set(
                 (body.syncedLabelIds as string[]).filter((id: string) => validIds.has(id))
-              ));
+              );
+              setSelectedLabels(synced);
+              // Record what the server considers currently synced so startGmailSyncWithLabels
+              // can compute which labels were removed and DELETE their data before re-syncing.
+              setServerSyncedLabels(synced);
             } else {
               // First-time setup (nothing synced yet) — no default selection
               setSelectedLabels(new Set());
+              setServerSyncedLabels(new Set());
             }
           } else if (body.error) {
             setLabelError(body.error);
@@ -408,8 +418,61 @@ function ConnectPageInner() {
   }
 
   async function startGmailSyncWithLabels() {
+    // Persist selection for future restoration (unchanged behavior per spec).
     try { localStorage.setItem("gerendo_gmail_selected_labels", JSON.stringify(Array.from(selectedLabels))); } catch {}
+
+    // Compute which server-synced labels the user has now deselected.
+    const removed = new Set<string>();
+    for (const id of serverSyncedLabels) {
+      if (!selectedLabels.has(id)) removed.add(id);
+    }
+
+    // Edge case: user unchecked everything. Delete all server-synced data, do not start sync.
+    if (selectedLabels.size === 0) {
+      if (removed.size > 0) {
+        setSyncPhase("removing");
+        const res = await fetch("/api/sync/gmail/labels", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ labelIds: Array.from(removed) }),
+        });
+        setSyncPhase(null);
+        if (!res.ok) {
+          let reason = "Unknown error";
+          try { const j = await res.json(); reason = j.error ?? reason; } catch {}
+          setLabelError(`Failed to remove labels: ${reason}`);
+          return;
+        }
+        setServerSyncedLabels(new Set());
+        // Refresh the synced count on the tool card.
+        fetch("/api/workspace/info").then(r => r.json()).then(info => {
+          if (info.emailCount >= 0) setSyncedCounts(p => ({ ...p, gmail: info.emailCount }));
+        }).catch(() => {});
+      }
+      setShowLabelPicker(false);
+      return;
+    }
+
+    // If some labels were removed, DELETE their data before starting the sync stream.
+    if (removed.size > 0) {
+      setSyncPhase("removing");
+      const delRes = await fetch("/api/sync/gmail/labels", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ labelIds: Array.from(removed) }),
+      });
+      setSyncPhase(null);
+      if (!delRes.ok) {
+        let reason = "Unknown error";
+        try { const j = await delRes.json(); reason = j.error ?? reason; } catch {}
+        setLabelError(`Failed to remove labels: ${reason}`);
+        return;
+      }
+    }
+
+    // Proceed with the sync stream (existing behavior, unchanged).
     setShowLabelPicker(false);
+    setSyncPhase(null);
     const labelsParam = Array.from(selectedLabels).join(",");
     setConnectedTools(p => new Set([...p, "gmail"]));
     setToolStatus(p => ({ ...p, gmail: "syncing" }));
@@ -417,9 +480,13 @@ function ConnectPageInner() {
     setInitialSyncing("gmail");
 
     try {
+      setSyncPhase("syncing");
       const res = await fetch(`/api/sync/gmail/stream?labels=${encodeURIComponent(labelsParam)}`);
       const { error } = await res.json();
       if (error) throw new Error(error);
+      // Update serverSyncedLabels so the next picker open reflects the new truth
+      // without needing a refetch round-trip.
+      setServerSyncedLabels(new Set(selectedLabels));
       startPoll();
       fetch("/api/webhooks/gmail/register", { method: "POST" }).catch(() => {});
       setToolStatus(p => ({ ...p, gmail: "active" }));
@@ -427,6 +494,8 @@ function ConnectPageInner() {
       setToolStatus(p => ({ ...p, gmail: "error" }));
       setToolError(p => ({ ...p, gmail: err.message ?? "Something went wrong" }));
       setInitialSyncing(null);
+    } finally {
+      setSyncPhase(null);
     }
   }
 
@@ -930,11 +999,17 @@ function ConnectPageInner() {
 
               <button
                 onClick={startGmailSyncWithLabels}
-                disabled={selectedLabels.size === 0}
+                disabled={(selectedLabels.size === 0 && serverSyncedLabels.size === 0) || syncPhase !== null}
                 className="flex-1 text-sm py-2.5 rounded-xl font-medium disabled:opacity-40"
                 style={{ background: "oklch(0.78 0.14 65)", color: "oklch(0.11 0.008 55)" }}
               >
-                Start sync ({selectedLabels.size} selected)
+                {syncPhase === "removing"
+                  ? "Removing labels..."
+                  : syncPhase === "syncing"
+                  ? "Syncing..."
+                  : selectedLabels.size === 0
+                  ? "Remove all"
+                  : `Start sync (${selectedLabels.size} selected)`}
               </button>
             </div>
           </div>
