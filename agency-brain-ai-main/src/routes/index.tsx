@@ -683,7 +683,7 @@ function WaitlistDialog({
             </div>
             <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground/70">
               {state.status === "ok"
-                ? "Check your inbox - a note from contact@gerendo.com is on its way."
+                ? "Check your inbox - a personal note from Ermina, our co-founder, is on its way."
                 : state.status === "error"
                   ? state.message
                   : "One email when access opens. No spam, ever."}
