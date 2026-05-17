@@ -1,7 +1,7 @@
 const ITEMS = [
   "Gmail", "Google Drive", "Asana", "Google Meet",
-  "WhatsApp Business", "Discord", "Notion", "Slack",
-  "Linear", "Calendar", "Loom", "Figma",
+  "WhatsApp Business", "Slack", "Notion", "HubSpot",
+  "Google Calendar", "Linear", "Jira", "Dropbox",
 ];
 
 export function Marquee() {

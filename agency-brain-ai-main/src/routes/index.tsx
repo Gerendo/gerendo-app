@@ -100,7 +100,7 @@ function Hero({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
           >
             <span className="h-1.5 w-1.5 rounded-full bg-ember pulse-dot" />
             <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-muted-foreground">
-              Built for modern businesses
+              Built for marketing agencies
             </span>
           </motion.div>
 
@@ -122,8 +122,8 @@ function Hero({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             transition={{ duration: 0.7, delay: 0.15 }}
             className="mt-6 max-w-xl text-pretty text-lg leading-relaxed text-muted-foreground md:text-xl"
           >
-            Your team's knowledge is scattered across Gmail, Drive, Asana, Meet,
-            WhatsApp, and a dozen other tools. Gerendo brings it all into one place
+            Your team's knowledge is scattered across Gmail, Drive, Asana, and
+            the tools piling up around them. Gerendo brings it all into one place
             your team can simply{" "}
             <em className="font-display italic text-foreground/90">talk to</em> -
             and get answers backed by the source.
@@ -192,13 +192,13 @@ function Pillars() {
       n: "01",
       tag: "Ask",
       title: "Ask anything. Get cited answers.",
-      body: "“What did Acme decide about the homepage?” - answered in seconds with links to the Gmail thread, the WhatsApp message, and the Asana comment that prove it.",
+      body: “”What did Acme decide about the homepage?” - answered in seconds with links to the Gmail thread, the Drive doc, and the Asana comment that prove it.”,
     },
     {
       n: "02",
       tag: "Drift",
       title: "Catch the drift before it ships.",
-      body: "When a client says one thing in WhatsApp and your Asana task says another, Gerendo surfaces the conflict before someone sends the wrong file to the wrong person.",
+      body: "When a client email says one thing and your Asana task says another, Gerendo surfaces the conflict before someone sends the wrong version to the wrong person.",
     },
     {
       n: "03",
@@ -285,7 +285,7 @@ function MeetingsToSOPs() {
     {
       tag: "01 · Capture",
       title: "Every meeting becomes context.",
-      body: "Gerendo turns your Google Meet calls into clean summaries - decisions, owners, deadlines, blockers - so nothing important gets lost in someone's notebook.",
+      body: "Gerendo turns your client calls into clean summaries - decisions, owners, deadlines, blockers - so nothing important gets lost in someone's notebook.",
     },
     {
       tag: "02 · Remember",
@@ -366,10 +366,10 @@ function MeetingsToSOPs() {
 
 function BringYourAI() {
   const models = [
-    { name: "Claude", note: "Anthropic" },
-    { name: "GPT-4", note: "OpenAI" },
-    { name: "Gemini", note: "Google" },
-    { name: "Mistral", note: "EU API" },
+    { name: "Claude", note: "by Anthropic" },
+    { name: "Private", note: "zero training on your data" },
+    { name: "Cited", note: "sources in every answer" },
+    { name: "Context", note: "reads all connected tools" },
   ];
 
   return (
@@ -379,15 +379,15 @@ function BringYourAI() {
     >
       <div className="mb-14 max-w-2xl">
         <p className="font-mono text-[11px] uppercase tracking-[0.22em] text-ember">
-          Use the AI you trust
+          Powered by Claude
         </p>
         <h2 className="mt-4 font-display text-4xl leading-[1.05] tracking-tight md:text-5xl">
-          Pick your AI. <em className="italic text-muted-foreground">Any of them.</em>
+          Frontier AI. <em className="italic text-muted-foreground">Grounded in your data.</em>
         </h2>
         <p className="mt-5 max-w-xl text-pretty text-muted-foreground">
-          Gerendo plugs into the AI tools you already know - Claude, ChatGPT, Gemini,
-          Mistral. Use the one your team prefers. Switch any time. Your data is never
-          used to train any of them.
+          Gerendo runs on Claude by Anthropic - one of the world's leading AI models.
+          What makes it smart isn't the model alone: it's the full context of your business,
+          read across every tool you've connected. Your data is never used to train any model.
         </p>
       </div>
 
@@ -503,12 +503,12 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
           Pricing
         </p>
         <h2 className="mt-4 font-display text-4xl leading-[1.05] tracking-tight md:text-5xl">
-          Free for the first <em className="italic text-ember">five</em>.
+          Built with the first <em className="italic text-ember">five</em>.
         </h2>
         <p className="mt-5 max-w-xl text-pretty text-muted-foreground">
-          The first five businesses to come on board get Gerendo free, in exchange for
-          working closely with us - sharing feedback, shaping the roadmap, helping us
-          build the product your team actually wants.
+          The first five businesses get 3 months free, in exchange for working closely
+          with us - sharing feedback, shaping the roadmap, telling us honestly what's
+          missing.
         </p>
       </div>
 
@@ -519,19 +519,20 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             Founding partners · 5 spots
           </p>
           <div className="mt-4 flex items-baseline gap-2">
-            <span className="font-display text-5xl tracking-tight">$0</span>
-            <span className="text-sm text-muted-foreground">/ unlimited</span>
+            <span className="font-display text-5xl tracking-tight">Free</span>
+            <span className="text-sm text-muted-foreground">/ first 3 months</span>
           </div>
           <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-            Full product. All integrations. Direct line to the team building it. In
-            return: candid feedback and the willingness to help us get this right.
+            Full product access, free for 3 months. A direct line to the team building
+            it. In return: honest feedback and the willingness to tell us what's
+            actually wrong.
           </p>
-          <a
-            href="https://app.gerendo.com"
+          <button
+            onClick={onWaitlistOpen}
             className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-ember px-6 py-3.5 text-sm font-medium text-primary-foreground ember-glow transition hover:scale-[1.01]"
           >
-            Access the beta →
-          </a>
+            Apply for a founding spot →
+          </button>
         </div>
 
         <div className="rounded-2xl border border-border bg-card/40 p-8 backdrop-blur-sm">
@@ -542,8 +543,9 @@ function Pricing({ onWaitlistOpen }: { onWaitlistOpen: () => void }) {
             <span className="font-display text-5xl tracking-tight">Soon</span>
           </div>
           <p className="mt-4 text-[15px] leading-relaxed text-muted-foreground">
-            Standard plans roll out once founding partners are happy. Join the waitlist
-            and we'll be in touch - no spam, just an email when access opens.
+            Standard plans roll out once founding partners are up and running. Join the
+            waitlist and we'll reach out personally - no spam, just a note when your
+            spot opens.
           </p>
           <button
             onClick={onWaitlistOpen}
@@ -648,8 +650,8 @@ function WaitlistDialog({
           </DialogTitle>
           <DialogDescription asChild>
             <p className="mt-3 text-[15px] leading-relaxed text-muted-foreground">
-              Drop your work email. We'll be in touch when your spot opens - and tell
-              you if you qualify for one of the five free founding partner spots.
+              Drop your work email. We'll reach out personally - and let you know if
+              you qualify for one of the five founding partner spots (3 months free).
             </p>
           </DialogDescription>
 

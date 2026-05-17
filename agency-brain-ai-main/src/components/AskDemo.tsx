@@ -8,7 +8,7 @@ const SAMPLES = [
     sources: [
       { app: "Gmail", who: "lena@acme.co", when: "Tue 14:02" },
       { app: "Asana", who: "Homepage v3 · comment", when: "Tue 16:18" },
-      { app: "WhatsApp", who: "Acme · #project", when: "Wed 09:41" },
+      { app: "Drive", who: "Acme · /2026-brand", when: "Wed 09:41" },
     ],
   },
   {
@@ -21,9 +21,9 @@ const SAMPLES = [
   },
   {
     q: "Did anyone reply to the Northwind invoice question?",
-    a: "Yes - Dani confirmed net-30 in WhatsApp 22 min ago. Not yet logged in Asana.",
+    a: "Yes - Dani confirmed net-30 by email 22 min ago. Not yet logged in Asana.",
     sources: [
-      { app: "WhatsApp", who: "Dani · Northwind", when: "22m ago" },
+      { app: "Gmail", who: "Dani · Northwind", when: "22m ago" },
     ],
   },
 ];
@@ -76,7 +76,7 @@ export function AskDemo() {
       </div>
 
       {/* prompt */}
-      <div className="px-6 pt-6">
+      <div className="min-h-[96px] px-6 pt-6">
         <div className="flex items-start gap-3">
           <span className="mt-1.5 font-mono text-xs text-ember">›</span>
           <p className="font-display text-xl leading-snug text-foreground md:text-2xl">
@@ -87,7 +87,7 @@ export function AskDemo() {
       </div>
 
       {/* answer */}
-      <div className="min-h-[220px] px-6 pb-6 pt-5">
+      <div className="min-h-[300px] px-6 pb-6 pt-5">
         <AnimatePresence mode="wait">
           {phase === "thinking" && (
             <motion.div
