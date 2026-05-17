@@ -192,7 +192,7 @@ function Pillars() {
       n: "01",
       tag: "Ask",
       title: "Ask anything. Get cited answers.",
-      body: “”What did Acme decide about the homepage?” - answered in seconds with links to the Gmail thread, the Drive doc, and the Asana comment that prove it.”,
+      body: "“What did Acme decide about the homepage?” - answered in seconds with links to the Gmail thread, the Drive doc, and the Asana comment that prove it.",
     },
     {
       n: "02",
